@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
+.next/
+out/
+
+# Production builds
+build/
+dist/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Prisma
+# Migration files ARE committed to git (they are part of the schema history)
+# But do NOT commit generated client or local development databases
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+/coverage
+/tests/e2e/reports
+
+# Playwright
+playwright-report/
+test-results/
+
+# Vercel
+.vercel
+
+# Package manager locks (keep one — we use npm)
+yarn.lock
+pnpm-lock.yaml
+bun.lockb

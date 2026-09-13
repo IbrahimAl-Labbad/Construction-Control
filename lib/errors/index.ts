@@ -1,0 +1,161 @@
+/**
+ * lib/errors/index.ts
+ *
+ * Centralized error types and handling utilities.
+ *
+ * Error handling strategy:
+ * - Application errors are typed (never generic Error)
+ * - Error responses are structured (never raw exception messages to users)
+ * - Internal details (stack traces, DB queries) are logged, not exposed
+ * - HTTP status codes are consistently mapped
+ *
+ * See AGENTS.md §17 for error handling rules.
+ *
+ * Usage:
+ *   import { AppError, ErrorCode } from '@/lib/errors';
+ *   throw new AppError('NOT_FOUND', 'المشروع غير موجود');
+ */
+
+// ---------------------------------------------------------------------------
+// Error codes
+// ---------------------------------------------------------------------------
+
+/**
+ * Exhaustive list of application error codes.
+ * Add new codes here as new modules are implemented.
+ */
+export type ErrorCode =
+  // Authentication
+  | 'UNAUTHENTICATED'
+  | 'ACCOUNT_INACTIVE'
+  // Authorization
+  | 'FORBIDDEN'
+  | 'INSUFFICIENT_ROLE'
+  // Validation
+  | 'VALIDATION_ERROR'
+  // Resources
+  | 'NOT_FOUND'
+  | 'ALREADY_EXISTS'
+  | 'CONFLICT'
+  // Financial integrity
+  | 'IMMUTABLE_RECORD'
+  | 'INVALID_STATE_TRANSITION'
+  // General
+  | 'INTERNAL_ERROR'
+  | 'SERVICE_UNAVAILABLE';
+
+// ---------------------------------------------------------------------------
+// HTTP status mapping
+// ---------------------------------------------------------------------------
+
+export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
+  UNAUTHENTICATED: 401,
+  ACCOUNT_INACTIVE: 401,
+  FORBIDDEN: 403,
+  INSUFFICIENT_ROLE: 403,
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  ALREADY_EXISTS: 409,
+  CONFLICT: 409,
+  IMMUTABLE_RECORD: 422,
+  INVALID_STATE_TRANSITION: 422,
+  INTERNAL_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
+};
+
+// ---------------------------------------------------------------------------
+// Application error class
+// ---------------------------------------------------------------------------
+
+/**
+ * The base application error class.
+ *
+ * All thrown errors in application code should be AppError instances.
+ * This ensures consistent error handling and response formatting.
+ *
+ * Internal details (cause, stack) are logged but never sent to clients.
+ *
+ * @example
+ * throw new AppError('NOT_FOUND', 'المشروع غير موجود');
+ * throw new AppError('FORBIDDEN', 'ليس لديك صلاحية', { cause: originalError });
+ */
+export class AppError extends Error {
+  public readonly code: ErrorCode;
+  public readonly httpStatus: number;
+
+  constructor(
+    code: ErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'AppError';
+    this.code = code;
+    this.httpStatus = ERROR_HTTP_STATUS[code];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error response type (sent to clients)
+// ---------------------------------------------------------------------------
+
+/**
+ * The structured error response sent to API clients.
+ * Never includes stack traces or internal implementation details.
+ */
+export interface ErrorResponse {
+  error: ErrorCode;
+  message: string;
+  details?: Array<{ path: string; message: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Error classification helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the error is an AppError with the given code.
+ */
+export function isAppError(error: unknown, code?: ErrorCode): error is AppError {
+  if (!(error instanceof AppError)) return false;
+  if (code !== undefined) return error.code === code;
+  return true;
+}
+
+/**
+ * Converts any unknown error to an AppError.
+ *
+ * Used in catch blocks to ensure consistent error typing.
+ * Unknown errors are wrapped as INTERNAL_ERROR.
+ *
+ * @example
+ * try {
+ *   await riskyOperation();
+ * } catch (error) {
+ *   const appError = toAppError(error);
+ *   logger.error('Operation failed', { code: appError.code });
+ *   throw appError;
+ * }
+ */
+export function toAppError(error: unknown): AppError {
+  if (error instanceof AppError) return error;
+
+  if (error instanceof Error) {
+    return new AppError('INTERNAL_ERROR', 'حدث خطأ غير متوقع', {
+      cause: error,
+    });
+  }
+
+  return new AppError('INTERNAL_ERROR', 'حدث خطأ غير متوقع');
+}
+
+/**
+ * Formats an AppError into a safe error response for clients.
+ * Never exposes internal details.
+ */
+export function formatErrorResponse(error: AppError): ErrorResponse {
+  return {
+    error: error.code,
+    message: error.message,
+  };
+}
