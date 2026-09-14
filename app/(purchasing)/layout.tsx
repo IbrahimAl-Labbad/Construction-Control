@@ -1,17 +1,22 @@
 /**
- * (purchasing) route group layout — structural placeholder.
+ * (purchasing) route group layout.
  *
- * Wrap all Purchasing Officer pages. Will include:
- * - Sidebar navigation (purchasing menu)
- * - Authorization guard: requireRole(Role.PURCHASING)
+ * Enforces Purchasing Officer role authorization on the server.
+ * All pages under /(purchasing) are protected by this guard.
  *
- * Implemented in the next phase (Authentication + Role-based routing).
- * DO NOT add business content here yet.
+ * See AGENTS.md §18 for authorization rules.
  */
-export default function PurchasingLayout({
+
+import { Role } from '@prisma/client';
+import { requireRole } from '@/lib/permissions';
+
+export default async function PurchasingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Server-side authorization guard
+  await requireRole(Role.PURCHASING);
+
   return <>{children}</>;
 }

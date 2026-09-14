@@ -1,28 +1,24 @@
 /**
  * lib/logger/index.ts
  *
- * Logging abstraction for the application.
+ * Logging abstraction for the application with centralized secret redaction.
  *
  * IMPORTANT: Never use console.log in application code.
  * Always use this logger module.
  *
  * Why?
  * - Provides consistent log format (structured JSON in production)
- * - Respects LOG_LEVEL environment variable
- * - Allows future integration with log aggregators (Datadog, CloudWatch, etc.)
+ * - Respects LOG_LEVEL from validated environment configuration
+ * - Recursively redacts sensitive fields (passwords, tokens, secrets)
  * - Supports request correlation IDs
  *
  * Usage:
  *   import { logger } from '@/lib/logger';
  *   logger.info('User authenticated', { userId: user.id, role: user.role });
  *   logger.error('Database error', { error: err.message, query: 'user.findUnique' });
- *
- * Log levels (in order of severity):
- *   error > warn > info > debug
- *
- * In production, only error and warn are logged by default (LOG_LEVEL=info).
- * In development, all levels are logged.
  */
+
+import { env, isProduction } from '@/lib/config/env';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,15 +47,54 @@ const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
 };
 
 // ---------------------------------------------------------------------------
+// Sensitive key redaction
+// ---------------------------------------------------------------------------
+
+const SENSITIVE_KEY_PATTERN =
+  /^(password|passwordhash|token|secret|authorization|cookie|sessiontoken|creditcard|apikey|accesstoken|refreshtoken)$/i;
+
+/**
+ * Recursively traverses and redacts sensitive keys in log payloads.
+ */
+export function redactSensitiveData(value: unknown, depth = 0): unknown {
+  if (depth > 6 || value === null || value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveData(item, depth + 1));
+  }
+
+  if (typeof value === 'object') {
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: isProduction ? undefined : value.stack,
+        cause: value.cause ? redactSensitiveData(value.cause, depth + 1) : undefined,
+      };
+    }
+
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (SENSITIVE_KEY_PATTERN.test(k)) {
+        cleaned[k] = '[REDACTED]';
+      } else {
+        cleaned[k] = redactSensitiveData(v, depth + 1);
+      }
+    }
+    return cleaned;
+  }
+
+  return value;
+}
+
+// ---------------------------------------------------------------------------
 // Logger implementation
 // ---------------------------------------------------------------------------
 
 function getConfiguredLevel(): LogLevel {
-  const level = process.env['LOG_LEVEL'];
-  if (level === 'error' || level === 'warn' || level === 'info' || level === 'debug') {
-    return level;
-  }
-  return process.env['NODE_ENV'] === 'production' ? 'warn' : 'debug';
+  return env.LOG_LEVEL as LogLevel;
 }
 
 function shouldLog(level: LogLevel): boolean {
@@ -73,19 +108,24 @@ function formatMessage(
   context?: LogContext,
 ): string {
   const timestamp = new Date().toISOString();
+  const sanitizedContext = context
+    ? (redactSensitiveData(context) as LogContext)
+    : undefined;
 
-  if (process.env['NODE_ENV'] === 'production') {
+  if (isProduction) {
     // Structured JSON for log aggregators
     return JSON.stringify({
       timestamp,
       level,
       message,
-      ...context,
+      ...sanitizedContext,
     });
   }
 
   // Human-readable format for development
-  const contextStr = context ? ` ${JSON.stringify(context)}` : '';
+  const contextStr = sanitizedContext
+    ? ` ${JSON.stringify(sanitizedContext)}`
+    : '';
   return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
 }
 
@@ -111,10 +151,11 @@ function createLogger(defaultContext?: LogContext): Logger {
     if (!shouldLog(level)) return;
 
     const mergedContext = { ...defaultContext, ...context };
+    const hasContext = Object.keys(mergedContext).length > 0;
     const formatted = formatMessage(
       level,
       message,
-      Object.keys(mergedContext).length > 0 ? mergedContext : undefined,
+      hasContext ? mergedContext : undefined,
     );
 
     // Only place in the codebase where console methods are called.
@@ -144,10 +185,5 @@ function createLogger(defaultContext?: LogContext): Logger {
 
 /**
  * The application-wide logger instance.
- *
- * @example
- * import { logger } from '@/lib/logger';
- * logger.info('Server started');
- * logger.error('Unexpected error', { error: err.message, userId });
  */
 export const logger = createLogger();

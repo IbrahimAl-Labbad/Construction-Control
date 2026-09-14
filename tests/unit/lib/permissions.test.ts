@@ -106,4 +106,31 @@ describe('Permission Guards', () => {
     expect(await hasRole(Role.ENGINEER)).toBe(true);
     expect(await hasRole(Role.MANAGER)).toBe(false);
   });
+
+  it('tests convenience role guard functions', async () => {
+    const {
+      requireManager,
+      requireEngineer,
+      requireAccountant,
+      requirePurchasing,
+    } = await import('@/lib/permissions/guards');
+
+    const mgrUser = { id: '1', role: Role.MANAGER, isActive: true, email: 'm@ex.com' };
+    const engUser = { id: '2', role: Role.ENGINEER, isActive: true, email: 'e@ex.com' };
+    const accUser = { id: '3', role: Role.ACCOUNTANT, isActive: true, email: 'a@ex.com' };
+    const purUser = { id: '4', role: Role.PURCHASING, isActive: true, email: 'p@ex.com' };
+
+    vi.spyOn(sessionModule, 'requireAuth').mockResolvedValue(mgrUser);
+    expect(await requireManager()).toEqual(mgrUser);
+
+    vi.spyOn(sessionModule, 'requireAuth').mockResolvedValue(engUser);
+    expect(await requireEngineer()).toEqual(engUser);
+
+    vi.spyOn(sessionModule, 'requireAuth').mockResolvedValue(accUser);
+    expect(await requireAccountant()).toEqual(accUser);
+
+    vi.spyOn(sessionModule, 'requireAuth').mockResolvedValue(purUser);
+    expect(await requirePurchasing()).toEqual(purUser);
+  });
 });
+

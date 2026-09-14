@@ -58,17 +58,24 @@ model User {
   /// Only Manager can deactivate users.
   isActive Boolean @default(true)
 
+  /// Soft deletion timestamp
+  deletedAt DateTime? @db.Timestamptz
+
+  // Password credential
+  credential Credential?
+
   // NextAuth required relations
   accounts Account[]
   sessions Session[]
 
-  // Audit trail: who created this user
+  // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([email])
   @@index([role])
   @@index([isActive])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -77,12 +84,31 @@ model User {
 model Credential {
   id           String   @id @default(cuid())
   userId       String   @unique
-  /// bcrypt hash of the password (never store plaintext)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Argon2id hash of the password (never store plaintext)
   passwordHash String
   createdAt    DateTime @default(now()) @db.Timestamptz
   updatedAt    DateTime @updatedAt @db.Timestamptz
 
   @@map("credentials")
+}
+
+/// Append-only audit trail for all sensitive and financial state transitions.
+/// Entries must never be modified or deleted.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  /// User ID who performed the action (nullable for unauthenticated actions)
+  action     String   /// Event name (e.g. 'AUTH_LOGIN_SUCCESS', 'AUTH_LOGIN_FAILURE', 'USER_DEACTIVATED')
+  entityType String   /// Target entity type (e.g. 'USER', 'SESSION')
+  entityId   String?  /// Identifier of the target entity
+  metadata   Json?    /// Contextual metadata (IP, user-agent, reason, etc.)
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // NextAuth.js adapter required models below.

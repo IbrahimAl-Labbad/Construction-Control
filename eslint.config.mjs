@@ -44,9 +44,16 @@ const config = [
     },
   },
 
-  // Test files — relax some rules
+  // Test and CLI scripts — relax some rules
   {
-    files: ['tests/**/*.ts', 'tests/**/*.tsx', '**/*.test.ts', '**/*.test.tsx'],
+    files: [
+      'tests/**/*.ts',
+      'tests/**/*.tsx',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      'prisma/**/*.ts',
+      'scripts/**/*.ts',
+    ],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       'no-console': 'off',

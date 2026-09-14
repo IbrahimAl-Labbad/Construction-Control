@@ -1,17 +1,22 @@
 /**
- * (accountant) route group layout — structural placeholder.
+ * (accountant) route group layout.
  *
- * Wrap all Accountant-only pages. Will include:
- * - Sidebar navigation (accountant menu)
- * - Authorization guard: requireRole(Role.ACCOUNTANT)
+ * Enforces Accountant role authorization on the server.
+ * All pages under /(accountant) are protected by this guard.
  *
- * Implemented in the next phase (Authentication + Role-based routing).
- * DO NOT add business content here yet.
+ * See AGENTS.md §18 for authorization rules.
  */
-export default function AccountantLayout({
+
+import { Role } from '@prisma/client';
+import { requireRole } from '@/lib/permissions';
+
+export default async function AccountantLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Server-side authorization guard
+  await requireRole(Role.ACCOUNTANT);
+
   return <>{children}</>;
 }

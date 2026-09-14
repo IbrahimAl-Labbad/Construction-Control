@@ -413,13 +413,16 @@ Database writes must respect business invariants at the schema level:
 
 ## 17. AUTHENTICATION RULES
 
-1. **Framework**: NextAuth.js (Auth.js) v4 with Prisma adapter.
-2. **Strategy**: Database sessions (`strategy: 'database'`) stored in PostgreSQL.
-3. **Credentials**: Email + password with bcrypt hashing (minimum 12 rounds).
+1. **Framework**: NextAuth.js (Auth.js) v4 with CredentialsProvider.
+2. **Strategy**: Hybrid Option C — NextAuth JWT session strategy (`strategy: 'jwt'`) synchronized with PostgreSQL `Session` records.
+   - CredentialsProvider requires JWT strategy in NextAuth v4.
+   - On successful authentication, an active session record is synchronized to the PostgreSQL `Session` table.
+   - Server-side guards (`requireAuth()`) verify the database session row in real time, ensuring instant revocation capability.
+3. **Credentials**: Email + password with Argon2id cryptographic hashing and verification (OWASP recommended parameters: 64MB memory, 3 iterations, 4 parallelism).
 4. **Providers**: Credentials provider only in v1. No public registration; Manager creates accounts.
-5. **Session**: Server-side session validation on every protected route and action via `getServerSession()`.
+5. **Session**: Server-side session validation on every protected route and action via `getServerSession()` + database verification in `requireAuth()`.
 6. **Expiry**: 24-hour sliding inactivity timeout; absolute expiry at 30 days.
-7. **Active status check**: Inactive users (`isActive = false`) must be blocked at session creation AND rejected on every request.
+7. **Active status check**: Inactive users (`isActive = false` or `deletedAt != null`) must be blocked at login AND rejected immediately on every protected request.
 
 ---
 
@@ -652,3 +655,13 @@ Act as a senior software engineer, not a reckless code generator.
 *End of AGENTS.md — Version 1.1.0*
 *This document is the supreme engineering contract of this repository.*
 *Future AI agents: Read this document before making any change.*
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

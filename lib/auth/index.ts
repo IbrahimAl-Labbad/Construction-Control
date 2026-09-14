@@ -7,5 +7,6 @@
 
 export { authOptions } from './config';
 export { getSession, getCurrentUser, requireAuth, AuthError } from './session';
+export { hashPassword, verifyPassword, ARGON2_OPTIONS } from './password';
 export type { AuthenticatedUser, AuthenticatedSession } from './types';
 export type { AuthErrorCode } from './session';

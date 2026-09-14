@@ -1,21 +1,28 @@
 /**
  * lib/auth/config.ts
  *
- * NextAuth.js configuration.
+ * NextAuth.js configuration implementing Option C:
+ * Hybrid JWT sessions with real-time PostgreSQL database session synchronization.
  *
- * IMPORTANT: This module configures authentication only.
- * Authorization (role checks, permission gates) lives in lib/permissions/.
+ * Requirements (from AGENTS.md §17 & Owner Decision):
+ * - Provider: CredentialsProvider (email + password)
+ * - Session strategy: "jwt" (required by NextAuth v4 for CredentialsProvider)
+ * - Source of truth: PostgreSQL Session table is synchronized on sign-in
+ * - Password verification: Argon2id via verifyPassword()
+ * - Real-time enforcement: Protected requests verify DB session existence and active status
  *
- * See AGENTS.md §13 for authentication rules.
+ * See AGENTS.md §17 for authentication rules.
  */
 
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import type { NextAuthOptions, Session, User } from 'next-auth';
-import type { Adapter } from 'next-auth/adapters';
+import crypto from 'crypto';
+import type { NextAuthOptions, Session } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 
 import { prisma } from '@/lib/db/prisma';
+import type { Role } from '@/lib/permissions/roles';
 
+import { verifyPassword } from './password';
 import type { AuthenticatedUser } from './types';
 
 // ---------------------------------------------------------------------------
@@ -29,21 +36,131 @@ import type { AuthenticatedUser } from './types';
  * - app/api/auth/[...nextauth]/route.ts (route handler)
  * - lib/auth/session.ts (getServerSession)
  */
-export const authOptions: NextAuthOptions = {
-  // Use Prisma adapter for database sessions
-  // Docs: https://authjs.dev/reference/adapter/prisma
-  adapter: PrismaAdapter(prisma) as Adapter,
+/**
+ * Authorize credentials and verify with Argon2id.
+ * Synchronizes database Session record on successful authentication.
+ */
+export async function authorizeUser(
+  credentials?: Record<string, string | undefined>,
+): Promise<AuthenticatedUser | null> {
+  if (!credentials?.email || !credentials.password) {
+    return null;
+  }
 
-  // Database sessions (not JWT) — session tokens stored in PostgreSQL
+  const normalizedEmail = credentials.email.trim().toLowerCase();
+
+  // 1. Look up user with stored credential
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: { credential: true },
+  });
+
+  // 2. Reject if user not found, soft-deleted, or inactive
+  if (!user || !user.isActive || user.deletedAt !== null) {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'AUTH_LOGIN_FAILURE',
+          entityType: 'USER',
+          metadata: { email: normalizedEmail, reason: 'USER_NOT_FOUND_OR_INACTIVE' },
+        },
+      });
+    } catch {
+      // Ignore audit failure in auth path
+    }
+    return null;
+  }
+
+  // 3. User has no password credentials set
+  if (!user.credential) {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'AUTH_LOGIN_FAILURE',
+          entityType: 'USER',
+          entityId: user.id,
+          metadata: { email: normalizedEmail, reason: 'NO_CREDENTIAL_FOUND' },
+        },
+      });
+    } catch {
+      // Ignore
+    }
+    return null;
+  }
+
+  // 4. Verify password with Argon2id
+  const isPasswordValid = await verifyPassword(
+    user.credential.passwordHash,
+    credentials.password,
+  );
+
+  if (!isPasswordValid) {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'AUTH_LOGIN_FAILURE',
+          entityType: 'USER',
+          entityId: user.id,
+          metadata: { email: normalizedEmail, reason: 'INVALID_PASSWORD' },
+        },
+      });
+    } catch {
+      // Ignore
+    }
+    return null;
+  }
+
+  // 5. Option C: Create associated database Session record in PostgreSQL
+  const sessionToken = crypto.randomUUID();
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  try {
+    await prisma.session.create({
+      data: {
+        sessionToken,
+        userId: user.id,
+        expires,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: user.id,
+        action: 'AUTH_LOGIN_SUCCESS',
+        entityType: 'USER',
+        entityId: user.id,
+      },
+    });
+  } catch {
+    // If DB write fails, auth cannot proceed safely
+    return null;
+  }
+
+  // 6. Return minimal authenticated user object (never include passwordHash)
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image ?? null,
+    role: user.role,
+    isActive: user.isActive,
+    sessionToken,
+  };
+}
+
+export const authOptions: NextAuthOptions = {
+  // Option C: JWT session strategy for NextAuth credentials compatibility
   session: {
-    strategy: 'database',
-    // 24 hours inactivity timeout
+    strategy: 'jwt',
+    // 24 hours session lifetime
     maxAge: 24 * 60 * 60,
-    // Update session on every request (sliding expiry)
-    updateAge: 60 * 60, // 1 hour
+    // Sliding expiry: update age 1 hour
+    updateAge: 60 * 60,
   },
 
-  // Credentials provider — email + password
+  // Credentials provider — email + password with Argon2id verification
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -51,91 +168,78 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      /**
-       * Validate credentials and return the user object.
-       * Returns null if credentials are invalid (do NOT throw errors here).
-       *
-       * Password verification is deferred to the next phase (auth vertical slice).
-       * This stub structure ensures the foundation is correct.
-       */
-      async authorize(credentials): Promise<User | null> {
-        if (!credentials?.email || !credentials.password) {
-          return null;
-        }
-
-        // Find the user by email
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            isActive: true,
-            image: true,
-          },
-        });
-
-        // User not found or inactive
-        if (!user || !user.isActive) {
-          return null;
-        }
-
-        // TODO (next phase): verify password against Credential.passwordHash
-        // const credential = await prisma.credential.findUnique({ where: { userId: user.id } });
-        // const isValid = await bcrypt.compare(credentials.password, credential.passwordHash);
-        // if (!isValid) return null;
-
-        // Return user for session population
-        // IMPORTANT: The password is NOT returned here — never include secrets
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image ?? null,
-        };
-      },
+      authorize: authorizeUser,
     }),
   ],
 
-  // Callbacks to enrich session and token with role
+  // Callbacks to enrich JWT and Session tokens with role and DB sessionToken
   callbacks: {
     /**
-     * Adds role and isActive to the session object.
-     * Called whenever a session is checked (getServerSession, useSession).
+     * Enriches the JWT with the user's role and database sessionToken on initial sign-in.
      */
-    async session({ session, user }): Promise<Session> {
-      if (session.user && user) {
-        // Fetch fresh user data including role and active status
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { id: true, role: true, isActive: true },
-        });
-
-        if (!dbUser || !dbUser.isActive) {
-          // Force session invalidation for inactive users
-          // The session will be invalidated by returning empty user data
-          throw new Error('USER_INACTIVE');
+    async jwt({ token, user }): Promise<JWT> {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        if (user.sessionToken !== undefined) {
+          token.sessionToken = user.sessionToken;
         }
+      }
+      return token;
+    },
 
+    /**
+     * Propagates role, id, and sessionToken to session.user.
+     */
+    async session({ session, token }): Promise<Session> {
+      if (token && session.user) {
         const authenticatedUser: AuthenticatedUser = {
-          ...session.user,
-          id: dbUser.id,
-          role: dbUser.role,
-          isActive: dbUser.isActive,
+          id: (token.id as string) ?? session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+          role: (token.role as Role) ?? 'ENGINEER',
+          isActive: true,
+          sessionToken: token.sessionToken,
         };
 
-        return {
-          ...session,
-          user: authenticatedUser,
-        };
+        session.user = authenticatedUser;
       }
 
       return session;
     },
   },
 
-  // Pages — login page lives at /login (implemented in next phase)
+  // Events — Option C lifecycle hooks
+  events: {
+    /**
+     * Option C: Revoke database Session record when user signs out.
+     */
+    async signOut({ token }): Promise<void> {
+      if (token?.sessionToken) {
+        try {
+          await prisma.session.deleteMany({
+            where: { sessionToken: token.sessionToken },
+          });
+
+          if (token.id) {
+            await prisma.auditLog.create({
+              data: {
+                actorId: token.id as string,
+                action: 'AUTH_LOGOUT',
+                entityType: 'USER',
+                entityId: token.id as string,
+              },
+            });
+          }
+        } catch {
+          // Failure to delete session or audit on signout should not throw unhandled rejection
+        }
+      }
+    },
+  },
+
+  // Pages — custom login page
   pages: {
     signIn: '/login',
     error: '/login',

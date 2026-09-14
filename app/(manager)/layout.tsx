@@ -1,18 +1,22 @@
 /**
- * (manager) route group layout — structural placeholder.
+ * (manager) route group layout.
  *
- * Wrap all Manager-only pages. Will include:
- * - Sidebar navigation (manager menu)
- * - Header with role badge
- * - Authorization guard: requireRole(Role.MANAGER)
+ * Enforces Manager-only role authorization on the server.
+ * All pages under /(manager) are protected by this guard.
  *
- * Implemented in the next phase (Authentication + Role-based routing).
- * DO NOT add business content here yet.
+ * See AGENTS.md §18 for authorization rules.
  */
-export default function ManagerLayout({
+
+import { Role } from '@prisma/client';
+import { requireRole } from '@/lib/permissions';
+
+export default async function ManagerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Server-side authorization guard
+  await requireRole(Role.MANAGER);
+
   return <>{children}</>;
 }

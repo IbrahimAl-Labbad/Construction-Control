@@ -1,17 +1,22 @@
 /**
- * (engineer) route group layout — structural placeholder.
+ * (engineer) route group layout.
  *
- * Wrap all Engineer-only pages. Will include:
- * - Sidebar navigation (engineer menu)
- * - Authorization guard: requireRole(Role.ENGINEER)
+ * Enforces Site Engineer role authorization on the server.
+ * All pages under /(engineer) are protected by this guard.
  *
- * Implemented in the next phase (Authentication + Role-based routing).
- * DO NOT add business content here yet.
+ * See AGENTS.md §18 for authorization rules.
  */
-export default function EngineerLayout({
+
+import { Role } from '@prisma/client';
+import { requireRole } from '@/lib/permissions';
+
+export default async function EngineerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Server-side authorization guard
+  await requireRole(Role.ENGINEER);
+
   return <>{children}</>;
 }
