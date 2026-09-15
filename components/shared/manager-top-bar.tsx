@@ -15,8 +15,10 @@
  * See AGENTS.md §15 for RTL/Arabic UI rules.
  */
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut } from 'lucide-react';
+import { LogOut, FolderKanban, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -26,9 +28,14 @@ import { Button } from '@/components/ui/button';
  * RTL layout: System name appears on the right, logout on the left.
  */
 export function ManagerTopBar() {
+  const pathname = usePathname();
+
   function handleLogout() {
     void signOut({ callbackUrl: '/login' });
   }
+
+  const isProjects = pathname.startsWith('/projects');
+  const isUsers = pathname.startsWith('/users');
 
   return (
     <header
@@ -36,10 +43,38 @@ export function ManagerTopBar() {
       role="banner"
     >
       <div className="flex items-center justify-between px-6 py-3">
-        {/* System title — on the right in RTL */}
-        <span className="text-base font-semibold text-foreground">
-          نظام متابعة التشييد
-        </span>
+        {/* System title & Nav links — on the right in RTL */}
+        <div className="flex items-center gap-6">
+          <span className="text-base font-semibold text-foreground">
+            نظام متابعة التشييد
+          </span>
+          <nav className="flex items-center gap-2" aria-label="التنقل الرئيسي">
+            <Link
+              href="/projects"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isProjects
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-projects-link"
+            >
+              <FolderKanban className="size-3.5" aria-hidden="true" />
+              المشاريع
+            </Link>
+            <Link
+              href="/users"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isUsers
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-users-link"
+            >
+              <Users className="size-3.5" aria-hidden="true" />
+              المستخدمون
+            </Link>
+          </nav>
+        </div>
 
         {/* Logout — on the left in RTL */}
         <Button

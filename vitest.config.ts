@@ -10,7 +10,11 @@ export default defineConfig({
     // Setup file for @testing-library/jest-dom matchers
     setupFiles: ['./tests/setup.ts'],
     // Glob patterns for test files
-    include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'tests/unit/**/*.test.tsx',
+      'tests/integration/**/*.test.ts',
+    ],
     exclude: ['tests/e2e/**', 'node_modules/**'],
     // Global test utilities (no need to import describe/it/expect in every file)
     globals: true,

@@ -31,6 +31,15 @@ enum Role {
   PURCHASING
 }
 
+/// Project lifecycle status for construction projects.
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -67,6 +76,9 @@ model User {
   // NextAuth required relations
   accounts Account[]
   sessions Session[]
+
+  // Projects managed by this user
+  managedProjects Project[] @relation("ProjectManager")
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -109,6 +121,40 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// =============================================================================
+// PROJECT DOMAIN MODELS
+// =============================================================================
+
+/// Operational and control layer representation of a construction project.
+model Project {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String?       @db.Text
+  location    String?
+  status      ProjectStatus @default(PLANNED)
+
+  /// Assigned project manager (must have Role.MANAGER and isActive = true)
+  managerId   String
+  manager     User          @relation("ProjectManager", fields: [managerId], references: [id], onDelete: Restrict)
+
+  /// Operational schedule
+  startDate   DateTime?     @db.Timestamptz
+  endDate     DateTime?     @db.Timestamptz
+
+  /// Soft deletion timestamp
+  deletedAt   DateTime?     @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt   DateTime      @default(now()) @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @db.Timestamptz
+
+  @@index([managerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("projects")
 }
 
 // NextAuth.js adapter required models below.

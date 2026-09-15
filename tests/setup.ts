@@ -11,7 +11,7 @@
 import '@testing-library/jest-dom';
 
 process.env['DATABASE_URL'] =
-  process.env['DATABASE_URL'] || 'postgresql://postgres:postgres@localhost:5432/construction_control_test';
+  process.env['DATABASE_URL'] || 'postgresql://postgres:postgres@localhost:5432/construction_control?schema=public';
 process.env['NEXTAUTH_SECRET'] =
   process.env['NEXTAUTH_SECRET'] || '12345678901234567890123456789012';
 process.env['NEXTAUTH_URL'] =

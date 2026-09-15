@@ -36,6 +36,10 @@ async function main() {
   let managerPassword = process.env['E2E_TEST_PASSWORD'];
   let engineerEmail = process.env['E2E_ENGINEER_EMAIL']?.trim();
   let engineerPassword = process.env['E2E_ENGINEER_PASSWORD'];
+  let accountantEmail = process.env['E2E_ACCOUNTANT_EMAIL']?.trim();
+  let accountantPassword = process.env['E2E_ACCOUNTANT_PASSWORD'];
+  let purchasingEmail = process.env['E2E_PURCHASING_EMAIL']?.trim();
+  let purchasingPassword = process.env['E2E_PURCHASING_PASSWORD'];
 
   let shouldUpdateEnv = false;
 
@@ -55,6 +59,22 @@ async function main() {
     shouldUpdateEnv = true;
   }
 
+  if (!accountantEmail || !accountantPassword) {
+    accountantEmail = accountantEmail || 'accountant@test.local';
+    accountantPassword = accountantPassword || `${crypto.randomBytes(16).toString('hex')}!Cc3`;
+    process.env['E2E_ACCOUNTANT_EMAIL'] = accountantEmail;
+    process.env['E2E_ACCOUNTANT_PASSWORD'] = accountantPassword;
+    shouldUpdateEnv = true;
+  }
+
+  if (!purchasingEmail || !purchasingPassword) {
+    purchasingEmail = purchasingEmail || 'purchasing@test.local';
+    purchasingPassword = purchasingPassword || `${crypto.randomBytes(16).toString('hex')}!Dd4`;
+    process.env['E2E_PURCHASING_EMAIL'] = purchasingEmail;
+    process.env['E2E_PURCHASING_PASSWORD'] = purchasingPassword;
+    shouldUpdateEnv = true;
+  }
+
   if (shouldUpdateEnv) {
     const envContent = [
       '# Local E2E Test Credentials — DO NOT COMMIT',
@@ -62,6 +82,10 @@ async function main() {
       `E2E_TEST_PASSWORD="${managerPassword}"`,
       `E2E_ENGINEER_EMAIL="${engineerEmail}"`,
       `E2E_ENGINEER_PASSWORD="${engineerPassword}"`,
+      `E2E_ACCOUNTANT_EMAIL="${accountantEmail}"`,
+      `E2E_ACCOUNTANT_PASSWORD="${accountantPassword}"`,
+      `E2E_PURCHASING_EMAIL="${purchasingEmail}"`,
+      `E2E_PURCHASING_PASSWORD="${purchasingPassword}"`,
       '',
     ].join('\n');
 
@@ -128,9 +152,61 @@ async function main() {
     create: { userId: engineerUser.id, passwordHash: engineerHash },
   });
 
+  // 3. Seed Accountant
+  const accountantHash = await hashPassword(accountantPassword);
+  const accountantUser = await prisma.user.upsert({
+    where: { email: accountantEmail.toLowerCase() },
+    update: {
+      name: 'المحاسب التجريبي',
+      role: 'ACCOUNTANT',
+      isActive: true,
+      deletedAt: null,
+    },
+    create: {
+      email: accountantEmail.toLowerCase(),
+      name: 'المحاسب التجريبي',
+      role: 'ACCOUNTANT',
+      isActive: true,
+      deletedAt: null,
+    },
+  });
+
+  await prisma.credential.upsert({
+    where: { userId: accountantUser.id },
+    update: { passwordHash: accountantHash },
+    create: { userId: accountantUser.id, passwordHash: accountantHash },
+  });
+
+  // 4. Seed Purchasing Officer
+  const purchasingHash = await hashPassword(purchasingPassword);
+  const purchasingUser = await prisma.user.upsert({
+    where: { email: purchasingEmail.toLowerCase() },
+    update: {
+      name: 'مسؤول المشتريات التجريبي',
+      role: 'PURCHASING',
+      isActive: true,
+      deletedAt: null,
+    },
+    create: {
+      email: purchasingEmail.toLowerCase(),
+      name: 'مسؤول المشتريات التجريبي',
+      role: 'PURCHASING',
+      isActive: true,
+      deletedAt: null,
+    },
+  });
+
+  await prisma.credential.upsert({
+    where: { userId: purchasingUser.id },
+    update: { passwordHash: purchasingHash },
+    create: { userId: purchasingUser.id, passwordHash: purchasingHash },
+  });
+
   console.log('✅ Safe E2E test users successfully seeded:');
   console.log(`   Manager: ${managerUser.id} (${managerUser.email})`);
   console.log(`   Engineer: ${engineerUser.id} (${engineerUser.email})`);
+  console.log(`   Accountant: ${accountantUser.id} (${accountantUser.email})`);
+  console.log(`   Purchasing: ${purchasingUser.id} (${purchasingUser.email})`);
 }
 
 main()

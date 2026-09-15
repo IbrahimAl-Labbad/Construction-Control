@@ -22,9 +22,8 @@
    2. TAILWIND CSS
    ============================================================================= */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 /* =============================================================================
    3. CSS CUSTOM PROPERTIES — Design Tokens
