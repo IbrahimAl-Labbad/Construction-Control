@@ -32,42 +32,51 @@ dotenv.config({ path: envPath });
 const prisma = new PrismaClient();
 
 async function main() {
-  let email = process.env['E2E_TEST_EMAIL']?.trim();
-  let password = process.env['E2E_TEST_PASSWORD'];
+  let managerEmail = process.env['E2E_TEST_EMAIL']?.trim();
+  let managerPassword = process.env['E2E_TEST_PASSWORD'];
+  let engineerEmail = process.env['E2E_ENGINEER_EMAIL']?.trim();
+  let engineerPassword = process.env['E2E_ENGINEER_PASSWORD'];
 
-  // If no credentials in environment, generate and write to .env.test.local
-  if (!email || !password) {
-    email = email || 'manager@test.local';
-    // Generate high-entropy password satisfying OWASP / complexity guidelines
-    password = password || `${crypto.randomBytes(16).toString('hex')}!Aa1`;
+  let shouldUpdateEnv = false;
 
+  if (!managerEmail || !managerPassword) {
+    managerEmail = managerEmail || 'manager@test.local';
+    managerPassword = managerPassword || `${crypto.randomBytes(16).toString('hex')}!Aa1`;
+    process.env['E2E_TEST_EMAIL'] = managerEmail;
+    process.env['E2E_TEST_PASSWORD'] = managerPassword;
+    shouldUpdateEnv = true;
+  }
+
+  if (!engineerEmail || !engineerPassword) {
+    engineerEmail = engineerEmail || 'engineer@test.local';
+    engineerPassword = engineerPassword || `${crypto.randomBytes(16).toString('hex')}!Bb2`;
+    process.env['E2E_ENGINEER_EMAIL'] = engineerEmail;
+    process.env['E2E_ENGINEER_PASSWORD'] = engineerPassword;
+    shouldUpdateEnv = true;
+  }
+
+  if (shouldUpdateEnv) {
     const envContent = [
       '# Local E2E Test Credentials — DO NOT COMMIT',
-      `E2E_TEST_EMAIL="${email}"`,
-      `E2E_TEST_PASSWORD="${password}"`,
+      `E2E_TEST_EMAIL="${managerEmail}"`,
+      `E2E_TEST_PASSWORD="${managerPassword}"`,
+      `E2E_ENGINEER_EMAIL="${engineerEmail}"`,
+      `E2E_ENGINEER_PASSWORD="${engineerPassword}"`,
       '',
     ].join('\n');
 
     fs.writeFileSync(envTestLocalPath, envContent, 'utf8');
-    // Set for current process
-    process.env['E2E_TEST_EMAIL'] = email;
-    process.env['E2E_TEST_PASSWORD'] = password;
   }
 
-  const normalizedEmail = email.toLowerCase();
-
-  // 1. Hash password with OWASP Argon2id
-  const passwordHash = await hashPassword(password);
-
-  // Quick sanity check: verify hash against password
-  const selfCheck = await verifyPassword(passwordHash, password);
-  if (!selfCheck) {
-    throw new Error('Argon2id hash verification failed self-test.');
+  // 1. Seed Manager
+  const managerHash = await hashPassword(managerPassword);
+  const managerSelfCheck = await verifyPassword(managerHash, managerPassword);
+  if (!managerSelfCheck) {
+    throw new Error('Argon2id hash verification failed for manager self-test.');
   }
 
-  // 2. Upsert test user
-  const user = await prisma.user.upsert({
-    where: { email: normalizedEmail },
+  const managerUser = await prisma.user.upsert({
+    where: { email: managerEmail.toLowerCase() },
     update: {
       name: 'مدير النظام التجريبي',
       role: 'MANAGER',
@@ -75,7 +84,7 @@ async function main() {
       deletedAt: null,
     },
     create: {
-      email: normalizedEmail,
+      email: managerEmail.toLowerCase(),
       name: 'مدير النظام التجريبي',
       role: 'MANAGER',
       isActive: true,
@@ -83,26 +92,45 @@ async function main() {
     },
   });
 
-  // 3. Upsert credential
   await prisma.credential.upsert({
-    where: { userId: user.id },
+    where: { userId: managerUser.id },
+    update: { passwordHash: managerHash },
+    create: { userId: managerUser.id, passwordHash: managerHash },
+  });
+
+  // 2. Seed Engineer
+  const engineerHash = await hashPassword(engineerPassword);
+  const engineerSelfCheck = await verifyPassword(engineerHash, engineerPassword);
+  if (!engineerSelfCheck) {
+    throw new Error('Argon2id hash verification failed for engineer self-test.');
+  }
+
+  const engineerUser = await prisma.user.upsert({
+    where: { email: engineerEmail.toLowerCase() },
     update: {
-      passwordHash,
+      name: 'مهندس الموقع التجريبي',
+      role: 'ENGINEER',
+      isActive: true,
+      deletedAt: null,
     },
     create: {
-      userId: user.id,
-      passwordHash,
+      email: engineerEmail.toLowerCase(),
+      name: 'مهندس الموقع التجريبي',
+      role: 'ENGINEER',
+      isActive: true,
+      deletedAt: null,
     },
   });
 
-  // 4. Safe output (strictly no secret/hash)
-  console.log('✅ Safe E2E test user successfully seeded:');
-  console.log(`   User ID: ${user.id}`);
-  console.log(`   Email: ${user.email}`);
-  console.log(`   Role: ${user.role}`);
-  console.log(`   Active: ${user.isActive}`);
-  console.log(`   Soft-deleted: ${user.deletedAt === null ? 'No' : 'Yes'}`);
-  console.log('   Credential: 1 (Argon2id verified)');
+  await prisma.credential.upsert({
+    where: { userId: engineerUser.id },
+    update: { passwordHash: engineerHash },
+    create: { userId: engineerUser.id, passwordHash: engineerHash },
+  });
+
+  console.log('✅ Safe E2E test users successfully seeded:');
+  console.log(`   Manager: ${managerUser.id} (${managerUser.email})`);
+  console.log(`   Engineer: ${engineerUser.id} (${engineerUser.email})`);
 }
 
 main()

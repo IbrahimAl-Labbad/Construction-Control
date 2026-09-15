@@ -5,8 +5,8 @@
 # This document is the authoritative engineering contract for all AI coding
 # agents and human engineers working on this repository.
 #
-# Version: 1.1.0
-# Last updated: 2026-09-13
+# Version: 1.2.0
+# Last updated: 2026-09-14
 #
 # RULE: When in doubt, this document wins over assumptions, conventions,
 # or any other documentation. Read it before writing a single line of code.
@@ -514,6 +514,7 @@ Before considering any feature or PR complete, verify every category:
 - [ ] No business logic in UI components or event handlers
 - [ ] No direct Prisma calls from React components
 - [ ] No unnecessary or premature abstraction
+- [ ] No server-only module imported inside a `'use client'` file (§26)
 
 ### Code Quality
 - [ ] Clean code: readable, self-documenting, meaningful names
@@ -560,6 +561,7 @@ A feature is done **ONLY** when:
 - [ ] Security and data exposure concerns are reviewed
 - [ ] Audit trail requirements are satisfied
 - [ ] Financial data uses Decimal with exact arithmetic
+- [ ] No server-only modules (`logger`, `env`, `prisma`, `argon2`) imported in any `'use client'` file (§26)
 - [ ] TypeScript typecheck passes with 0 errors (`npm run typecheck`)
 - [ ] ESLint passes with 0 warnings and 0 errors (`npm run lint`)
 - [ ] Production build succeeds (`npm run build`)
@@ -604,6 +606,87 @@ Act as a senior software engineer, not a reckless code generator.
 8. Payroll Data Entry (Amounts only, no processing)
 9. Executive Dashboard (Budget vs. actual, pending approvals)
 10. Progress Reports by Site Engineer
+
+---
+
+## 26. SERVER / CLIENT MODULE BOUNDARY
+
+This rule is **mandatory**. Violations crash the client-side JavaScript bundle
+and produce runtime errors that are invisible during development lint/typecheck
+but break every page that loads the affected component.
+
+### Background
+
+Next.js App Router compiles two separate bundles:
+
+| Bundle | Runs in | Environment variables available |
+|--------|---------|---------------------------------|
+| Server bundle | Node.js / Edge | All — `DATABASE_URL`, `NEXTAUTH_SECRET`, etc. |
+| Client bundle | Browser | Only `NEXT_PUBLIC_*` vars |
+
+Server-only modules (e.g., `lib/logger`, `lib/config/env`, `lib/db`,
+`lib/auth`) execute **environment validation or Node.js-specific code at
+module-evaluation time**. When these modules are imported — directly or
+transitively — by a `'use client'` file, they are bundled into the browser
+bundle. On first load they throw immediately, crashing the entire React tree
+before any component renders.
+
+### Mandatory Rules
+
+1. **Never import server-only modules inside `'use client'` files.**
+
+   The following modules are server-only and must **never** appear in the
+   import graph of any `'use client'` file:
+
+   | Module | Reason |
+   |--------|--------|
+   | `lib/config/env` | Calls `validateEnv()` at module-eval; throws if server env vars are absent |
+   | `lib/logger` | Imports `lib/config/env`; transitively server-only |
+   | `lib/db` | Prisma client; Node.js-only |
+   | `lib/auth/session` | Imports NextAuth server helpers and `lib/db` |
+   | `lib/permissions/guards` | Imports `lib/auth/session`; transitively server-only |
+   | `argon2` | Native Node.js addon; not available in the browser |
+
+2. **Error boundaries are client components — apply extra scrutiny.**
+
+   `error.tsx` and any other `'use client'` error boundary must **not** import
+   any of the modules listed above. Use `console.error` for browser-side
+   logging inside error boundaries:
+
+   ```typescript
+   // ✅ CORRECT — safe in 'use client' error boundaries
+   useEffect(() => {
+     // eslint-disable-next-line no-console
+     console.error('[ErrorBoundary]', error.name, error.message);
+   }, [error]);
+
+   // ❌ WRONG — logger → env → throws in browser
+   import { logger } from '@/lib/logger';
+   ```
+
+3. **Never add `'server-only'` imports to shared utility files accessed by
+   client components.** If a module is needed on both sides, split it:
+   - Create a client-safe version (pure logic, no env/db/Node.js deps).
+   - Keep the server-enriched version in a separate file.
+
+4. **Prefer explicit exports over barrel re-exports** for modules that contain
+   a mix of client-safe and server-only symbols. Barrel files (e.g.,
+   `lib/permissions/index.ts`) that re-export both server-only guards and
+   client-safe constants force the entire server tree into the client bundle.
+   Instead, export client-safe symbols from a dedicated client-safe file
+   (e.g., `lib/permissions/roles.ts`).
+
+### Verification
+
+There is currently no automated bundler check for this rule. Verify manually:
+
+- Search for `'use client'` files that import from the server-only list above.
+- Check the Next.js build output for bundle-size anomalies.
+- Playwright E2E tests will expose this class of bug as a runtime error overlay
+  (Next.js dev) or a blank/crashed page (production).
+
+A future task may introduce `@next/bundle-analyzer` or the `server-only`
+package to enforce this boundary at build time.
 
 ---
 

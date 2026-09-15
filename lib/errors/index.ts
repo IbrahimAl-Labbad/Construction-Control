@@ -159,3 +159,30 @@ export function formatErrorResponse(error: AppError): ErrorResponse {
     message: error.message,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Validation error — carries field-level details
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown by use cases when Zod schema validation fails.
+ * Includes field-level details for structured client responses.
+ *
+ * Caught by server actions to return safe, structured error responses.
+ * Internal implementation details are never exposed.
+ *
+ * @example
+ * const validation = validate(createUserSchema, input);
+ * if (!validation.success) {
+ *   throw new ValidationError(validation.errors);
+ * }
+ */
+export class ValidationError extends AppError {
+  public readonly details: Array<{ path: string; message: string }>;
+
+  constructor(details: Array<{ path: string; message: string }>) {
+    super('VALIDATION_ERROR', 'بيانات غير صالحة');
+    this.name = 'ValidationError';
+    this.details = details;
+  }
+}
