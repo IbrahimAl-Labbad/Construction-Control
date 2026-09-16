@@ -59,6 +59,14 @@ enum BudgetCategory {
   CONTINGENCY
 }
 
+/// Operational and approval lifecycle status for expenses.
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -104,6 +112,15 @@ model User {
 
   // Budgets approved by this user
   approvedBudgets Budget[] @relation("BudgetApprover")
+
+  // Expenses submitted by this user
+  submittedExpenses Expense[] @relation("ExpenseSubmitter")
+
+  // Expenses approved by this user
+  approvedExpenses Expense[] @relation("ExpenseApprover")
+
+  // Expenses rejected by this user
+  rejectedExpenses Expense[] @relation("ExpenseRejecter")
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -171,6 +188,9 @@ model Project {
 
   /// Budgets for this project
   budgets     Budget[]
+
+  /// Expenses for this project
+  expenses    Expense[]
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -247,9 +267,72 @@ model BudgetLine {
   createdAt   DateTime       @default(now()) @db.Timestamptz
   updatedAt   DateTime       @updatedAt @db.Timestamptz
 
+  /// Related expenses charged against this budget line
+  expenses    Expense[]
+
   @@index([budgetId])
   @@index([category])
   @@map("budget_lines")
+}
+
+// =============================================================================
+// EXPENSE DOMAIN MODELS
+// =============================================================================
+
+/// Granular operational expense claim linked to a Project Budget Line.
+/// Approved records represent realized actual spend and are strictly immutable.
+model Expense {
+  id              String         @id @default(cuid())
+  projectId       String
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  budgetLineId    String
+  budgetLine      BudgetLine     @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// Monetary amount in SAR. Positive Decimal(15,2).
+  amount          Decimal        @db.Decimal(15, 2)
+  currency        String         @default("SAR")
+
+  /// Operational description of the spend event
+  description     String         @db.Text
+
+  /// Date the expense occurred in the field
+  expenseDate     DateTime       @db.Timestamptz
+
+  /// Operational status of the claim
+  status          ExpenseStatus  @default(DRAFT)
+
+  /// Submitter / Claimant tracking
+  submittedById   String
+  submittedBy     User           @relation("ExpenseSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt     DateTime?      @db.Timestamptz
+
+  /// Approval tracking
+  approvedById    String?
+  approvedBy      User?          @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt      DateTime?      @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById    String?
+  rejectedBy      User?          @relation("ExpenseRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt      DateTime?      @db.Timestamptz
+  rejectionReason String?        @db.Text
+
+  /// Soft deletion timestamp
+  deletedAt       DateTime?      @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt       DateTime       @default(now()) @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([submittedById])
+  @@index([approvedById])
+  @@index([rejectedById])
+  @@index([expenseDate])
+  @@index([deletedAt])
+  @@map("expenses")
 }
 
 // NextAuth.js adapter required models below.

@@ -19,4 +19,5 @@ export {
 } from './guards';
 export type { PermissionErrorCode } from './guards';
 
+export { requireAuth } from '@/lib/auth';
 export { policies } from './policies';

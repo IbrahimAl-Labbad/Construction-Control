@@ -63,25 +63,38 @@ const canDeactivateUser: Policy = (user) => isManager(user);
 const canViewOwnProfile: Policy = (_user) => true;
 
 // ---------------------------------------------------------------------------
-// Future financial policies (stubs — to be populated in feature tasks)
+// Expense policies (Vertical Slice 4)
 // ---------------------------------------------------------------------------
-// These stubs document the expected shape of future policies.
-// They return false by default to enforce "deny by default" (AGENTS.md §6).
 
 /**
- * Whether the user can submit an expense claim.
- * Engineers and Accountants can submit expenses.
- * @stub — implement in expense feature task
+ * Whether the user can create, edit, delete, or submit an expense claim.
+ * In v1, restricted to Site Engineers and Accountants.
  */
 const canSubmitExpense: Policy = (user) =>
   user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
 
+const canManageExpenseDraft: Policy = (user) =>
+  user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
 /**
- * Whether the user can approve an expense claim.
- * Only managers can approve.
- * @stub — implement in expense feature task
+ * Whether the user can approve or reject an expense claim.
+ * Only managers have final approval authority.
  */
 const canApproveExpense: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can view expenses.
+ * Managers, Engineers, and Accountants can view expenses.
+ * Purchasing has no access to expenses.
+ */
+const canViewExpenses: Policy = (user) =>
+  isManager(user) || user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
+// ---------------------------------------------------------------------------
+// Future financial policies (stubs — to be populated in feature tasks)
+// ---------------------------------------------------------------------------
+// These stubs document the expected shape of future policies.
+// They return false by default to enforce "deny by default" (AGENTS.md §6).
 
 /**
  * Whether the user can create a purchase request.
@@ -143,9 +156,13 @@ export const policies = {
   canManageBudget,
   canViewBudget,
 
-  // Financial (stubs)
+  // Expense management (Vertical Slice 4)
   canSubmitExpense,
+  canManageExpenseDraft,
   canApproveExpense,
+  canViewExpenses,
+
+  // Purchasing (stubs)
   canCreatePurchaseRequest,
   canApprovePurchaseRequest,
 } as const;

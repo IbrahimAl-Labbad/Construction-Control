@@ -13,6 +13,7 @@ import {
   FileText,
   Pencil,
   DollarSign,
+  Receipt,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -102,6 +103,16 @@ export default async function ProjectDetailsPage({
           >
             <DollarSign className="size-4" aria-hidden="true" />
             <span>الموازنة التقديرية</span>
+          </Link>
+
+          {/* Expenses Link */}
+          <Link
+            href={`/projects/${project.id}/expenses`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-expenses-button"
+          >
+            <Receipt className="size-4" aria-hidden="true" />
+            <span>المصروفات والرقابة</span>
           </Link>
 
           {/* Edit metadata */}
