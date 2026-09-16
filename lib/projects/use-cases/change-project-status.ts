@@ -17,10 +17,12 @@
  * Transition matrix defined in lib/projects/state-machine.ts.
  */
 
+import { ProjectStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
+import { hasApprovedBudget } from '@/lib/budget/queries/has-approved-budget';
 import {
   projectIdSchema,
   changeProjectStatusSchema,
@@ -76,6 +78,17 @@ export async function changeProjectStatus(
 
   // 5. Enforce state machine — throws INVALID_STATE_TRANSITION if not allowed
   assertCanTransitionProjectStatus(existing.status, newStatus);
+
+  // 5.1 Cross-domain financial invariant: PLANNED -> ACTIVE requires an APPROVED active budget
+  if (existing.status === ProjectStatus.PLANNED && newStatus === ProjectStatus.ACTIVE) {
+    const hasApproved = await hasApprovedBudget(id);
+    if (!hasApproved) {
+      throw new AppError(
+        'BUDGET_REQUIRED',
+        'لا يمكن تفعيل المشروع دون وجود موازنة معتمدة نشطة',
+      );
+    }
+  }
 
   // 6. Atomic transaction: update status + audit
   const updated = await prisma.$transaction(async (tx) => {

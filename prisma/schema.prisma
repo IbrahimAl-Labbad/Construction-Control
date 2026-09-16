@@ -40,6 +40,25 @@ enum ProjectStatus {
   CANCELLED
 }
 
+/// Lifecycle status for project budgets.
+enum BudgetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+/// Standard cost categories for budget line items.
+enum BudgetCategory {
+  MATERIALS
+  LABOR
+  SUBCONTRACTOR
+  EQUIPMENT
+  SITE_OPERATIONS
+  CONTINGENCY
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -79,6 +98,12 @@ model User {
 
   // Projects managed by this user
   managedProjects Project[] @relation("ProjectManager")
+
+  // Budgets created by this user
+  createdBudgets Budget[] @relation("BudgetCreator")
+
+  // Budgets approved by this user
+  approvedBudgets Budget[] @relation("BudgetApprover")
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -144,6 +169,9 @@ model Project {
   startDate   DateTime?     @db.Timestamptz
   endDate     DateTime?     @db.Timestamptz
 
+  /// Budgets for this project
+  budgets     Budget[]
+
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
 
@@ -155,6 +183,73 @@ model Project {
   @@index([status])
   @@index([deletedAt])
   @@map("projects")
+}
+
+// =============================================================================
+// BUDGET DOMAIN MODELS
+// =============================================================================
+
+/// Project Budget header representing a specific version of project cost baseline.
+model Budget {
+  id              String        @id @default(cuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  version         Int           @default(1)
+  status          BudgetStatus  @default(DRAFT)
+
+  /// Total authorized budget calculated server-side from lines. Decimal(15,2) in SAR.
+  totalAmount     Decimal       @db.Decimal(15, 2)
+  currency        String        @default("SAR")
+  notes           String?       @db.Text
+
+  /// Creator & Submitter tracking
+  createdById     String
+  createdBy       User          @relation("BudgetCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Approval tracking
+  approvedById    String?
+  approvedBy      User?         @relation("BudgetApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt      DateTime?     @db.Timestamptz
+  rejectionReason String?       @db.Text
+
+  /// Soft deletion timestamp
+  deletedAt       DateTime?     @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt       DateTime      @default(now()) @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @db.Timestamptz
+
+  /// Related line items
+  lines           BudgetLine[]
+
+  @@unique([projectId, version])
+  @@index([projectId, status])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([deletedAt])
+  @@map("budgets")
+}
+
+/// Granular line item under a Project Budget.
+/// Mutable only while parent Budget is in DRAFT status.
+/// Once Budget is APPROVED, lines are strictly immutable.
+model BudgetLine {
+  id          String         @id @default(cuid())
+  budgetId    String
+  budget      Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  category    BudgetCategory
+  description String         @db.Text
+  amount      Decimal        @db.Decimal(15, 2)
+
+  /// Audit timestamps
+  createdAt   DateTime       @default(now()) @db.Timestamptz
+  updatedAt   DateTime       @updatedAt @db.Timestamptz
+
+  @@index([budgetId])
+  @@index([category])
+  @@map("budget_lines")
 }
 
 // NextAuth.js adapter required models below.

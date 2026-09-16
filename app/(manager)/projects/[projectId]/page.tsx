@@ -12,10 +12,12 @@ import {
   Clock,
   FileText,
   Pencil,
+  DollarSign,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
 import { getProject, getAllowedNextStatuses } from '@/lib/projects';
+import { getProjectBudget } from '@/lib/budget';
 import { AppError } from '@/lib/errors';
 import { ProjectStatusBadge } from '../components/project-status-badge';
 import { ChangeStatusDialog } from '../components/change-status-dialog';
@@ -67,6 +69,7 @@ export default async function ProjectDetailsPage({
   });
 
   const allowedNextStatuses = getAllowedNextStatuses(project.status);
+  const budget = await getProjectBudget(projectId);
 
   return (
     <div className="space-y-6">
@@ -91,6 +94,16 @@ export default async function ProjectDetailsPage({
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Budget Link */}
+          <Link
+            href={`/projects/${project.id}/budget`}
+            className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary shadow-sm hover:bg-primary/20 transition-colors"
+            data-testid="project-budget-button"
+          >
+            <DollarSign className="size-4" aria-hidden="true" />
+            <span>الموازنة التقديرية</span>
+          </Link>
+
           {/* Edit metadata */}
           <Link
             href={`/projects/${project.id}/edit`}
@@ -125,6 +138,65 @@ export default async function ProjectDetailsPage({
             العودة لقائمة المشاريع
           </Link>
         </div>
+      </div>
+
+      {/* Financial Control & Budget Banner */}
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <DollarSign className="size-5" aria-hidden="true" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-sm font-bold text-foreground">
+                الرقابة المالية والموازنة التقديرية
+              </span>
+              {budget ? (
+                <span
+                  className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold ${
+                    budget.status === 'APPROVED'
+                      ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                      : budget.status === 'SUBMITTED'
+                      ? 'border-blue-500/30 bg-blue-500/15 text-blue-700 dark:text-blue-400'
+                      : budget.status === 'REJECTED'
+                      ? 'border-destructive/30 bg-destructive/15 text-destructive'
+                      : 'border-slate-500/30 bg-slate-500/15 text-slate-700 dark:text-slate-300'
+                  }`}
+                  data-testid="project-budget-status-badge"
+                >
+                  {budget.status === 'APPROVED'
+                    ? 'معتمدة رسمياً'
+                    : budget.status === 'SUBMITTED'
+                    ? 'قيد الاعتماد'
+                    : budget.status === 'REJECTED'
+                    ? 'مرفوضة'
+                    : 'مسودة'}
+                </span>
+              ) : (
+                <span
+                  className="text-xs px-2.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold"
+                  data-testid="project-no-budget-badge"
+                >
+                  غير محددة (مطلوبة لتفعيل المشروع)
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {budget
+                ? `إجمالي الموازنة: ${budget.totalAmount} ر.س (${budget.lineCount} بنود تكلفة)`
+                : 'يجب اعتماد موازنة تقديرية أولاً قبل تمكين الانتقال لحالة المشروع "نشط"'}
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href={`/projects/${project.id}/budget`}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
+          data-testid="view-manage-budget-button"
+        >
+          <DollarSign className="size-4" aria-hidden="true" />
+          <span>{budget ? 'استعراض وإدارة الموازنة' : 'إعداد مسودة الموازنة'}</span>
+        </Link>
       </div>
 
       {/* Metadata Cards Grid */}

@@ -13,9 +13,15 @@ import { Role, ProjectStatus } from '@prisma/client';
 import { updateProject, changeProjectStatus, assignProjectManager } from '@/lib/projects';
 import { prisma } from '@/lib/db/prisma';
 import * as permissions from '@/lib/permissions';
+import * as budgetQueries from '@/lib/budget/queries/has-approved-budget';
 import { ValidationError } from '@/lib/errors';
 import { PermissionError } from '@/lib/permissions/guards';
 import type { AuthenticatedUser } from '@/lib/auth/types';
+
+// Auto-mock the budget query so tests don't hit the DB
+vi.mock('@/lib/budget/queries/has-approved-budget', () => ({
+  hasApprovedBudget: vi.fn().mockResolvedValue(false),
+}));
 
 const { PLANNED, ACTIVE, ON_HOLD, COMPLETED, CANCELLED } = ProjectStatus;
 
@@ -244,6 +250,8 @@ describe('changeProjectStatus', () => {
     vi.spyOn(prisma.project, 'findFirst').mockResolvedValue(
       existingProject as unknown as Awaited<ReturnType<typeof prisma.project.findFirst>>,
     );
+    // PLANNED → ACTIVE requires an approved budget — mock it to pass
+    vi.spyOn(budgetQueries, 'hasApprovedBudget').mockResolvedValue(true);
 
     const updatedProject = { ...existingProject, status: ACTIVE };
     const mockTx = {
@@ -275,6 +283,19 @@ describe('changeProjectStatus', () => {
         }),
       }),
     );
+  });
+
+  it('throws BUDGET_REQUIRED when activating a project without an approved budget', async () => {
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(mockManager);
+    vi.spyOn(prisma.project, 'findFirst').mockResolvedValue(
+      existingProject as unknown as Awaited<ReturnType<typeof prisma.project.findFirst>>,
+    );
+    // Explicitly return false — no approved budget
+    vi.spyOn(budgetQueries, 'hasApprovedBudget').mockResolvedValue(false);
+
+    await expect(
+      changeProjectStatus('proj-abc', { newStatus: ACTIVE }),
+    ).rejects.toThrow(expect.objectContaining({ code: 'BUDGET_REQUIRED' }));
   });
 
   it('valid transition ON_HOLD → ACTIVE passes without error', async () => {

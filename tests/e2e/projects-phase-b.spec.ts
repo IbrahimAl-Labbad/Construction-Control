@@ -180,10 +180,31 @@ test.describe('Projects Phase B E2E Suite', () => {
       expect(statusOptions).not.toContain('معلق');
       expect(statusOptions).not.toContain('مكتمل');
 
-      // Select ACTIVE with reason
+      // Attempting to select ACTIVE without an approved budget fails with error
       await selectStatus.selectOption('ACTIVE');
       const statusReason = 'بدء الأعمال الميدانية واعتماد المخططات';
       await page.getByTestId('status-reason-input').fill(statusReason);
+      await page.getByTestId('confirm-status-change-button').click();
+
+      // Dialog remains open with budget required error
+      await expect(statusDialog).toBeVisible();
+      await expect(statusDialog.getByText(/موازنة معتمدة/i)).toBeVisible();
+
+      // Seed approved budget for this project in PostgreSQL to satisfy the invariant
+      await prisma.budget.create({
+        data: {
+          projectId,
+          version: 1,
+          status: 'APPROVED',
+          totalAmount: 100000.0,
+          currency: 'SAR',
+          createdById: secondManagerId,
+          approvedById: secondManagerId,
+          approvedAt: new Date(),
+        },
+      });
+
+      // Retry status change with approved budget -> now succeeds
       await page.getByTestId('confirm-status-change-button').click();
 
       // Dialog closes and status badge reflects ACTIVE

@@ -99,6 +99,22 @@ const canCreatePurchaseRequest: Policy = (user) =>
 const canApprovePurchaseRequest: Policy = (user) => isManager(user);
 
 // ---------------------------------------------------------------------------
+// Budget policies (Vertical Slice 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create, update, submit, approve, or reject budgets.
+ * In v1, this is restricted exclusively to Role.MANAGER.
+ */
+const canManageBudget: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can view a project budget.
+ * In v1, all authenticated active users can view budgets.
+ */
+const canViewBudget: Policy = (user) => user.isActive;
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -122,6 +138,10 @@ export const policies = {
   canCreateUser,
   canDeactivateUser,
   canViewOwnProfile,
+
+  // Budget management (Vertical Slice 3)
+  canManageBudget,
+  canViewBudget,
 
   // Financial (stubs)
   canSubmitExpense,
