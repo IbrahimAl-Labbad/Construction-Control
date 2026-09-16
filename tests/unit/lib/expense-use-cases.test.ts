@@ -447,6 +447,11 @@ describe('Expense Use Cases', () => {
               _sum: { amount: new Prisma.Decimal('10000.00') }, // Already approved = 10k
             }),
           },
+          commitment: {
+            aggregate: vi.fn().mockResolvedValue({
+              _sum: { amount: new Prisma.Decimal('0.00') },
+            }),
+          },
           budget: {
             findFirst: vi.fn().mockResolvedValue({ id: 'b-1' }),
           },

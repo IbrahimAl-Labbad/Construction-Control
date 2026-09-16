@@ -67,6 +67,14 @@ enum ExpenseStatus {
   REJECTED
 }
 
+/// Operational and approval lifecycle status for purchasing commitments.
+enum CommitmentStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -121,6 +129,18 @@ model User {
 
   // Expenses rejected by this user
   rejectedExpenses Expense[] @relation("ExpenseRejecter")
+
+  // Commitments created by this user
+  createdCommitments Commitment[] @relation("CommitmentCreator")
+
+  // Commitments submitted by this user
+  submittedCommitments Commitment[] @relation("CommitmentSubmitter")
+
+  // Commitments approved by this user
+  approvedCommitments Commitment[] @relation("CommitmentApprover")
+
+  // Commitments rejected by this user
+  rejectedCommitments Commitment[] @relation("CommitmentRejecter")
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -191,6 +211,9 @@ model Project {
 
   /// Expenses for this project
   expenses    Expense[]
+
+  /// Commitments for this project
+  commitments Commitment[]
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -270,6 +293,9 @@ model BudgetLine {
   /// Related expenses charged against this budget line
   expenses    Expense[]
 
+  /// Related commitments charged against this budget line
+  commitments Commitment[]
+
   @@index([budgetId])
   @@index([category])
   @@map("budget_lines")
@@ -333,6 +359,76 @@ model Expense {
   @@index([expenseDate])
   @@index([deletedAt])
   @@map("expenses")
+}
+
+// =============================================================================
+// COMMITMENT DOMAIN MODELS
+// =============================================================================
+
+/// Granular purchasing or contractual commitment linked to a Project Budget Line.
+/// Approved records encumber the BudgetLine ceiling and are strictly immutable.
+model Commitment {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  budgetLineId    String
+  budgetLine      BudgetLine       @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// Reference number (e.g. Purchase Order or Contract #). Optional.
+  referenceNumber String?          @db.VarChar(100)
+
+  /// External vendor or contractor trade name (plain validated text)
+  vendorName      String           @db.VarChar(150)
+
+  /// Committed monetary obligation in SAR. Positive Decimal(15,2).
+  amount          Decimal          @db.Decimal(15, 2)
+  currency        String           @default("SAR")
+
+  /// Operational description of the commitment
+  description     String           @db.Text
+
+  /// Official commitment or issuance date
+  commitmentDate  DateTime         @db.Timestamptz
+
+  /// Operational status of the commitment
+  status          CommitmentStatus @default(DRAFT)
+
+  /// Creator tracking (Purchasing Officer)
+  createdById     String
+  createdBy       User             @relation("CommitmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Submitter tracking
+  submittedById   String?
+  submittedBy     User?            @relation("CommitmentSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt     DateTime?        @db.Timestamptz
+
+  /// Approval tracking (Manager only)
+  approvedById    String?
+  approvedBy      User?            @relation("CommitmentApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt      DateTime?        @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById    String?
+  rejectedBy      User?            @relation("CommitmentRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt      DateTime?        @db.Timestamptz
+  rejectionReason String?          @db.Text
+
+  /// Soft deletion timestamp
+  deletedAt       DateTime?        @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt       DateTime         @default(now()) @db.Timestamptz
+  updatedAt       DateTime         @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([createdById])
+  @@index([submittedById])
+  @@index([approvedById])
+  @@index([commitmentDate])
+  @@index([deletedAt])
+  @@map("commitments")
 }
 
 // NextAuth.js adapter required models below.

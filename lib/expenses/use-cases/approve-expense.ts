@@ -17,7 +17,7 @@
  * 6. Atomicity: Status update + approval metadata + EXPENSE_APPROVED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -123,8 +123,8 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       throw new AppError('BUDGET_NOT_APPROVED', 'المشروع لا يمتلك موازنة معتمدة نشطة');
     }
 
-    // 6.4 Aggregate current APPROVED spend on this budget line after acquiring the lock (Gate 27)
-    const approvedAgg = await tx.expense.aggregate({
+    // 6.4 Aggregate current APPROVED spend and commitments on this budget line after acquiring the lock (Joint Financial Concurrency Invariant)
+    const approvedExpensesAgg = await tx.expense.aggregate({
       where: {
         budgetLineId: expenseToApprove.budgetLineId,
         status: ExpenseStatus.APPROVED,
@@ -133,12 +133,23 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       _sum: { amount: true },
     });
 
-    const currentSpend = approvedAgg._sum.amount ?? new Prisma.Decimal('0.00');
-    const newTotalSpend = currentSpend.add(expenseToApprove.amount);
+    const approvedCommitmentsAgg = await tx.commitment.aggregate({
+      where: {
+        budgetLineId: expenseToApprove.budgetLineId,
+        status: CommitmentStatus.APPROVED,
+        deletedAt: null,
+      },
+      _sum: { amount: true },
+    });
 
-    // 6.5 Enforce hard budget ceiling (Gate 25)
+    const currentSpend = approvedExpensesAgg._sum.amount ?? new Prisma.Decimal('0.00');
+    const currentCommitments = approvedCommitmentsAgg._sum.amount ?? new Prisma.Decimal('0.00');
+    const currentExposure = currentSpend.add(currentCommitments);
+    const newTotalSpend = currentExposure.add(expenseToApprove.amount);
+
+    // 6.5 Enforce hard budget ceiling
     if (newTotalSpend.greaterThan(lockedLine.amount)) {
-      const remainingAvailable = lockedLine.amount.sub(currentSpend);
+      const remainingAvailable = lockedLine.amount.sub(currentExposure);
       throw new AppError(
         'BUDGET_LINE_EXCEEDED',
         `مبلغ المصروف (${expenseToApprove.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتاح لبند الموازنة (${remainingAvailable.toFixed(2)} ر.س)`,

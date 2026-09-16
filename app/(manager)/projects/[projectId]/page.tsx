@@ -14,6 +14,7 @@ import {
   Pencil,
   DollarSign,
   Receipt,
+  FileSignature,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -103,6 +104,16 @@ export default async function ProjectDetailsPage({
           >
             <DollarSign className="size-4" aria-hidden="true" />
             <span>الموازنة التقديرية</span>
+          </Link>
+
+          {/* Commitments Link */}
+          <Link
+            href={`/projects/${project.id}/commitments`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-commitments-button"
+          >
+            <FileSignature className="size-4" aria-hidden="true" />
+            <span>الارتباطات والشراء</span>
           </Link>
 
           {/* Expenses Link */}
@@ -200,14 +211,36 @@ export default async function ProjectDetailsPage({
           </div>
         </div>
 
-        <Link
-          href={`/projects/${project.id}/budget`}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
-          data-testid="view-manage-budget-button"
-        >
-          <DollarSign className="size-4" aria-hidden="true" />
-          <span>{budget ? 'استعراض وإدارة الموازنة' : 'إعداد مسودة الموازنة'}</span>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {budget?.status === 'APPROVED' && (
+            <>
+              <Link
+                href={`/projects/${project.id}/commitments`}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary shadow-sm hover:bg-primary/20 shrink-0"
+                data-testid="view-commitments-button"
+              >
+                <FileSignature className="size-4" aria-hidden="true" />
+                <span>أوامر الشراء والارتباطات</span>
+              </Link>
+              <Link
+                href={`/projects/${project.id}/expenses`}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3.5 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted shrink-0"
+                data-testid="view-expenses-button"
+              >
+                <Receipt className="size-4" aria-hidden="true" />
+                <span>المصروفات الفعلية</span>
+              </Link>
+            </>
+          )}
+          <Link
+            href={`/projects/${project.id}/budget`}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
+            data-testid="view-manage-budget-button"
+          >
+            <DollarSign className="size-4" aria-hidden="true" />
+            <span>{budget ? 'استعراض وإدارة الموازنة' : 'إعداد مسودة الموازنة'}</span>
+          </Link>
+        </div>
       </div>
 
       {/* Metadata Cards Grid */}

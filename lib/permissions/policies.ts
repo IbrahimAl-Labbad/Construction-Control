@@ -91,6 +91,35 @@ const canViewExpenses: Policy = (user) =>
   isManager(user) || user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
 
 // ---------------------------------------------------------------------------
+// Commitment policies (Vertical Slice 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create, edit, delete, or submit a commitment draft.
+ * In v1, restricted EXCLUSIVELY to Role.PURCHASING.
+ * Engineers, Accountants, and Managers cannot create commitments.
+ */
+const canCreateCommitment: Policy = (user) => user.role === Role.PURCHASING;
+
+const canManageCommitmentDraft: Policy = (user) => user.role === Role.PURCHASING;
+
+const canSubmitCommitment: Policy = (user) => user.role === Role.PURCHASING;
+
+/**
+ * Whether the user can approve or reject a commitment.
+ * Only managers have final approval authority.
+ */
+const canApproveCommitment: Policy = (user) => isManager(user);
+
+const canRejectCommitment: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can view commitments.
+ * All active authenticated users can view commitments according to their scope.
+ */
+const canViewCommitments: Policy = (user) => user.isActive;
+
+// ---------------------------------------------------------------------------
 // Future financial policies (stubs — to be populated in feature tasks)
 // ---------------------------------------------------------------------------
 // These stubs document the expected shape of future policies.
@@ -161,6 +190,14 @@ export const policies = {
   canManageExpenseDraft,
   canApproveExpense,
   canViewExpenses,
+
+  // Commitment management (Vertical Slice 5)
+  canCreateCommitment,
+  canManageCommitmentDraft,
+  canSubmitCommitment,
+  canApproveCommitment,
+  canRejectCommitment,
+  canViewCommitments,
 
   // Purchasing (stubs)
   canCreatePurchaseRequest,
