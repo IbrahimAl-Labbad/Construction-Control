@@ -120,6 +120,50 @@ const canRejectCommitment: Policy = (user) => isManager(user);
 const canViewCommitments: Policy = (user) => user.isActive;
 
 // ---------------------------------------------------------------------------
+// Custody policies (Vertical Slice 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create, edit, delete, or submit a custody request.
+ * In v1, restricted to Site Engineers and Accountants.
+ */
+const canCreateCustody: Policy = (user) =>
+  user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
+const canManageCustodyDraft: Policy = (user) =>
+  user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
+const canSubmitCustody: Policy = (user) =>
+  user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
+/**
+ * Whether the user can approve, reject, or cancel an approved custody request.
+ * Only managers have approval and cancellation authority.
+ */
+const canApproveCustody: Policy = (user) => isManager(user);
+const canRejectCustody: Policy = (user) => isManager(user);
+const canCancelCustody: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can disburse cash for an approved custody or record cash return.
+ * Restricted to Accountants.
+ */
+const canIssueCustody: Policy = (user) => user.role === Role.ACCOUNTANT;
+const canRecordCashReturn: Policy = (user) => user.role === Role.ACCOUNTANT;
+
+/**
+ * Whether the user can execute final administrative closure of a settled custody.
+ * Restricted to Managers.
+ */
+const canCloseCustody: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can view custodies.
+ * All active users can view according to their operational scope.
+ */
+const canViewCustodies: Policy = (user) => user.isActive;
+
+// ---------------------------------------------------------------------------
 // Future financial policies (stubs — to be populated in feature tasks)
 // ---------------------------------------------------------------------------
 // These stubs document the expected shape of future policies.
@@ -198,6 +242,18 @@ export const policies = {
   canApproveCommitment,
   canRejectCommitment,
   canViewCommitments,
+
+  // Custody management (Vertical Slice 6)
+  canCreateCustody,
+  canManageCustodyDraft,
+  canSubmitCustody,
+  canApproveCustody,
+  canRejectCustody,
+  canCancelCustody,
+  canIssueCustody,
+  canRecordCashReturn,
+  canCloseCustody,
+  canViewCustodies,
 
   // Purchasing (stubs)
   canCreatePurchaseRequest,

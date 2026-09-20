@@ -75,6 +75,19 @@ enum CommitmentStatus {
   REJECTED
 }
 
+/// Operational and approval lifecycle status for custody cash advances.
+enum CustodyStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  ISSUED
+  PARTIALLY_SETTLED
+  SETTLED
+  CLOSED
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -141,6 +154,30 @@ model User {
 
   // Commitments rejected by this user
   rejectedCommitments Commitment[] @relation("CommitmentRejecter")
+
+  // Custodies held by this user as custodian
+  custodianCustodies Custody[] @relation("CustodianUser")
+
+  // Custodies created by this user
+  createdCustodies Custody[] @relation("CustodyCreator")
+
+  // Custodies submitted by this user
+  submittedCustodies Custody[] @relation("CustodySubmitter")
+
+  // Custodies approved by this user
+  approvedCustodies Custody[] @relation("CustodyApprover")
+
+  // Custodies rejected by this user
+  rejectedCustodies Custody[] @relation("CustodyRejecter")
+
+  // Custodies cancelled by this user
+  cancelledCustodies Custody[] @relation("CustodyCanceller")
+
+  // Custodies issued by this user
+  issuedCustodies Custody[] @relation("CustodyIssuer")
+
+  // Custodies closed by this user
+  closedCustodies Custody[] @relation("CustodyCloser")
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -214,6 +251,9 @@ model Project {
 
   /// Commitments for this project
   commitments Commitment[]
+
+  /// Custodies for this project
+  custodies   Custody[]
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -296,6 +336,9 @@ model BudgetLine {
   /// Related commitments charged against this budget line
   commitments Commitment[]
 
+  /// Related custodies charged against this budget line
+  custodies   Custody[]
+
   @@index([budgetId])
   @@index([category])
   @@map("budget_lines")
@@ -344,6 +387,10 @@ model Expense {
   rejectedAt      DateTime?      @db.Timestamptz
   rejectionReason String?        @db.Text
 
+  /// Related custody advance (if this expense settles a cash advance)
+  custodyId       String?
+  custody         Custody?       @relation("CustodyExpenses", fields: [custodyId], references: [id], onDelete: Restrict)
+
   /// Soft deletion timestamp
   deletedAt       DateTime?      @db.Timestamptz
 
@@ -353,6 +400,7 @@ model Expense {
 
   @@index([projectId, status])
   @@index([budgetLineId, status])
+  @@index([custodyId])
   @@index([submittedById])
   @@index([approvedById])
   @@index([rejectedById])
@@ -429,6 +477,102 @@ model Commitment {
   @@index([commitmentDate])
   @@index([deletedAt])
   @@map("commitments")
+}
+
+// =============================================================================
+// CUSTODY / ADVANCE PAYMENT DOMAIN MODELS
+// =============================================================================
+
+/// Operational cash advance envelope linked to a Project Budget Line.
+/// Approved and issued advances represent entrusted funds subject to reconciliation.
+model Custody {
+  id                     String        @id @default(cuid())
+  code                   String        @unique
+  projectId              String
+  project                Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  budgetLineId           String
+  budgetLine             BudgetLine    @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// Authorized employee accountable for holding physical cash
+  custodianUserId        String
+  custodian              User          @relation("CustodianUser", fields: [custodianUserId], references: [id], onDelete: Restrict)
+
+  /// Authorized advance monetary amount in SAR. Positive Decimal(15,2).
+  amount                 Decimal       @db.Decimal(15, 2)
+  currency               String        @default("SAR")
+
+  /// Operational purpose and justification
+  purpose                String        @db.Text
+
+  /// Operational and approval lifecycle status
+  status                 CustodyStatus @default(DRAFT)
+
+  /// Recorded unspent cash returned to company
+  cashReturnedAmount     Decimal       @default(0.00) @db.Decimal(15, 2)
+
+  /// Creator tracking
+  createdById            String
+  createdBy              User          @relation("CustodyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Submitter tracking
+  submittedById          String?
+  submittedBy            User?         @relation("CustodySubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt            DateTime?     @db.Timestamptz
+
+  /// Approval tracking (Manager only)
+  approvedById           String?
+  approvedBy             User?         @relation("CustodyApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt             DateTime?     @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById           String?
+  rejectedBy             User?         @relation("CustodyRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt             DateTime?     @db.Timestamptz
+  rejectionReason        String?       @db.Text
+
+  /// Pre-issuance cancellation tracking (Manager only)
+  cancelledById          String?
+  cancelledBy            User?         @relation("CustodyCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  cancelledAt            DateTime?     @db.Timestamptz
+  cancellationReason     String?       @db.Text
+
+  /// Cash issuance tracking (Accountant)
+  issuedById             String?
+  issuedBy               User?         @relation("CustodyIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  issuedAt               DateTime?     @db.Timestamptz
+
+  /// Full settlement timestamp (when balance reaches 0.00)
+  settledAt              DateTime?     @db.Timestamptz
+
+  /// Final administrative closure tracking (Manager)
+  closedById             String?
+  closedBy               User?         @relation("CustodyCloser", fields: [closedById], references: [id], onDelete: Restrict)
+  closedAt               DateTime?     @db.Timestamptz
+
+  /// Operational deadline for reconciliation
+  expectedSettlementDate DateTime?     @db.Timestamptz
+
+  /// Soft deletion timestamp
+  deletedAt              DateTime?     @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt              DateTime      @default(now()) @db.Timestamptz
+  updatedAt              DateTime      @updatedAt @db.Timestamptz
+
+  /// Expenses settled against this custody advance
+  expenses               Expense[]     @relation("CustodyExpenses")
+
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([custodianUserId])
+  @@index([createdById])
+  @@index([submittedById])
+  @@index([approvedById])
+  @@index([issuedById])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("custodies")
 }
 
 // NextAuth.js adapter required models below.

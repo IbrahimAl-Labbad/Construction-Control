@@ -14,6 +14,7 @@ describe('toExpenseSummaryDTO', () => {
     id: 'exp-123',
     projectId: 'proj-456',
     budgetLineId: 'line-789',
+    custodyId: null,
     amount: new Prisma.Decimal('1450.50'),
     currency: 'SAR',
     description: 'توريد أدوات حفر',

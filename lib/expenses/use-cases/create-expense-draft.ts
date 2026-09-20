@@ -46,7 +46,7 @@ export async function createExpenseDraft(rawInput: unknown): Promise<ExpenseSumm
     throw new ValidationError(validation.errors);
   }
 
-  const { projectId, budgetLineId, amount, expenseDate, description } = validation.data;
+  const { projectId, budgetLineId, custodyId, amount, expenseDate, description } = validation.data;
 
   // 3. Verify target project exists, not deleted, and is ACTIVE
   const project = await prisma.project.findFirst({
@@ -98,6 +98,37 @@ export async function createExpenseDraft(rawInput: unknown): Promise<ExpenseSumm
     );
   }
 
+  // 5.1 If custodyId is specified, verify custody invariants
+  if (custodyId) {
+    const custody = await prisma.custody.findFirst({
+      where: { id: custodyId, deletedAt: null },
+      select: { id: true, projectId: true, budgetLineId: true, custodianUserId: true, status: true },
+    });
+
+    if (!custody) {
+      throw new AppError('NOT_FOUND', 'العهدة المحددة غير موجودة');
+    }
+
+    if (custody.status !== 'ISSUED' && custody.status !== 'PARTIALLY_SETTLED') {
+      throw new AppError(
+        'CUSTODY_NOT_ISSUED',
+        `لا يمكن تسجيل مصروف على عهدة بحالة "${custody.status}". يجب أن تكون منصرفة (ISSUED أو PARTIALLY_SETTLED)`,
+      );
+    }
+
+    if (custody.projectId !== projectId) {
+      throw new AppError('INVALID_EXPENSE_LINKAGE', 'مشروع العهدة لا يتطابق مع مشروع المصروف');
+    }
+
+    if (custody.budgetLineId !== budgetLineId) {
+      throw new AppError('INVALID_EXPENSE_LINKAGE', 'بند موازنة العهدة لا يتطابق مع بند موازنة المصروف');
+    }
+
+    if (custody.custodianUserId !== actor.id) {
+      throw new AppError('FORBIDDEN', 'فقط أمين العهدة يمكنه تسجيل مصروفات لتسوية هذه العهدة');
+    }
+  }
+
   // 6. Monetary conversion
   const decimalAmount = new Prisma.Decimal(amount);
 
@@ -107,6 +138,7 @@ export async function createExpenseDraft(rawInput: unknown): Promise<ExpenseSumm
       data: {
         projectId,
         budgetLineId,
+        custodyId: custodyId ?? null,
         amount: decimalAmount,
         currency: 'SAR',
         description,

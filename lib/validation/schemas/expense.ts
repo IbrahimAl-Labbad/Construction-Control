@@ -66,6 +66,11 @@ export const createExpenseDraftSchema = z.object({
     .string()
     .min(1, 'معرّف بند الموازنة مطلوب')
     .cuid('معرّف بند الموازنة غير صالح'),
+  custodyId: z
+    .string()
+    .cuid('معرّف العهدة غير صالح')
+    .nullable()
+    .optional(),
   amount: moneyAmountSchema,
   expenseDate: expenseDateSchema,
   description: z
@@ -86,6 +91,11 @@ export const updateExpenseDraftSchema = z.object({
     .string()
     .min(1, 'معرّف بند الموازنة مطلوب')
     .cuid('معرّف بند الموازنة غير صالح'),
+  custodyId: z
+    .string()
+    .cuid('معرّف العهدة غير صالح')
+    .nullable()
+    .optional(),
   amount: moneyAmountSchema,
   expenseDate: expenseDateSchema,
   description: z

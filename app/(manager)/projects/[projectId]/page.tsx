@@ -15,6 +15,7 @@ import {
   DollarSign,
   Receipt,
   FileSignature,
+  Wallet,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -229,6 +230,14 @@ export default async function ProjectDetailsPage({
               >
                 <Receipt className="size-4" aria-hidden="true" />
                 <span>المصروفات الفعلية</span>
+              </Link>
+              <Link
+                href={`/projects/${project.id}/custodies`}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 shadow-sm hover:bg-amber-500/20 shrink-0"
+                data-testid="view-custodies-button"
+              >
+                <Wallet className="size-4" aria-hidden="true" />
+                <span>العهد النقدية والتسويات</span>
               </Link>
             </>
           )}

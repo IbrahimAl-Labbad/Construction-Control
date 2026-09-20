@@ -200,6 +200,7 @@ test.describe('Budget / Financial Control E2E Suite', () => {
         const pId = projectRecord.id;
         const bRec = await prisma.budget.findFirst({ where: { projectId: pId } });
         if (bRec) {
+          await prisma.custody.deleteMany({ where: { projectId: pId } });
           await prisma.budgetLine.deleteMany({ where: { budgetId: bRec.id } });
           await prisma.auditLog.deleteMany({ where: { entityType: 'BUDGET', entityId: bRec.id } });
           await prisma.budget.deleteMany({ where: { id: bRec.id } });

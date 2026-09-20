@@ -455,6 +455,9 @@ describe('Expense Use Cases', () => {
           budget: {
             findFirst: vi.fn().mockResolvedValue({ id: 'b-1' }),
           },
+          custody: {
+            findMany: vi.fn().mockResolvedValue([]),
+          },
         };
         // Adding 15k to 10k = 25k > 20k ceiling -> throws BUDGET_LINE_EXCEEDED
         return cb(tx as unknown as MockTx);

@@ -55,7 +55,7 @@ export async function updateExpenseDraft(
   if (!inputValidation.success) {
     throw new ValidationError(inputValidation.errors);
   }
-  const { budgetLineId, amount, expenseDate, description } = inputValidation.data;
+  const { budgetLineId, custodyId, amount, expenseDate, description } = inputValidation.data;
 
   // 4. Fetch existing expense
   const existing = await prisma.expense.findFirst({
@@ -120,6 +120,38 @@ export async function updateExpenseDraft(
     }
   }
 
+  // 7.1 If custodyId provided, validate custody invariants
+  const targetCustodyId = custodyId !== undefined ? custodyId : existing.custodyId;
+  if (targetCustodyId) {
+    const custody = await prisma.custody.findFirst({
+      where: { id: targetCustodyId, deletedAt: null },
+      select: { id: true, projectId: true, budgetLineId: true, custodianUserId: true, status: true },
+    });
+
+    if (!custody) {
+      throw new AppError('NOT_FOUND', 'العهدة المحددة غير موجودة');
+    }
+
+    if (custody.status !== 'ISSUED' && custody.status !== 'PARTIALLY_SETTLED') {
+      throw new AppError(
+        'CUSTODY_NOT_ISSUED',
+        `لا يمكن تسجيل مصروف على عهدة بحالة "${custody.status}". يجب أن تكون منصرفة (ISSUED أو PARTIALLY_SETTLED)`,
+      );
+    }
+
+    if (custody.projectId !== existing.projectId) {
+      throw new AppError('INVALID_EXPENSE_LINKAGE', 'مشروع العهدة لا يتطابق مع مشروع المصروف');
+    }
+
+    if (custody.budgetLineId !== budgetLineId) {
+      throw new AppError('INVALID_EXPENSE_LINKAGE', 'بند موازنة العهدة لا يتطابق مع بند موازنة المصروف');
+    }
+
+    if (custody.custodianUserId !== actor.id) {
+      throw new AppError('FORBIDDEN', 'فقط أمين العهدة يمكنه تسجيل مصروفات لتسوية هذه العهدة');
+    }
+  }
+
   // 8. Monetary conversion
   const newDecimalAmount = new Prisma.Decimal(amount);
 
@@ -137,6 +169,10 @@ export async function updateExpenseDraft(
       previous: existing.budgetLineId,
       new: budgetLineId,
     },
+    custodyId: {
+      previous: existing.custodyId,
+      new: targetCustodyId,
+    },
     expenseDate: {
       previous: existing.expenseDate.toISOString(),
       new: expenseDate.toISOString(),
@@ -149,6 +185,7 @@ export async function updateExpenseDraft(
       where: { id },
       data: {
         budgetLineId,
+        custodyId: targetCustodyId,
         amount: newDecimalAmount,
         expenseDate,
         description,

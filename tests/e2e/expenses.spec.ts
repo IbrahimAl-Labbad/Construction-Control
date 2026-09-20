@@ -245,6 +245,7 @@ test.describe('Expense Capture & Approval E2E Suite', () => {
     } finally {
       // Database cleanup
       await prisma.auditLog.deleteMany({ where: { entityType: 'EXPENSE' } });
+      await prisma.custody.deleteMany({ where: { projectId: project.id } });
       await prisma.expense.deleteMany({ where: { projectId: project.id } });
       await prisma.budgetLine.deleteMany({ where: { budgetId: budget.id } });
       await prisma.budget.deleteMany({ where: { id: budget.id } });

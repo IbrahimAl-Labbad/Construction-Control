@@ -257,6 +257,7 @@ test.describe('Purchasing & Commitments E2E Suite', () => {
     } finally {
       // Database cleanup
       await prisma.auditLog.deleteMany({ where: { entityType: 'COMMITMENT' } });
+      await prisma.custody.deleteMany({ where: { projectId: project.id } });
       await prisma.commitment.deleteMany({ where: { projectId: project.id } });
       await prisma.budgetLine.deleteMany({ where: { budgetId: budget.id } });
       await prisma.budget.deleteMany({ where: { id: budget.id } });

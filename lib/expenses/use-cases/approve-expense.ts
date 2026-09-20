@@ -17,7 +17,7 @@
  * 6. Atomicity: Status update + approval metadata + EXPENSE_APPROVED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, CommitmentStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -51,6 +51,7 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       status: true,
       submittedById: true,
       budgetLineId: true,
+      custodyId: true,
       amount: true,
       projectId: true,
     },
@@ -74,7 +75,7 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
   // 6. Execute atomic approval transaction with BudgetLine row-level locking
   const now = new Date();
   const approved = await prisma.$transaction(async (tx) => {
-    // 6.1 Lock the parent budget line row (Gate 4 & 26)
+    // 6.1 Lock the parent budget line row (Canonical Lock Order 1)
     const lockedLines = await tx.$queryRaw<Array<{ id: string; amount: Prisma.Decimal }>>`
       SELECT id, amount FROM budget_lines
       WHERE id = ${preCheck.budgetLineId}
@@ -86,7 +87,7 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       throw new AppError('INVALID_BUDGET_LINE', 'بند الموازنة غير موجود');
     }
 
-    // 6.2 Revalidate expense status inside locked transaction (Gate 28)
+    // 6.2 Revalidate expense status inside locked transaction
     const expenseToApprove = await tx.expense.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -105,7 +106,7 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       );
     }
 
-    // 6.3 Revalidate project & budget invariants (Gate 3)
+    // 6.3 Revalidate project & budget invariants
     if (expenseToApprove.project.status !== ProjectStatus.ACTIVE || expenseToApprove.project.deletedAt !== null) {
       throw new AppError('INVALID_PROJECT_STATUS', 'المشروع غير نشط أو تم حذفه');
     }
@@ -123,7 +124,85 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       throw new AppError('BUDGET_NOT_APPROVED', 'المشروع لا يمتلك موازنة معتمدة نشطة');
     }
 
-    // 6.4 Aggregate current APPROVED spend and commitments on this budget line after acquiring the lock (Joint Financial Concurrency Invariant)
+    // 6.4 Custody Branch (Canonical Lock Order 2)
+    let custodyToUpdate: { id: string; code: string; isFullySettled: boolean } | null = null;
+    if (expenseToApprove.custodyId) {
+      const lockedCustodies = await tx.$queryRaw<
+        Array<{
+          id: string;
+          code: string;
+          projectId: string;
+          budgetLineId: string;
+          custodianUserId: string;
+          amount: Prisma.Decimal;
+          cashReturnedAmount: Prisma.Decimal;
+          status: CustodyStatus;
+        }>
+      >`
+        SELECT id, code, "projectId", "budgetLineId", "custodianUserId", amount, "cashReturnedAmount", status
+        FROM custodies
+        WHERE id = ${expenseToApprove.custodyId}
+        FOR UPDATE
+      `;
+
+      const lockedCustody = lockedCustodies[0];
+      if (!lockedCustody) {
+        throw new AppError('NOT_FOUND', 'العهدة المرتبطة بالمصروف غير موجودة');
+      }
+
+      if (
+        lockedCustody.status !== CustodyStatus.ISSUED &&
+        lockedCustody.status !== CustodyStatus.PARTIALLY_SETTLED
+      ) {
+        throw new AppError(
+          'CUSTODY_NOT_ISSUED',
+          `لا يمكن اعتماد مصروف مرتبط بعهدة بحالة "${lockedCustody.status}". يجب أن تكون منصرفة (ISSUED أو PARTIALLY_SETTLED)`,
+        );
+      }
+
+      if (lockedCustody.projectId !== expenseToApprove.projectId) {
+        throw new AppError('INVALID_EXPENSE_LINKAGE', 'مشروع العهدة لا يتطابق مع مشروع المصروف');
+      }
+
+      if (lockedCustody.budgetLineId !== expenseToApprove.budgetLineId) {
+        throw new AppError('INVALID_EXPENSE_LINKAGE', 'بند موازنة العهدة لا يتطابق مع بند موازنة المصروف');
+      }
+
+      if (lockedCustody.custodianUserId !== expenseToApprove.submittedById) {
+        throw new AppError('FORBIDDEN', 'أمين العهدة فقط هو المخول بتقديم مصروفات لتسوية هذه العهدة');
+      }
+
+      // Aggregate existing approved expenses on this custody
+      const custodyExpensesAgg = await tx.expense.aggregate({
+        where: {
+          custodyId: lockedCustody.id,
+          status: ExpenseStatus.APPROVED,
+          deletedAt: null,
+        },
+        _sum: { amount: true },
+      });
+      const currentSettled = custodyExpensesAgg._sum.amount ?? new Prisma.Decimal('0.00');
+      const remainingAdvance = lockedCustody.amount.sub(currentSettled).sub(lockedCustody.cashReturnedAmount);
+
+      if (expenseToApprove.amount.greaterThan(remainingAdvance)) {
+        throw new AppError(
+          'CUSTODY_BALANCE_EXCEEDED',
+          `مبلغ المصروف (${expenseToApprove.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتبقي في العهدة (${remainingAdvance.toFixed(2)} ر.س)`,
+        );
+      }
+
+      const newSettled = currentSettled.add(expenseToApprove.amount);
+      const finalRemaining = lockedCustody.amount.sub(newSettled).sub(lockedCustody.cashReturnedAmount);
+      const isFullySettled = finalRemaining.equals(0);
+
+      custodyToUpdate = {
+        id: lockedCustody.id,
+        code: lockedCustody.code,
+        isFullySettled,
+      };
+    }
+
+    // 6.5 Aggregate active exposure on this budget line (Direct Spend + Custody Spend + Commitments + Outstanding Custodies)
     const approvedExpensesAgg = await tx.expense.aggregate({
       where: {
         budgetLineId: expenseToApprove.budgetLineId,
@@ -142,18 +221,44 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       _sum: { amount: true },
     });
 
+    // Outstanding custodies on this line
+    const activeCustodies = await tx.custody.findMany({
+      where: {
+        budgetLineId: expenseToApprove.budgetLineId,
+        status: { in: [CustodyStatus.ISSUED, CustodyStatus.PARTIALLY_SETTLED] },
+        deletedAt: null,
+      },
+      include: {
+        expenses: {
+          where: { status: ExpenseStatus.APPROVED, deletedAt: null },
+          select: { amount: true },
+        },
+      },
+    });
+
+    let outstandingCustodies = new Prisma.Decimal('0.00');
+    for (const c of activeCustodies) {
+      const settled = c.expenses.reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
+      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
+      outstandingCustodies = outstandingCustodies.add(remaining);
+    }
+
     const currentSpend = approvedExpensesAgg._sum.amount ?? new Prisma.Decimal('0.00');
     const currentCommitments = approvedCommitmentsAgg._sum.amount ?? new Prisma.Decimal('0.00');
-    const currentExposure = currentSpend.add(currentCommitments);
-    const newTotalSpend = currentExposure.add(expenseToApprove.amount);
+    const totalActiveExposure = currentSpend.add(currentCommitments).add(outstandingCustodies);
 
-    // 6.5 Enforce hard budget ceiling
-    if (newTotalSpend.greaterThan(lockedLine.amount)) {
-      const remainingAvailable = lockedLine.amount.sub(currentExposure);
-      throw new AppError(
-        'BUDGET_LINE_EXCEEDED',
-        `مبلغ المصروف (${expenseToApprove.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتاح لبند الموازنة (${remainingAvailable.toFixed(2)} ر.س)`,
-      );
+    // Invariant 4 & 5:
+    // If direct expense: increases active exposure -> check totalActiveExposure + amount <= line.amount
+    // If custody expense: converts outstanding custody into spend -> active exposure is preserved
+    if (!expenseToApprove.custodyId) {
+      const newTotalExposure = totalActiveExposure.add(expenseToApprove.amount);
+      if (newTotalExposure.greaterThan(lockedLine.amount)) {
+        const remainingAvailable = lockedLine.amount.sub(totalActiveExposure);
+        throw new AppError(
+          'BUDGET_LINE_EXCEEDED',
+          `مبلغ المصروف (${expenseToApprove.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتاح لبند الموازنة (${remainingAvailable.toFixed(2)} ر.س)`,
+        );
+      }
     }
 
     // 6.6 Update expense record to APPROVED
@@ -173,7 +278,37 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       },
     });
 
-    // 6.7 Write EXPENSE_APPROVED audit log inside same transaction (Gate 29)
+    // 6.7 If custody linked, update custody status
+    if (custodyToUpdate) {
+      const newStatus = custodyToUpdate.isFullySettled
+        ? CustodyStatus.SETTLED
+        : CustodyStatus.PARTIALLY_SETTLED;
+
+      await tx.custody.update({
+        where: { id: custodyToUpdate.id },
+        data: {
+          status: newStatus,
+          settledAt: custodyToUpdate.isFullySettled ? now : null,
+        },
+      });
+
+      if (custodyToUpdate.isFullySettled) {
+        await tx.auditLog.create({
+          data: {
+            actorId: actor.id,
+            action: 'CUSTODY_SETTLED',
+            entityType: 'CUSTODY',
+            entityId: custodyToUpdate.id,
+            metadata: {
+              code: custodyToUpdate.code,
+              settledAt: now.toISOString(),
+            },
+          },
+        });
+      }
+    }
+
+    // 6.8 Write EXPENSE_APPROVED audit log
     await tx.auditLog.create({
       data: {
         actorId: actor.id,
@@ -183,10 +318,8 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
         metadata: {
           projectId: updatedExpense.projectId,
           budgetLineId: updatedExpense.budgetLineId,
+          custodyId: expenseToApprove.custodyId,
           amount: updatedExpense.amount.toFixed(2),
-          previousApprovedSpend: currentSpend.toFixed(2),
-          newApprovedSpend: newTotalSpend.toFixed(2),
-          remainingLineBalance: lockedLine.amount.sub(newTotalSpend).toFixed(2),
           approvedAt: now.toISOString(),
         },
       },

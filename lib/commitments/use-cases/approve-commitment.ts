@@ -29,7 +29,7 @@
  * 6. Atomicity: Status update + approval metadata + COMMITMENT_APPROVED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, CommitmentStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -177,8 +177,30 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
     });
     const approvedCommitments = approvedCommitmentsAgg._sum.amount ?? new Prisma.Decimal('0.00');
 
-    // Total Exposure = ApprovedExpenses + ApprovedCommitments
-    const currentExposure = approvedExpenses.add(approvedCommitments);
+    // C. Aggregate Outstanding Custodies on this budget line
+    const activeCustodies = await tx.custody.findMany({
+      where: {
+        budgetLineId: commitmentToApprove.budgetLineId,
+        status: { in: [CustodyStatus.ISSUED, CustodyStatus.PARTIALLY_SETTLED] },
+        deletedAt: null,
+      },
+      include: {
+        expenses: {
+          where: { status: ExpenseStatus.APPROVED, deletedAt: null },
+          select: { amount: true },
+        },
+      },
+    });
+
+    let outstandingCustodies = new Prisma.Decimal('0.00');
+    for (const c of activeCustodies) {
+      const settled = c.expenses.reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
+      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
+      outstandingCustodies = outstandingCustodies.add(remaining);
+    }
+
+    // Total Exposure = ApprovedExpenses + ApprovedCommitments + OutstandingCustodies
+    const currentExposure = approvedExpenses.add(approvedCommitments).add(outstandingCustodies);
     const newTotalExposure = currentExposure.add(commitmentToApprove.amount);
 
     // 6.4 Enforce hard budget line ceiling

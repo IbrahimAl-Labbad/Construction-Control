@@ -41,6 +41,7 @@ export function toExpenseSummaryDTO(entity: ExpenseWithRelations): ExpenseSummar
           amount: entity.budgetLine.amount.toFixed(2),
         }
       : undefined,
+    custodyId: entity.custodyId ?? null,
     amount: entity.amount.toFixed(2),
     currency: entity.currency,
     description: entity.description,

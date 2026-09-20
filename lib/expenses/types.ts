@@ -49,6 +49,7 @@ export type ExpenseSummaryDTO = {
   project?: ExpenseProjectInfo | undefined;
   budgetLineId: string;
   budgetLine?: ExpenseBudgetLineInfo | undefined;
+  custodyId?: string | null;
   amount: string; // e.g. "1250.00"
   currency: string;
   description: string;
