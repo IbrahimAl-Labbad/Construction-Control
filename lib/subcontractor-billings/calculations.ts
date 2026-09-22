@@ -17,7 +17,7 @@
  * Strictly adheres to AGENTS.md §13 (no JS Number calculations for money).
  */
 
-import { Prisma } from '@prisma/client';
+import { Prisma, SubcontractorBillingStatus } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,29 +48,56 @@ export type BillingCeilingCheckResult = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Calculates the remaining balance on an approved Commitment after deducting
+ * the cumulative certified billing amount.
+ *
+ * @param commitmentAmount - Total authorized amount of the commitment.
+ * @param cumulativeCertified - Sum of approved billing amounts.
+ * @returns Remaining commitment balance as Prisma.Decimal.
+ */
+export function calculateRemainingCommitmentBalance(
+  commitmentAmount: Prisma.Decimal,
+  cumulativeCertified: Prisma.Decimal,
+): Prisma.Decimal {
+  return commitmentAmount.sub(cumulativeCertified);
+}
+
+/**
  * Calculates the cumulative certified amount for a Commitment by summing
  * all approved billing grossAmounts.
  *
- * Must be called with records already filtered to:
- *   - status === APPROVED
- *   - deletedAt === null
- *   - commitmentId === <target commitment>
+ * If records include a `status` field, only APPROVED billings are included.
+ * Otherwise, assumes all passed records are approved billings.
  *
- * @param approvedBillings - Array of approved billing records with grossAmount.
+ * @param commitmentAmount - Total authorized amount of the commitment.
+ * @param approvedBillings - Array of billing records with grossAmount (and optional status).
  * @returns Cumulative certified amount and remaining commitment balance.
  */
 export function calculateCumulativeCertified(
   commitmentAmount: Prisma.Decimal,
-  approvedBillings: ReadonlyArray<{ grossAmount: Prisma.Decimal }>,
+  approvedBillings: ReadonlyArray<{
+    grossAmount: Prisma.Decimal;
+    status?: SubcontractorBillingStatus | string;
+  }>,
 ): BillingCumulativeResult {
   const zero = new Prisma.Decimal('0.00');
 
-  const cumulativeCertified = approvedBillings.reduce(
+  const eligibleBillings = approvedBillings.filter(
+    (b) =>
+      !('status' in b) ||
+      b.status === undefined ||
+      b.status === SubcontractorBillingStatus.APPROVED,
+  );
+
+  const cumulativeCertified = eligibleBillings.reduce(
     (acc, billing) => acc.add(billing.grossAmount),
     zero,
   );
 
-  const remainingCommitmentBalance = commitmentAmount.sub(cumulativeCertified);
+  const remainingCommitmentBalance = calculateRemainingCommitmentBalance(
+    commitmentAmount,
+    cumulativeCertified,
+  );
 
   return {
     cumulativeCertified,
@@ -97,7 +124,10 @@ export function checkBillingCeiling(
   currentGrossAmount: Prisma.Decimal,
 ): BillingCeilingCheckResult {
   const newCumulativeCertified = previousCumulativeCertified.add(currentGrossAmount);
-  const remainingCommitmentBalance = commitmentAmount.sub(newCumulativeCertified);
+  const remainingCommitmentBalance = calculateRemainingCommitmentBalance(
+    commitmentAmount,
+    newCumulativeCertified,
+  );
   const withinCeiling = newCumulativeCertified.lessThanOrEqualTo(commitmentAmount);
 
   return {

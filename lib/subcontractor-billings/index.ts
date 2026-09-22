@@ -28,6 +28,7 @@ export {
 // Calculations (server-only — uses Prisma.Decimal)
 export {
   calculateCumulativeCertified,
+  calculateRemainingCommitmentBalance,
   checkBillingCeiling,
   type BillingCumulativeResult,
   type BillingCeilingCheckResult,

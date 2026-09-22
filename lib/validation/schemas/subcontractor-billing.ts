@@ -50,6 +50,8 @@ export const billingReferenceNumberSchema = z.preprocess(
     .optional(),
 );
 
+export const referenceNumberSchema = billingReferenceNumberSchema;
+
 // ---------------------------------------------------------------------------
 // Subcontractor Name Schema
 // ---------------------------------------------------------------------------
