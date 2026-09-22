@@ -16,6 +16,7 @@ import {
   Receipt,
   FileSignature,
   Wallet,
+  Users,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -238,6 +239,14 @@ export default async function ProjectDetailsPage({
               >
                 <Wallet className="size-4" aria-hidden="true" />
                 <span>العهد النقدية والتسويات</span>
+              </Link>
+              <Link
+                href={`/projects/${project.id}/payroll`}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-blue-500/30 bg-blue-500/10 px-3.5 py-2 text-xs font-semibold text-blue-700 dark:text-blue-400 shadow-sm hover:bg-blue-500/20 shrink-0"
+                data-testid="view-payroll-button"
+              >
+                <Users className="size-4" aria-hidden="true" />
+                <span>أجور وعمالة المشروع</span>
               </Link>
             </>
           )}

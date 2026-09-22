@@ -20,6 +20,7 @@ import {
   CommitmentStatus,
   CustodyStatus,
   ExpenseStatus,
+  PayrollStatus,
   Prisma,
   ProjectStatus,
   Role,
@@ -169,10 +170,24 @@ export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDT
       existingOutstandingCustodies = existingOutstandingCustodies.add(remaining);
     }
 
+    // D. Aggregate APPROVED payroll entries on this line
+    const payrollAgg = tx.payrollEntry
+      ? await tx.payrollEntry.aggregate({
+          where: {
+            budgetLineId: preCheck.budgetLineId,
+            status: PayrollStatus.APPROVED,
+            deletedAt: null,
+          },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null } };
+    const approvedPayroll = payrollAgg._sum.amount ?? new Prisma.Decimal('0.00');
+
     // Total Current Active Exposure
     const currentActiveExposure = approvedCommitments
       .add(approvedExpenses)
-      .add(existingOutstandingCustodies);
+      .add(existingOutstandingCustodies)
+      .add(approvedPayroll);
 
     const newTotalExposure = currentActiveExposure.add(lockedCustody.amount);
 

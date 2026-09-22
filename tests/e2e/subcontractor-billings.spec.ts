@@ -753,7 +753,7 @@ test.describe('Subcontractor Billings E2E Suite', () => {
     const { project, targetLine, commitment } = await seedTestProjectWithCommitment();
 
     const accountantUser = await prisma.user.findFirstOrThrow({
-      where: { role: Role.ACCOUNTANT, isActive: true },
+      where: { email: ACCOUNTANT_EMAIL, isActive: true },
       select: { id: true },
     });
 

@@ -20,7 +20,7 @@
  *   const canApprove = policies.canApproveExpense(user);
  */
 
-import { Role } from '@prisma/client';
+import { Role, PayrollStatus } from '@prisma/client';
 
 import type { AuthenticatedUser } from '@/lib/auth/types';
 
@@ -255,6 +255,172 @@ const canManageBudget: Policy = (user) => user.role === Role.MANAGER;
 const canViewBudget: Policy = (user) => user.isActive;
 
 // ---------------------------------------------------------------------------
+// Payroll policies (Vertical Slice 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create a payroll draft entry.
+ * In v1, restricted exclusively to active Accountants (AGENTS.md §5.3).
+ * Managers, Engineers, and Purchasing Officers cannot create payroll entries.
+ */
+export const canCreatePayrollDraft = (user: AuthenticatedUser): boolean => {
+  if (!user.isActive) return false;
+  return user.role === Role.ACCOUNTANT;
+};
+
+/**
+ * Whether the user can edit or delete a payroll draft entry.
+ * Restricted to active Accountants who own (created) the draft while in DRAFT status.
+ * Managers cannot edit or delete payroll entries (separation of duties).
+ */
+export const canManagePayrollDraft = (
+  user: AuthenticatedUser,
+  entry: { createdById: string; status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role !== Role.ACCOUNTANT) return false;
+  if (entry.status !== PayrollStatus.DRAFT) return false;
+  return entry.createdById === user.id;
+};
+
+/**
+ * Whether the user can submit a payroll draft for Manager approval.
+ * Restricted to the active Accountant who created the entry while in DRAFT status.
+ */
+export const canSubmitPayroll = (
+  user: AuthenticatedUser,
+  entry: { createdById: string; status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role !== Role.ACCOUNTANT) return false;
+  if (entry.status !== PayrollStatus.DRAFT) return false;
+  return entry.createdById === user.id;
+};
+
+/**
+ * Whether the user can approve a submitted payroll entry.
+ * Restricted to active Managers while entry is in SUBMITTED status.
+ * Strict separation of duties: creator cannot approve their own entry (createdById !== user.id).
+ * Accountants, Engineers, and Purchasing officers cannot approve.
+ */
+export const canApprovePayroll = (
+  user: AuthenticatedUser,
+  entry: { createdById: string; status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role !== Role.MANAGER) return false;
+  if (entry.status !== PayrollStatus.SUBMITTED) return false;
+  return entry.createdById !== user.id;
+};
+
+/**
+ * Whether the user can reject a submitted payroll entry back to Accountant.
+ * Restricted to active Managers while entry is in SUBMITTED status.
+ */
+export const canRejectPayroll = (
+  user: AuthenticatedUser,
+  entry: { status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role !== Role.MANAGER) return false;
+  return entry.status === PayrollStatus.SUBMITTED;
+};
+
+/**
+ * Whether the user can reopen a rejected payroll entry for corrections.
+ * Restricted to the active Accountant who originally created the entry while in REJECTED status.
+ * Managers or other accountants cannot reopen it.
+ */
+export const canReopenPayroll = (
+  user: AuthenticatedUser,
+  entry: { createdById: string; status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role !== Role.ACCOUNTANT) return false;
+  if (entry.status !== PayrollStatus.REJECTED) return false;
+  return entry.createdById === user.id;
+};
+
+/**
+ * Whether the user can cancel a payroll entry.
+ * Matrix:
+ * - DRAFT: Accountant creator OR Manager can cancel.
+ * - SUBMITTED: Manager ONLY can cancel.
+ * - REJECTED: Denied for all.
+ * - APPROVED: Denied for all (strictly immutable ledger record).
+ * - CANCELLED: Denied for all (terminal state).
+ */
+export const canCancelPayroll = (
+  user: AuthenticatedUser,
+  entry: { createdById: string; status: PayrollStatus },
+): boolean => {
+  if (!user.isActive) return false;
+
+  if (entry.status === PayrollStatus.DRAFT) {
+    if (user.role === Role.ACCOUNTANT && entry.createdById === user.id) {
+      return true;
+    }
+    if (user.role === Role.MANAGER) {
+      return true;
+    }
+    return false;
+  }
+
+  if (entry.status === PayrollStatus.SUBMITTED) {
+    return user.role === Role.MANAGER;
+  }
+
+  // REJECTED, APPROVED, CANCELLED cannot be cancelled
+  return false;
+};
+
+/**
+ * Whether the user can view detailed payroll entries.
+ * Restricted to active Managers and Accountants.
+ * Engineers and Purchasing Officers are strictly denied.
+ */
+export const canViewPayrollDetails = (user: AuthenticatedUser): boolean => {
+  if (!user.isActive) return false;
+  return user.role === Role.MANAGER || user.role === Role.ACCOUNTANT;
+};
+
+/**
+ * Whether the user can view aggregate project labor cost summaries.
+ * - Manager: ALLOW (active user).
+ * - Accountant: ALLOW (active user).
+ * - Purchasing: HARD DENY (false).
+ * - Engineer: FAIL-CLOSED. Allowed ONLY if a validated safe project-scope mechanism
+ *   proves the engineer is assigned to or has verified access to the specific project.
+ *   If scope is omitted or unverified, returns false.
+ */
+export const canViewProjectLaborAggregate = (
+  user: AuthenticatedUser,
+  scopeResolution?: { hasProjectAccess?: boolean; isAssignedEngineer?: boolean } | boolean,
+): boolean => {
+  if (!user.isActive) return false;
+
+  if (user.role === Role.MANAGER || user.role === Role.ACCOUNTANT) {
+    return true;
+  }
+
+  if (user.role === Role.PURCHASING) {
+    return false;
+  }
+
+  if (user.role === Role.ENGINEER) {
+    if (typeof scopeResolution === 'boolean') {
+      return scopeResolution;
+    }
+    if (scopeResolution && typeof scopeResolution === 'object') {
+      return Boolean(scopeResolution.hasProjectAccess || scopeResolution.isAssignedEngineer);
+    }
+    return false; // Fail closed
+  }
+
+  return false;
+};
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -321,4 +487,15 @@ export const policies = {
   canRejectBilling,
   canCancelBilling,
   canViewBillings,
+
+  // Payroll management (Vertical Slice 8)
+  canCreatePayrollDraft,
+  canManagePayrollDraft,
+  canSubmitPayroll,
+  canApprovePayroll,
+  canRejectPayroll,
+  canReopenPayroll,
+  canCancelPayroll,
+  canViewPayrollDetails,
+  canViewProjectLaborAggregate,
 } as const;

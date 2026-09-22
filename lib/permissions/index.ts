@@ -20,4 +20,15 @@ export {
 export type { PermissionErrorCode } from './guards';
 
 export { requireAuth } from '@/lib/auth';
-export { policies } from './policies';
+export {
+  policies,
+  canCreatePayrollDraft,
+  canManagePayrollDraft,
+  canSubmitPayroll,
+  canApprovePayroll,
+  canRejectPayroll,
+  canReopenPayroll,
+  canCancelPayroll,
+  canViewPayrollDetails,
+  canViewProjectLaborAggregate,
+} from './policies';

@@ -106,5 +106,30 @@ describe('Custody Financial Calculations', () => {
       expect(result.totalPendingExposure.toFixed(2)).toBe('0.00');
       expect(result.projectedBalance.toFixed(2)).toBe('25000.00');
     });
+
+    it('integrates approved and pending payroll into exposure calculation (Vertical Slice 8)', () => {
+      const result = calculateBudgetLineExposure({
+        authorizedAmount: new Prisma.Decimal('100000.00'),
+        approvedCommitments: new Prisma.Decimal('20000.00'),
+        directActualSpend: new Prisma.Decimal('15000.00'),
+        custodyActualSpend: new Prisma.Decimal('5000.00'),
+        outstandingCustodies: new Prisma.Decimal('10000.00'),
+        approvedPayroll: new Prisma.Decimal('25000.00'), // Slice 8
+        pendingCommitments: new Prisma.Decimal('5000.00'),
+        pendingDirectExpenses: new Prisma.Decimal('2000.00'),
+        pendingCustodies: new Prisma.Decimal('3000.00'),
+        pendingPayroll: new Prisma.Decimal('8000.00'), // Slice 8
+      });
+
+      // Total Active Exposure = 20k (commitments) + 15k (direct) + 5k (custody) + 10k (outstanding) + 25k (payroll) = 75,000.00
+      expect(result.totalActiveExposure.toFixed(2)).toBe('75000.00');
+      // Available balance = 100k - 75k = 25,000.00
+      expect(result.availableBalance.toFixed(2)).toBe('25000.00');
+      // Total pending exposure = 5k + 2k + 3k + 8k = 18,000.00
+      expect(result.totalPendingExposure.toFixed(2)).toBe('18000.00');
+      // Projected balance = 25k - 18k = 7,000.00
+      expect(result.projectedBalance.toFixed(2)).toBe('7000.00');
+    });
   });
 });
+

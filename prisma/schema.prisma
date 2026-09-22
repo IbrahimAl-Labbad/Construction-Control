@@ -97,6 +97,16 @@ enum SubcontractorBillingStatus {
   CANCELLED   // Terminal — voided before approval
 }
 
+/// Operational and approval lifecycle status for project payroll/labor cost entries (الشريحة الرأسية 8).
+enum PayrollStatus {
+  DRAFT       // Created by Accountant, editable
+  SUBMITTED   // Submitted for Manager approval, locked
+  APPROVED    // Approved by Manager — strictly immutable ledger record
+  REJECTED    // Rejected by Manager, can be reopened to DRAFT
+  CANCELLED   // Terminal — voided before approval
+}
+
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -194,6 +204,14 @@ model User {
   approvedBillings  SubcontractorBilling[] @relation("BillingApprover")
   rejectedBillings  SubcontractorBilling[] @relation("BillingRejecter")
 
+  // Payroll Entries (Vertical Slice 8)
+  createdPayrollEntries   PayrollEntry[] @relation("PayrollCreator")
+  submittedPayrollEntries PayrollEntry[] @relation("PayrollSubmitter")
+  approvedPayrollEntries  PayrollEntry[] @relation("PayrollApprover")
+  rejectedPayrollEntries  PayrollEntry[] @relation("PayrollRejecter")
+  cancelledPayrollEntries PayrollEntry[] @relation("PayrollCanceller")
+
+
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -272,6 +290,10 @@ model Project {
 
   /// Subcontractor Billings for this project (Vertical Slice 7)
   subcontractorBillings SubcontractorBilling[]
+
+  /// Payroll Entries for this project (Vertical Slice 8)
+  payrollEntries        PayrollEntry[]
+
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -359,6 +381,10 @@ model BudgetLine {
 
   /// Related subcontractor billings against this budget line (Vertical Slice 7)
   subcontractorBillings SubcontractorBilling[]
+
+  /// Related payroll entries against this budget line (Vertical Slice 8)
+  payrollEntries        PayrollEntry[]
+
 
   @@index([budgetId])
   @@index([category])
@@ -685,6 +711,84 @@ model SubcontractorBilling {
   @@index([deletedAt])
   @@map("subcontractor_billings")
 }
+
+// =============================================================================
+// PAYROLL DOMAIN MODELS (Vertical Slice 8)
+// =============================================================================
+
+/// Operational and control layer representation of a project labor cost entry.
+/// Captures approved site labor amounts without processing payroll, salaries, or HR contracts.
+/// Approved records represent realized actual labor spend and are strictly immutable (AGENTS.md §13).
+model PayrollEntry {
+  id                 String        @id @default(cuid())
+
+  projectId          String
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  budgetLineId       String
+  budgetLine         BudgetLine    @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// Worker identification snapshot (plain validated text — no HR master entity)
+  workerName         String        @db.VarChar(100)
+  workerReference    String?       @db.VarChar(50)
+  tradeOrTitle       String?       @db.VarChar(50)
+
+  /// Calendar period
+  periodYear         Int
+  periodMonth        Int
+
+  /// Monetary labor cost amount in SAR. Positive Decimal(15, 2).
+  amount             Decimal       @db.Decimal(15, 2)
+  currency           String        @default("SAR")
+
+  /// Operational description / site notes
+  description        String        @db.Text
+
+  /// Operational lifecycle status
+  status             PayrollStatus @default(DRAFT)
+
+  /// Creator tracking (Accountant only)
+  createdById        String
+  createdBy          User          @relation("PayrollCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Submitter tracking
+  submittedById      String?
+  submittedBy        User?         @relation("PayrollSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt        DateTime?     @db.Timestamptz
+
+  /// Approval tracking (Manager only)
+  approvedById       String?
+  approvedBy         User?         @relation("PayrollApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt         DateTime?     @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById       String?
+  rejectedBy         User?         @relation("PayrollRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt         DateTime?     @db.Timestamptz
+  rejectionReason    String?       @db.Text
+
+  /// Cancellation tracking
+  cancelledById      String?
+  cancelledBy        User?         @relation("PayrollCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  cancelledAt        DateTime?     @db.Timestamptz
+  cancellationReason String?       @db.Text
+
+  /// Soft deletion timestamp (AGENTS.md §14)
+  deletedAt          DateTime?     @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt          DateTime      @default(now()) @db.Timestamptz
+  updatedAt          DateTime      @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([periodYear, periodMonth])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([deletedAt])
+  @@map("payroll_entries")
+}
+
 
 // NextAuth.js adapter required models below.
 // See: https://authjs.dev/reference/adapter/prisma

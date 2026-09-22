@@ -44,16 +44,36 @@ export type BudgetLineActiveExposureResult = {
   authorizedAmount: Prisma.Decimal;
   approvedExpenses: Prisma.Decimal;
   approvedCommitments: Prisma.Decimal;
+  approvedPayroll: Prisma.Decimal;
   outstandingCustodies: Prisma.Decimal;
   totalActiveExposure: Prisma.Decimal;
   availableBalance: Prisma.Decimal;
   pendingCustodies: Prisma.Decimal;
+  pendingPayroll: Prisma.Decimal;
   totalPendingExposure: Prisma.Decimal;
   projectedBalance: Prisma.Decimal;
 };
 
 /**
  * Calculates budget line active and projected exposure metrics ensuring zero double counting.
+ *
+ * Canonical Exposure Formula (AGENTS.md §13 & Vertical Slice 8):
+ *   TotalActiveExposure = ApprovedCommitments
+ *                         + DirectActualSpend
+ *                         + CustodyActualSpend
+ *                         + OutstandingCustodies
+ *                         + ApprovedPayroll
+ *
+ *   AvailableBalance = AuthorizedAmount - TotalActiveExposure
+ *
+ *   TotalPendingExposure = PendingCommitments
+ *                          + PendingDirectExpenses
+ *                          + PendingCustodies
+ *                          + PendingPayroll
+ *
+ *   ProjectedBalance = AvailableBalance - TotalPendingExposure
+ *
+ * Backward compatibility: approvedPayroll and pendingPayroll default to 0.00 if omitted.
  */
 export function calculateBudgetLineExposure(params: {
   authorizedAmount: Prisma.Decimal;
@@ -61,9 +81,11 @@ export function calculateBudgetLineExposure(params: {
   directActualSpend: Prisma.Decimal;
   custodyActualSpend: Prisma.Decimal;
   outstandingCustodies: Prisma.Decimal;
+  approvedPayroll?: Prisma.Decimal;
   pendingCommitments?: Prisma.Decimal;
   pendingDirectExpenses?: Prisma.Decimal;
   pendingCustodies?: Prisma.Decimal;
+  pendingPayroll?: Prisma.Decimal;
 }): BudgetLineActiveExposureResult {
   const zero = new Prisma.Decimal('0.00');
   const authorizedAmount = params.authorizedAmount;
@@ -71,15 +93,18 @@ export function calculateBudgetLineExposure(params: {
   const directActualSpend = params.directActualSpend;
   const custodyActualSpend = params.custodyActualSpend;
   const outstandingCustodies = params.outstandingCustodies;
+  const approvedPayroll = params.approvedPayroll ?? zero;
+  const pendingPayroll = params.pendingPayroll ?? zero;
 
   // Total approved expenses = direct + custody settled expenses
   const approvedExpenses = directActualSpend.add(custodyActualSpend);
 
-  // Total Active Exposure = Commitments + Direct Spend + Custody Spend + Outstanding Custodies
+  // Total Active Exposure = Commitments + Direct Spend + Custody Spend + Outstanding Custodies + Approved Payroll
   const totalActiveExposure = approvedCommitments
     .add(directActualSpend)
     .add(custodyActualSpend)
-    .add(outstandingCustodies);
+    .add(outstandingCustodies)
+    .add(approvedPayroll);
 
   const availableBalance = authorizedAmount.sub(totalActiveExposure);
 
@@ -89,7 +114,8 @@ export function calculateBudgetLineExposure(params: {
 
   const totalPendingExposure = pendingCommitments
     .add(pendingDirectExpenses)
-    .add(pendingCustodies);
+    .add(pendingCustodies)
+    .add(pendingPayroll);
 
   const projectedBalance = availableBalance.sub(totalPendingExposure);
 
@@ -97,11 +123,14 @@ export function calculateBudgetLineExposure(params: {
     authorizedAmount,
     approvedExpenses,
     approvedCommitments,
+    approvedPayroll,
     outstandingCustodies,
     totalActiveExposure,
     availableBalance,
     pendingCustodies,
+    pendingPayroll,
     totalPendingExposure,
     projectedBalance,
   };
 }
+

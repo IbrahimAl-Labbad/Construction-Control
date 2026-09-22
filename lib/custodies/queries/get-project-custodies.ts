@@ -18,6 +18,7 @@ import {
   CommitmentStatus,
   CustodyStatus,
   ExpenseStatus,
+  PayrollStatus,
   Prisma,
 } from '@prisma/client';
 
@@ -119,11 +120,26 @@ export async function getProjectCustodies(
     },
   });
 
+  // 5.1 Fetch non-deleted payroll entries for joint exposure (Vertical Slice 8)
+  const payrollEntries = await prisma.payrollEntry.findMany({
+    where: {
+      projectId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      budgetLineId: true,
+      amount: true,
+      status: true,
+    },
+  });
+
   // 6. Calculate exposure metrics per budget line
   const linesBreakdown: BudgetLineCustodySpendDTO[] = (approvedBudget?.lines ?? []).map((line) => {
     const lineCommitments = commitments.filter((c) => c.budgetLineId === line.id);
     const lineExpenses = expenses.filter((e) => e.budgetLineId === line.id);
     const lineCustodies = custodies.filter((c) => c.budgetLineId === line.id);
+    const linePayroll = payrollEntries.filter((p) => p.budgetLineId === line.id);
 
     // Approved commitments
     const approvedCommitments = lineCommitments
@@ -152,6 +168,11 @@ export async function getProjectCustodies(
       }
     }
 
+    // Approved payroll (Vertical Slice 8)
+    const approvedPayroll = linePayroll
+      .filter((p) => p.status === PayrollStatus.APPROVED)
+      .reduce((acc, p) => acc.add(p.amount), new Prisma.Decimal('0.00'));
+
     // Pending metrics
     const pendingCommitments = lineCommitments
       .filter((c) => c.status === CommitmentStatus.SUBMITTED)
@@ -165,15 +186,21 @@ export async function getProjectCustodies(
       .filter((c) => c.status === CustodyStatus.SUBMITTED)
       .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
 
+    const pendingPayroll = linePayroll
+      .filter((p) => p.status === PayrollStatus.SUBMITTED)
+      .reduce((acc, p) => acc.add(p.amount), new Prisma.Decimal('0.00'));
+
     const metrics = calculateBudgetLineExposure({
       authorizedAmount: line.amount,
       approvedCommitments,
       directActualSpend,
       custodyActualSpend,
       outstandingCustodies,
+      approvedPayroll,
       pendingCommitments,
       pendingDirectExpenses,
       pendingCustodies,
+      pendingPayroll,
     });
 
     return {

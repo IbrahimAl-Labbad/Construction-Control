@@ -17,7 +17,7 @@
  * 6. Atomicity: Status update + approval metadata + EXPENSE_APPROVED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, PayrollStatus, Prisma, ProjectStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -243,9 +243,24 @@ export async function approveExpense(expenseId: unknown): Promise<ExpenseSummary
       outstandingCustodies = outstandingCustodies.add(remaining);
     }
 
+    const approvedPayrollAgg = tx.payrollEntry
+      ? await tx.payrollEntry.aggregate({
+          where: {
+            budgetLineId: expenseToApprove.budgetLineId,
+            status: PayrollStatus.APPROVED,
+            deletedAt: null,
+          },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null } };
+    const approvedPayroll = approvedPayrollAgg._sum.amount ?? new Prisma.Decimal('0.00');
+
     const currentSpend = approvedExpensesAgg._sum.amount ?? new Prisma.Decimal('0.00');
     const currentCommitments = approvedCommitmentsAgg._sum.amount ?? new Prisma.Decimal('0.00');
-    const totalActiveExposure = currentSpend.add(currentCommitments).add(outstandingCustodies);
+    const totalActiveExposure = currentSpend
+      .add(currentCommitments)
+      .add(outstandingCustodies)
+      .add(approvedPayroll);
 
     // Invariant 4 & 5:
     // If direct expense: increases active exposure -> check totalActiveExposure + amount <= line.amount

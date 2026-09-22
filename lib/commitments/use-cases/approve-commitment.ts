@@ -29,7 +29,7 @@
  * 6. Atomicity: Status update + approval metadata + COMMITMENT_APPROVED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, PayrollStatus, Prisma, ProjectStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -199,8 +199,24 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
       outstandingCustodies = outstandingCustodies.add(remaining);
     }
 
-    // Total Exposure = ApprovedExpenses + ApprovedCommitments + OutstandingCustodies
-    const currentExposure = approvedExpenses.add(approvedCommitments).add(outstandingCustodies);
+    // D. Aggregate APPROVED payroll entries on this budget line
+    const approvedPayrollAgg = tx.payrollEntry
+      ? await tx.payrollEntry.aggregate({
+          where: {
+            budgetLineId: commitmentToApprove.budgetLineId,
+            status: PayrollStatus.APPROVED,
+            deletedAt: null,
+          },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null } };
+    const approvedPayroll = approvedPayrollAgg._sum.amount ?? new Prisma.Decimal('0.00');
+
+    // Total Exposure = ApprovedExpenses + ApprovedCommitments + OutstandingCustodies + ApprovedPayroll
+    const currentExposure = approvedExpenses
+      .add(approvedCommitments)
+      .add(outstandingCustodies)
+      .add(approvedPayroll);
     const newTotalExposure = currentExposure.add(commitmentToApprove.amount);
 
     // 6.4 Enforce hard budget line ceiling
