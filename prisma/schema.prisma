@@ -88,6 +88,15 @@ enum CustodyStatus {
   CLOSED
 }
 
+/// Operational and approval lifecycle status for subcontractor billing claims (مستخلصات مقاولي الباطن).
+enum SubcontractorBillingStatus {
+  DRAFT       // Created by Accountant, editable
+  SUBMITTED   // Submitted for Manager approval, locked
+  APPROVED    // Certified — strictly immutable
+  REJECTED    // Rejected by Manager, can be reopened to DRAFT
+  CANCELLED   // Terminal — voided before approval
+}
+
 // =============================================================================
 // IDENTITY & ACCESS MODELS
 // These are required by NextAuth.js (Auth.js) with Prisma adapter.
@@ -179,6 +188,12 @@ model User {
   // Custodies closed by this user
   closedCustodies Custody[] @relation("CustodyCloser")
 
+  // Subcontractor Billings (Vertical Slice 7)
+  createdBillings   SubcontractorBilling[] @relation("BillingCreator")
+  submittedBillings SubcontractorBilling[] @relation("BillingSubmitter")
+  approvedBillings  SubcontractorBilling[] @relation("BillingApprover")
+  rejectedBillings  SubcontractorBilling[] @relation("BillingRejecter")
+
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -254,6 +269,9 @@ model Project {
 
   /// Custodies for this project
   custodies   Custody[]
+
+  /// Subcontractor Billings for this project (Vertical Slice 7)
+  subcontractorBillings SubcontractorBilling[]
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -338,6 +356,9 @@ model BudgetLine {
 
   /// Related custodies charged against this budget line
   custodies   Custody[]
+
+  /// Related subcontractor billings against this budget line (Vertical Slice 7)
+  subcontractorBillings SubcontractorBilling[]
 
   @@index([budgetId])
   @@index([category])
@@ -469,6 +490,9 @@ model Commitment {
   createdAt       DateTime         @default(now()) @db.Timestamptz
   updatedAt       DateTime         @updatedAt @db.Timestamptz
 
+  /// Subcontractor Billing claims drawn against this commitment (Vertical Slice 7)
+  subcontractorBillings SubcontractorBilling[]
+
   @@index([projectId, status])
   @@index([budgetLineId, status])
   @@index([createdById])
@@ -573,6 +597,93 @@ model Custody {
   @@index([status])
   @@index([deletedAt])
   @@map("custodies")
+}
+
+// =============================================================================
+// SUBCONTRACTOR BILLING DOMAIN MODELS (Vertical Slice 7)
+// =============================================================================
+
+/// Periodic subcontractor billing claim (مستخلص مقاول باطن).
+/// Represents a subcontractor's certified monetary claim against an approved Commitment.
+/// Billing is a certification of progress — NOT a new BudgetLine encumbrance.
+/// Approved records are strictly immutable (AGENTS.md §13).
+/// Must never be hard-deleted after submission (AGENTS.md §14 — SubcontractorBill).
+model SubcontractorBilling {
+  id                String                     @id @default(cuid())
+
+  projectId         String
+  project           Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  budgetLineId      String
+  budgetLine        BudgetLine                 @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// The approved Commitment this billing draws against.
+  /// Must be APPROVED, same project, same budgetLine. Required — billing cannot exist without a Commitment.
+  commitmentId      String
+  commitment        Commitment                 @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+
+  /// Subcontractor trade name (plain text, v1 — no Subcontractor master entity).
+  /// Must match commitment.vendorName (enforced at application layer).
+  subcontractorName String                     @db.VarChar(150)
+
+  /// Billing reference number (مستخلص رقم). Optional, nullable.
+  /// When present, must be unique per project (partial unique index in migration).
+  referenceNumber   String?                    @db.VarChar(100)
+
+  /// Descriptive text for the billing period (e.g. "سبتمبر 2026").
+  /// No DB uniqueness constraint — descriptive only.
+  billingPeriod     String                     @db.VarChar(100)
+
+  /// Date the subcontractor submitted this claim.
+  claimDate         DateTime                   @db.Timestamptz
+
+  /// Gross claim amount before any deductions. Must be positive SAR. Decimal(15,2).
+  /// Cumulative approved billing amounts must not exceed commitment.amount.
+  grossAmount       Decimal                    @db.Decimal(15, 2)
+  currency          String                     @default("SAR")
+
+  /// Description of work scope covered in this billing period.
+  description       String                     @db.Text
+
+  /// Operational lifecycle status.
+  status            SubcontractorBillingStatus @default(DRAFT)
+
+  /// Creator tracking (Accountant only)
+  createdById       String
+  createdBy         User                       @relation("BillingCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Submitter tracking
+  submittedById     String?
+  submittedBy       User?                      @relation("BillingSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt       DateTime?                  @db.Timestamptz
+
+  /// Approval tracking (Manager only)
+  approvedById      String?
+  approvedBy        User?                      @relation("BillingApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt        DateTime?                  @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById      String?
+  rejectedBy        User?                      @relation("BillingRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt        DateTime?                  @db.Timestamptz
+  rejectionReason   String?                    @db.Text
+
+  /// Soft deletion timestamp (AGENTS.md §14)
+  deletedAt         DateTime?                  @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt         DateTime                   @default(now()) @db.Timestamptz
+  updatedAt         DateTime                   @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([commitmentId, status])
+  @@index([createdById])
+  @@index([submittedById])
+  @@index([approvedById])
+  @@index([claimDate])
+  @@index([deletedAt])
+  @@map("subcontractor_billings")
 }
 
 // NextAuth.js adapter required models below.

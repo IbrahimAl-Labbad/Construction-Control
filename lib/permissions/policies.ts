@@ -164,6 +164,60 @@ const canCloseCustody: Policy = (user) => isManager(user);
 const canViewCustodies: Policy = (user) => user.isActive;
 
 // ---------------------------------------------------------------------------
+// Subcontractor Billing policies (Vertical Slice 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create a subcontractor billing draft.
+ * Restricted exclusively to Accountants.
+ * Coarse-grained role check only — object-level ownership is enforced
+ * inside the use-cases (e.g. Accountant can only edit their own draft).
+ */
+const canCreateBilling: Policy = (user) => user.role === Role.ACCOUNTANT;
+
+/**
+ * Whether the user can edit or delete a subcontractor billing draft.
+ * Restricted exclusively to Accountants.
+ * Object-level rule: only the Accountant who created the draft may manage it.
+ * That check lives in update-billing-draft.ts and delete-billing-draft.ts.
+ */
+const canManageBillingDraft: Policy = (user) => user.role === Role.ACCOUNTANT;
+
+/**
+ * Whether the user can submit a billing draft for Manager approval.
+ * Restricted exclusively to Accountants.
+ */
+const canSubmitBilling: Policy = (user) => user.role === Role.ACCOUNTANT;
+
+/**
+ * Whether the user can approve a submitted billing claim.
+ * Only managers have final certification authority.
+ * Object-level rule: self-approval is forbidden — enforced in approve-billing.ts.
+ */
+const canApproveBilling: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can reject a submitted billing claim.
+ * Only managers have rejection authority.
+ */
+const canRejectBilling: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can cancel a DRAFT or SUBMITTED billing.
+ * Only managers can cancel. APPROVED billings cannot be cancelled.
+ * That state guard lives in cancel-billing.ts.
+ */
+const canCancelBilling: Policy = (user) => isManager(user);
+
+/**
+ * Whether the user can view subcontractor billings.
+ * Managers, Engineers, and Accountants have read access.
+ * Purchasing has no access to subcontractor billing data.
+ */
+const canViewBillings: Policy = (user) =>
+  isManager(user) || user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
+
+// ---------------------------------------------------------------------------
 // Future financial policies (stubs — to be populated in feature tasks)
 // ---------------------------------------------------------------------------
 // These stubs document the expected shape of future policies.
@@ -258,4 +312,13 @@ export const policies = {
   // Purchasing (stubs)
   canCreatePurchaseRequest,
   canApprovePurchaseRequest,
+
+  // Subcontractor Billing management (Vertical Slice 7)
+  canCreateBilling,
+  canManageBillingDraft,
+  canSubmitBilling,
+  canApproveBilling,
+  canRejectBilling,
+  canCancelBilling,
+  canViewBillings,
 } as const;
