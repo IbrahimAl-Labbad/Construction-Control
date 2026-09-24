@@ -18,7 +18,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut, FolderKanban, Users, LayoutDashboard } from 'lucide-react';
+import { LogOut, FolderKanban, Users, LayoutDashboard, ClipboardList } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -36,6 +36,7 @@ export function ManagerTopBar() {
 
   const isDashboard = pathname.startsWith('/dashboard');
   const isProjects = pathname.startsWith('/projects');
+  const isProgressReports = pathname.startsWith('/progress-reports');
   const isUsers = pathname.startsWith('/users');
 
   return (
@@ -74,6 +75,18 @@ export function ManagerTopBar() {
             >
               <FolderKanban className="size-3.5" aria-hidden="true" />
               المشاريع
+            </Link>
+            <Link
+              href="/progress-reports"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isProgressReports
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-progress-reports-link"
+            >
+              <ClipboardList className="size-3.5" aria-hidden="true" />
+              تقارير التقدم
             </Link>
             <Link
               href="/users"

@@ -75,6 +75,8 @@ export type ErrorCode =
   | 'INVALID_PAYROLL_AMOUNT'
   | 'INVALID_PAYROLL_CURRENCY'
   | 'INVALID_BUDGET_LINE_CATEGORY'
+  // Progress Report specific errors (Vertical Slice 10)
+  | 'DUPLICATE_PROGRESS_REPORT'
   // General
   | 'INTERNAL_ERROR'
   | 'SERVICE_UNAVAILABLE';
@@ -128,6 +130,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   INVALID_PAYROLL_AMOUNT: 400,
   INVALID_PAYROLL_CURRENCY: 400,
   INVALID_BUDGET_LINE_CATEGORY: 400,
+  // Progress Report (Vertical Slice 10)
+  DUPLICATE_PROGRESS_REPORT: 409,
   INTERNAL_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
 };

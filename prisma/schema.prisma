@@ -106,6 +106,15 @@ enum PayrollStatus {
   CANCELLED   // Terminal — voided before approval
 }
 
+/// Operational and approval lifecycle status for Site Engineer progress reports (الشريحة الرأسية 10).
+enum ProgressReportStatus {
+  DRAFT       // Created by Engineer; editable
+  SUBMITTED   // Submitted for Manager review; locked
+  APPROVED    // Approved by Manager — strictly immutable
+  REJECTED    // Rejected by Manager; Engineer may reopen to DRAFT
+  CANCELLED   // Terminal — voided before or after submission
+}
+
 
 // =============================================================================
 // IDENTITY & ACCESS MODELS
@@ -211,6 +220,12 @@ model User {
   rejectedPayrollEntries  PayrollEntry[] @relation("PayrollRejecter")
   cancelledPayrollEntries PayrollEntry[] @relation("PayrollCanceller")
 
+  // Progress Reports (Vertical Slice 10)
+  createdProgressReports   ProgressReport[] @relation("ReportCreator")
+  approvedProgressReports  ProgressReport[] @relation("ReportApprover")
+  rejectedProgressReports  ProgressReport[] @relation("ReportRejecter")
+  cancelledProgressReports ProgressReport[] @relation("ReportCanceller")
+
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -293,6 +308,9 @@ model Project {
 
   /// Payroll Entries for this project (Vertical Slice 8)
   payrollEntries        PayrollEntry[]
+
+  /// Progress Reports for this project (Vertical Slice 10)
+  progressReports       ProgressReport[]
 
 
   /// Soft deletion timestamp
@@ -787,6 +805,108 @@ model PayrollEntry {
   @@index([approvedById])
   @@index([deletedAt])
   @@map("payroll_entries")
+}
+
+// =============================================================================
+// PROGRESS REPORT DOMAIN MODELS (Vertical Slice 10)
+// =============================================================================
+
+/// Operational progress report submitted by a Site Engineer for a construction project.
+/// Contains operational narrative only — no financial data.
+/// Authored by Role.ENGINEER. Reviewed (approved/rejected) by Role.MANAGER.
+/// Approved reports are strictly immutable (AGENTS.md §13 principle).
+///
+/// deletedAt is present for schema consistency.
+/// NO Slice 10 use case sets deletedAt.
+/// All operational queries must filter: WHERE deletedAt IS NULL.
+/// Admin/cleanup deletion is outside Slice 10 scope.
+model ProgressReport {
+  id          String               @id @default(cuid())
+
+  /// FK to the project this report covers (must be ACTIVE, not deleted).
+  /// Permissive authoring (BD-03 Model C): any active Engineer may target any ACTIVE project.
+  projectId   String
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  /// Calendar date this report describes. NOT the submission timestamp.
+  /// @db.Date — date only; no time component; no timezone stored.
+  /// DTO representation: YYYY-MM-DD string.
+  /// Cannot be more than 1 day in the future (BD-05b: server-side 1-day tolerance).
+  /// Business uniqueness: one report per (projectId, reportDate, createdById).
+  reportDate  DateTime             @db.Date
+
+  /// Brief Arabic title for the report (≤ 150 chars).
+  title       String               @db.VarChar(150)
+
+  /// Narrative description of completed work during the report period (≤ 3000 chars).
+  /// Free text. UI instructs Engineers not to include worker names, phone numbers, or financial data.
+  workDescription String           @db.Text
+
+  /// Optional self-reported overall project completion estimate (0–100, integer).
+  /// Qualitative operational signal only. Not derived from financial data.
+  progressPercentage Int?
+
+  /// Optional: operational blockers, risks, or notable site conditions (≤ 1500 chars).
+  blockers    String?              @db.Text
+
+  /// Optional: planned work for the next reporting period (≤ 1500 chars).
+  nextPeriodPlan String?           @db.Text
+
+  /// Optional: weather conditions at site, free text (≤ 100 chars).
+  weatherCondition String?         @db.VarChar(100)
+
+  /// Operational lifecycle status.
+  status      ProgressReportStatus @default(DRAFT)
+
+  /// Engineer who authored this report. Immutable after creation.
+  createdById String
+  createdBy   User                 @relation("ReportCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Timestamp when the Engineer submitted this report for Manager review.
+  /// Written on DRAFT → SUBMITTED transition.
+  /// No submittedBy FK: the submitter is always the creator (createdById).
+  submittedAt DateTime?            @db.Timestamptz
+
+  /// Approval tracking — Manager who approved and when.
+  /// Written on SUBMITTED → APPROVED transition. Immutable once set.
+  approvedById String?
+  approvedBy   User?               @relation("ReportApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt   DateTime?           @db.Timestamptz
+
+  /// Rejection tracking — Manager who rejected, when, and the reason.
+  /// Written on SUBMITTED → REJECTED transition.
+  /// Cleared (set to null) on REJECTED → DRAFT (reopen) transition.
+  rejectedById    String?
+  rejectedBy      User?            @relation("ReportRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt      DateTime?        @db.Timestamptz
+  rejectionReason String?          @db.Text
+
+  /// Cancellation tracking — who cancelled, when, and the reason.
+  /// Written on DRAFT → CANCELLED or SUBMITTED → CANCELLED transition (terminal).
+  cancelledById      String?
+  cancelledBy        User?         @relation("ReportCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  cancelledAt        DateTime?     @db.Timestamptz
+  cancellationReason String?       @db.Text
+
+  /// Soft deletion marker — present for schema consistency.
+  /// NO Slice 10 use case sets this field.
+  deletedAt   DateTime?            @db.Timestamptz
+
+  /// Audit timestamps — DB-managed.
+  createdAt   DateTime             @default(now()) @db.Timestamptz
+  updatedAt   DateTime             @updatedAt @db.Timestamptz
+
+  /// Business uniqueness: one report per Engineer per project per calendar date.
+  /// CANCELLED reports are NOT exempt from this constraint.
+  /// A cancelled report permanently occupies the (projectId, reportDate, createdById) slot.
+  /// The same Engineer cannot create a replacement report for the same date after cancellation.
+  @@unique([projectId, reportDate, createdById])
+
+  @@index([projectId, status])
+  @@index([createdById, status])
+  @@index([reportDate])
+  @@index([deletedAt])
+  @@map("progress_reports")
 }
 
 

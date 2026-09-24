@@ -20,7 +20,7 @@
  *   const canApprove = policies.canApproveExpense(user);
  */
 
-import { Role, PayrollStatus } from '@prisma/client';
+import { Role, PayrollStatus, ProgressReportStatus } from '@prisma/client';
 
 import type { AuthenticatedUser } from '@/lib/auth/types';
 
@@ -440,6 +440,110 @@ const canViewExecutiveDashboard: Policy = (user) =>
   user.isActive && user.role === Role.MANAGER;
 
 // ---------------------------------------------------------------------------
+// Progress Report Policies (Vertical Slice 10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal progress report resource shape for policy evaluation.
+ */
+interface ProgressReportResource {
+  id: string;
+  status: ProgressReportStatus;
+  createdById: string;
+}
+
+/**
+ * Whether the user can create a progress report draft.
+ * Role.ENGINEER only (BD-02).
+ */
+const canCreateProgressReport: Policy = (user) => user.role === Role.ENGINEER;
+
+/**
+ * Whether the user can update/manage a progress report draft.
+ * Only the creating Engineer while in DRAFT status (BD-07).
+ */
+const canManageProgressReportDraft: Policy<ProgressReportResource> = (user, report) => {
+  if (user.role !== Role.ENGINEER) return false;
+  return report.status === ProgressReportStatus.DRAFT && report.createdById === user.id;
+};
+
+/**
+ * Whether the user can submit a progress report for review.
+ * Only the creating Engineer while in DRAFT status.
+ */
+const canSubmitProgressReport: Policy<ProgressReportResource> = (user, report) => {
+  if (user.role !== Role.ENGINEER) return false;
+  return report.status === ProgressReportStatus.DRAFT && report.createdById === user.id;
+};
+
+/**
+ * Whether the user can approve a submitted progress report.
+ * Role.MANAGER only (BD-06).
+ */
+const canApproveProgressReport: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can reject a submitted progress report.
+ * Role.MANAGER only (BD-06).
+ */
+const canRejectProgressReport: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can reopen a rejected progress report.
+ * Only the creating Engineer while in REJECTED status (BD-06, BD-07).
+ */
+const canReopenProgressReport: Policy<ProgressReportResource> = (user, report) => {
+  if (user.role !== Role.ENGINEER) return false;
+  return report.status === ProgressReportStatus.REJECTED && report.createdById === user.id;
+};
+
+/**
+ * Whether the user can cancel a progress report.
+ * Engineer can cancel own DRAFT. Manager can cancel DRAFT or SUBMITTED (BD-08).
+ */
+const canCancelProgressReport: Policy<ProgressReportResource> = (user, report) => {
+  if (user.role === Role.ENGINEER) {
+    return report.status === ProgressReportStatus.DRAFT && report.createdById === user.id;
+  }
+  if (user.role === Role.MANAGER) {
+    return (
+      report.status === ProgressReportStatus.DRAFT ||
+      report.status === ProgressReportStatus.SUBMITTED
+    );
+  }
+  return false;
+};
+
+/**
+ * Whether the user can view a specific progress report.
+ * Manager can view any report. Engineer can view own report only (BD-16, BD-17, BD-18).
+ * Accountant and Purchasing are denied.
+ */
+const canViewProgressReport: Policy<ProgressReportResource> = (user, report) => {
+  if (user.role === Role.MANAGER) return true;
+  if (user.role === Role.ENGINEER) return report.createdById === user.id;
+  return false;
+};
+
+/**
+ * Whether the user can view the global progress reports list.
+ * Role.MANAGER only (BD-17, BD-20).
+ */
+const canListAllProgressReports: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can view their own progress reports list.
+ * Role.ENGINEER only (BD-18).
+ */
+const canListEngineerProgressReports: Policy = (user) => user.role === Role.ENGINEER;
+
+/**
+ * Whether the user can view progress reports for a specific project.
+ * Role.MANAGER only.
+ */
+const canListProjectProgressReports: Policy = (user) => user.role === Role.MANAGER;
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -520,4 +624,17 @@ export const policies = {
 
   // Executive Dashboard (Vertical Slice 9)
   canViewExecutiveDashboard,
+
+  // Progress Reports (Vertical Slice 10)
+  canCreateProgressReport,
+  canManageProgressReportDraft,
+  canSubmitProgressReport,
+  canApproveProgressReport,
+  canRejectProgressReport,
+  canReopenProgressReport,
+  canCancelProgressReport,
+  canViewProgressReport,
+  canListAllProgressReports,
+  canListEngineerProgressReports,
+  canListProjectProgressReports,
 } as const;

@@ -17,6 +17,7 @@ import {
   FileSignature,
   Wallet,
   Users,
+  ClipboardList,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -250,6 +251,15 @@ export default async function ProjectDetailsPage({
               </Link>
             </>
           )}
+          <Link
+            href={`/projects/${project.id}/progress`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 shadow-sm hover:bg-emerald-500/20 shrink-0"
+            data-testid="view-progress-reports-button"
+          >
+            <ClipboardList className="size-4" aria-hidden="true" />
+            <span>تقارير التقدم الميداني</span>
+          </Link>
+
           <Link
             href={`/projects/${project.id}/budget`}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
