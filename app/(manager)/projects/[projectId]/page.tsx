@@ -23,6 +23,7 @@ import {
 import { requireManager } from '@/lib/permissions';
 import { getProject, getAllowedNextStatuses } from '@/lib/projects';
 import { getProjectBudget } from '@/lib/budget';
+import { getActiveProjectEngineerCount } from '@/lib/project-team';
 import { AppError } from '@/lib/errors';
 import { ProjectStatusBadge } from '../components/project-status-badge';
 import { ChangeStatusDialog } from '../components/change-status-dialog';
@@ -74,7 +75,10 @@ export default async function ProjectDetailsPage({
   });
 
   const allowedNextStatuses = getAllowedNextStatuses(project.status);
-  const budget = await getProjectBudget(projectId);
+  const [budget, activeEngineerCount] = await Promise.all([
+    getProjectBudget(projectId),
+    getActiveProjectEngineerCount(projectId),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -127,6 +131,16 @@ export default async function ProjectDetailsPage({
           >
             <Receipt className="size-4" aria-hidden="true" />
             <span>المصروفات والرقابة</span>
+          </Link>
+
+          {/* Project Team Link */}
+          <Link
+            href={`/projects/${project.id}/team`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-team-button"
+          >
+            <Users className="size-4" aria-hidden="true" />
+            <span>فريق العمل ({activeEngineerCount})</span>
           </Link>
 
           {/* Edit metadata */}
@@ -272,7 +286,7 @@ export default async function ProjectDetailsPage({
       </div>
 
       {/* Metadata Cards Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {/* Manager */}
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -319,6 +333,29 @@ export default async function ProjectDetailsPage({
             {formatDate(project.endDate)}
           </p>
         </div>
+
+        {/* Assigned Engineers Widget */}
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-primary" aria-hidden="true" />
+              <span>فريق المهندسين</span>
+            </div>
+            <Link
+              href={`/projects/${project.id}/team`}
+              className="text-xs text-primary hover:underline font-semibold"
+              data-testid="view-team-link"
+            >
+              إدارة
+            </Link>
+          </div>
+          <p className="mt-2 text-base font-semibold text-foreground" data-testid="project-engineers-count">
+            {activeEngineerCount} {activeEngineerCount === 1 ? 'مهندس نشط' : activeEngineerCount === 2 ? 'مهندسان نشطان' : activeEngineerCount > 2 && activeEngineerCount < 11 ? 'مهندسين نشطين' : 'مهندس نشط'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            معينون للعمل الميداني
+          </p>
+        </div>
       </div>
 
       {/* Description Section */}
@@ -340,3 +377,4 @@ export default async function ProjectDetailsPage({
     </div>
   );
 }
+

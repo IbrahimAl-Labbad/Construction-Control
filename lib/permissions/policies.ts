@@ -544,6 +544,35 @@ const canListEngineerProgressReports: Policy = (user) => user.role === Role.ENGI
 const canListProjectProgressReports: Policy = (user) => user.role === Role.MANAGER;
 
 // ---------------------------------------------------------------------------
+// Project Team & Assignment Policies (Vertical Slice 11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can assign or remove engineers from a project.
+ * Restricted to active Managers (BD-11-02).
+ */
+const canManageProjectTeam: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can view the project team list.
+ * Restricted to active Managers.
+ */
+const canViewProjectTeam: Policy = (user) => user.role === Role.MANAGER;
+
+/**
+ * Whether the user can view assigned projects for an engineer.
+ * Allowed for Managers, or the Engineer viewing their own assignments.
+ */
+const canViewAssignedProjects = (
+  user: AuthenticatedUser,
+  targetEngineerId: string,
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role === Role.MANAGER) return true;
+  return user.role === Role.ENGINEER && user.id === targetEngineerId;
+};
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -637,4 +666,10 @@ export const policies = {
   canListAllProgressReports,
   canListEngineerProgressReports,
   canListProjectProgressReports,
+
+  // Project Team & Assignment (Vertical Slice 11)
+  canManageProjectTeam,
+  canViewProjectTeam,
+  canViewAssignedProjects,
 } as const;
+

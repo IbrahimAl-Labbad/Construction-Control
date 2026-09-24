@@ -115,6 +115,12 @@ enum ProgressReportStatus {
   CANCELLED   // Terminal — voided before or after submission
 }
 
+/// Operational and lifecycle status for project engineer assignments (الشريحة الرأسية 11).
+enum AssignmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
 
 // =============================================================================
 // IDENTITY & ACCESS MODELS
@@ -226,6 +232,11 @@ model User {
   rejectedProgressReports  ProgressReport[] @relation("ReportRejecter")
   cancelledProgressReports ProgressReport[] @relation("ReportCanceller")
 
+  // Project Assignments (Vertical Slice 11)
+  engineerAssignments ProjectAssignment[] @relation("AssignedEngineer")
+  createdAssignments  ProjectAssignment[] @relation("AssignmentCreator")
+  removedAssignments  ProjectAssignment[] @relation("AssignmentRemover")
+
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -311,6 +322,9 @@ model Project {
 
   /// Progress Reports for this project (Vertical Slice 10)
   progressReports       ProgressReport[]
+
+  /// Assigned Site Engineers (Vertical Slice 11)
+  assignments           ProjectAssignment[] @relation("ProjectAssignments")
 
 
   /// Soft deletion timestamp
@@ -907,6 +921,47 @@ model ProgressReport {
   @@index([reportDate])
   @@index([deletedAt])
   @@map("progress_reports")
+}
+
+// =============================================================================
+// PROJECT TEAM & ASSIGNMENT DOMAIN MODELS (Vertical Slice 11)
+// =============================================================================
+
+/// Operational and control layer representation of a Site Engineer's assignment to a Project.
+/// Represents the current / latest relationship state.
+/// Authoritative historical event sequence is maintained in AuditLog.
+model ProjectAssignment {
+  id            String           @id @default(cuid())
+
+  projectId     String
+  project       Project          @relation("ProjectAssignments", fields: [projectId], references: [id], onDelete: Restrict)
+
+  engineerId    String
+  engineer      User             @relation("AssignedEngineer", fields: [engineerId], references: [id], onDelete: Restrict)
+
+  status        AssignmentStatus @default(ACTIVE)
+
+  /// Timestamp of the initial assignment or most recent reactivation
+  assignedAt    DateTime         @default(now()) @db.Timestamptz
+  assignedById  String
+  assignedBy    User             @relation("AssignmentCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  /// Removal tracking (populated when status === INACTIVE; cleared on reactivation)
+  removedAt     DateTime?        @db.Timestamptz
+  removedById   String?
+  removedBy     User?            @relation("AssignmentRemover", fields: [removedById], references: [id], onDelete: Restrict)
+  removalReason String?          @db.Text
+
+  /// DB timestamps
+  createdAt     DateTime         @default(now()) @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @db.Timestamptz
+
+  /// Natural composite key: exactly one relationship record per project-engineer pair
+  @@unique([projectId, engineerId])
+  @@index([projectId, status])
+  @@index([engineerId, status])
+  @@index([status])
+  @@map("project_assignments")
 }
 
 
