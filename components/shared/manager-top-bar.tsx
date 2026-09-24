@@ -18,7 +18,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut, FolderKanban, Users } from 'lucide-react';
+import { LogOut, FolderKanban, Users, LayoutDashboard } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -34,6 +34,7 @@ export function ManagerTopBar() {
     void signOut({ callbackUrl: '/login' });
   }
 
+  const isDashboard = pathname.startsWith('/dashboard');
   const isProjects = pathname.startsWith('/projects');
   const isUsers = pathname.startsWith('/users');
 
@@ -49,6 +50,19 @@ export function ManagerTopBar() {
             نظام متابعة التشييد
           </span>
           <nav className="flex items-center gap-2" aria-label="التنقل الرئيسي">
+            {/* Dashboard link — added in Vertical Slice 9 (BD-29: login landing unchanged) */}
+            <Link
+              href="/dashboard"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isDashboard
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-dashboard-link"
+            >
+              <LayoutDashboard className="size-3.5" aria-hidden="true" />
+              لوحة المتابعة
+            </Link>
             <Link
               href="/projects"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${

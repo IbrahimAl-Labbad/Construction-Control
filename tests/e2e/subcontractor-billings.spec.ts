@@ -162,12 +162,12 @@ test.describe('Subcontractor Billings E2E Suite', () => {
     const projectName = `مشروع مقاولي باطن ${randomSuffix}`;
 
     const managerUser = await prisma.user.findFirstOrThrow({
-      where: { role: Role.MANAGER, isActive: true },
+      where: { email: MANAGER_EMAIL, isActive: true },
       select: { id: true, name: true },
     });
 
     const purchasingUser = await prisma.user.findFirstOrThrow({
-      where: { role: Role.PURCHASING, isActive: true },
+      where: { email: PURCHASING_EMAIL, isActive: true },
       select: { id: true, name: true },
     });
 

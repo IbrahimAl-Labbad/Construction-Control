@@ -421,6 +421,25 @@ export const canViewProjectLaborAggregate = (
 };
 
 // ---------------------------------------------------------------------------
+// Executive Dashboard policies (Vertical Slice 9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can view the executive dashboard.
+ *
+ * Restricted exclusively to active Managers (BD-02).
+ * AGENTS.md §5.1: Manager is the primary consumer of management visibility.
+ *
+ * Denied for:
+ * - Accountant (payroll aggregate exposure risk)
+ * - Engineer (fail-closed)
+ * - Purchasing (denied)
+ * - Inactive users of any role
+ */
+const canViewExecutiveDashboard: Policy = (user) =>
+  user.isActive && user.role === Role.MANAGER;
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -498,4 +517,7 @@ export const policies = {
   canCancelPayroll,
   canViewPayrollDetails,
   canViewProjectLaborAggregate,
+
+  // Executive Dashboard (Vertical Slice 9)
+  canViewExecutiveDashboard,
 } as const;
