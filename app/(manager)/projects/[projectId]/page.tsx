@@ -18,12 +18,14 @@ import {
   Wallet,
   Users,
   ClipboardList,
+  Flag,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
 import { getProject, getAllowedNextStatuses } from '@/lib/projects';
 import { getProjectBudget } from '@/lib/budget';
 import { getActiveProjectEngineerCount } from '@/lib/project-team';
+import { getProjectMilestoneSummary } from '@/lib/milestones';
 import { AppError } from '@/lib/errors';
 import { ProjectStatusBadge } from '../components/project-status-badge';
 import { ChangeStatusDialog } from '../components/change-status-dialog';
@@ -75,9 +77,10 @@ export default async function ProjectDetailsPage({
   });
 
   const allowedNextStatuses = getAllowedNextStatuses(project.status);
-  const [budget, activeEngineerCount] = await Promise.all([
+  const [budget, activeEngineerCount, milestoneSummary] = await Promise.all([
     getProjectBudget(projectId),
     getActiveProjectEngineerCount(projectId),
+    getProjectMilestoneSummary(projectId),
   ]);
 
   return (
@@ -141,6 +144,16 @@ export default async function ProjectDetailsPage({
           >
             <Users className="size-4" aria-hidden="true" />
             <span>فريق العمل ({activeEngineerCount})</span>
+          </Link>
+
+          {/* Project Milestones Link (BD-12-17) */}
+          <Link
+            href={`/projects/${project.id}/milestones`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-milestones-button"
+          >
+            <Flag className="size-4" aria-hidden="true" />
+            <span>المعالم التخطيطية ({milestoneSummary.totalCount})</span>
           </Link>
 
           {/* Edit metadata */}
@@ -275,6 +288,15 @@ export default async function ProjectDetailsPage({
           </Link>
 
           <Link
+            href={`/projects/${project.id}/milestones`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400 shadow-sm hover:bg-indigo-500/20 shrink-0"
+            data-testid="view-milestones-banner-button"
+          >
+            <Flag className="size-4" aria-hidden="true" />
+            <span>المعالم التعاقدية ({milestoneSummary.completedCount}/{milestoneSummary.totalCount})</span>
+          </Link>
+
+          <Link
             href={`/projects/${project.id}/budget`}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
             data-testid="view-manage-budget-button"
@@ -286,7 +308,7 @@ export default async function ProjectDetailsPage({
       </div>
 
       {/* Metadata Cards Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {/* Manager */}
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -354,6 +376,35 @@ export default async function ProjectDetailsPage({
           </p>
           <p className="text-xs text-muted-foreground">
             معينون للعمل الميداني
+          </p>
+        </div>
+
+        {/* Project Milestones Widget */}
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Flag className="size-4 text-primary" aria-hidden="true" />
+              <span>المعالم التعاقدية</span>
+            </div>
+            <Link
+              href={`/projects/${project.id}/milestones`}
+              className="text-xs text-primary hover:underline font-semibold"
+              data-testid="view-milestones-link"
+            >
+              عرض ({milestoneSummary.totalCount})
+            </Link>
+          </div>
+          <p className="mt-2 text-base font-semibold text-foreground" data-testid="project-milestones-summary">
+            {milestoneSummary.completedCount} من {milestoneSummary.totalCount} منجز
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {milestoneSummary.overdueCount > 0 ? (
+              <span className="text-rose-600 font-semibold">{milestoneSummary.overdueCount} متأخر</span>
+            ) : milestoneSummary.nextUpcomingMilestone ? (
+              `القادم: ${milestoneSummary.nextUpcomingMilestone.title}`
+            ) : (
+              'لا توجد معالم متأخرة'
+            )}
           </p>
         </div>
       </div>

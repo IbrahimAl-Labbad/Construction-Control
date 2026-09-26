@@ -4,6 +4,7 @@
  * Provides COARSE-GRAINED route protection:
  * - Redirects unauthenticated users to /login
  * - Redirects authenticated users away from /login
+ * - Sets `x-pathname` header for server-side layout route awareness
  *
  * IMPORTANT: Middleware provides only URL-level protection.
  * FINE-GRAINED authorization (role checks) must ALSO be enforced
@@ -15,13 +16,25 @@
  * See AGENTS.md §14 for authorization rules.
  */
 
+import { NextResponse } from 'next/server';
 import { withAuth } from 'next-auth/middleware';
 
-export default withAuth({
-  pages: {
-    signIn: '/login',
+export default withAuth(
+  function middleware(req) {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-pathname', req.nextUrl.pathname);
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   },
-});
+  {
+    pages: {
+      signIn: '/login',
+    },
+  }
+);
 
 /**
  * Route matcher configuration.

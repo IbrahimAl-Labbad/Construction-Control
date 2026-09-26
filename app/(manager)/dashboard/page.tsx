@@ -18,6 +18,8 @@
 import type { Metadata } from 'next';
 import { LayoutDashboard } from 'lucide-react';
 
+import { Role } from '@prisma/client';
+import { requireRole } from '@/lib/permissions';
 import { getDashboardSummary } from '@/lib/dashboard/queries/get-dashboard-summary';
 import { CompanySummaryPanel } from './components/company-summary-panel';
 import { PendingApprovalsPanel } from './components/pending-approvals-panel';
@@ -29,6 +31,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
+  await requireRole(Role.MANAGER);
   const dashboard = await getDashboardSummary();
 
   return (

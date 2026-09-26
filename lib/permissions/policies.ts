@@ -573,6 +573,37 @@ const canViewAssignedProjects = (
 };
 
 // ---------------------------------------------------------------------------
+// Project Planning & Milestones Policies (Vertical Slice 12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create, update, start, complete, cancel, reorder, or delete milestones.
+ * Restricted to active Managers (BD-12-01).
+ */
+export const canManageMilestones: Policy = (user) => user.isActive && user.role === Role.MANAGER;
+
+/**
+ * Whether the user can view project milestones (BD-12-02, BD-12-03, BD-12-04).
+ * - Manager: ALLOW
+ * - Accountant: ALLOW (View-only)
+ * - Purchasing: ALLOW (View-only)
+ * - Engineer: ALLOW ONLY IF active project assignment exists (BD-12-02)
+ */
+export const canViewProjectMilestones = (
+  user: AuthenticatedUser,
+  isAssignedEngineer: boolean = false,
+): boolean => {
+  if (!user.isActive) return false;
+  if (user.role === Role.MANAGER || user.role === Role.ACCOUNTANT || user.role === Role.PURCHASING) {
+    return true;
+  }
+  if (user.role === Role.ENGINEER) {
+    return isAssignedEngineer;
+  }
+  return false;
+};
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -671,5 +702,9 @@ export const policies = {
   canManageProjectTeam,
   canViewProjectTeam,
   canViewAssignedProjects,
+
+  // Project Planning & Milestones (Vertical Slice 12)
+  canManageMilestones,
+  canViewProjectMilestones,
 } as const;
 

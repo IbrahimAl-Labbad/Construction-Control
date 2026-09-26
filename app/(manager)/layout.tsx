@@ -1,9 +1,15 @@
 /**
  * (manager) route group layout.
  *
- * Enforces Manager-only role authorization on the server.
- * All pages under /(manager) are protected by this guard.
- * Renders the minimal manager top bar above page content.
+ * Enforces server-side authorization on the server.
+ * Ensures the user is authenticated and active, and has one of the valid
+ * system roles.
+ *
+ * Defense-in-depth: Each individual page under /(manager) enforces its own
+ * granular role and ownership guard (e.g. requireManager() on manager pages,
+ * canViewProjectMilestones() on milestones page).
+ *
+ * Renders the top bar above page content.
  *
  * See AGENTS.md §18 for authorization rules.
  * See AGENTS.md §15 for RTL/Arabic UI rules.
@@ -21,7 +27,12 @@ export default async function ManagerLayout({
 }) {
   // Server-side authorization guard — enforced before any page renders
   try {
-    await requireRole(Role.MANAGER);
+    await requireRole([
+      Role.MANAGER,
+      Role.ENGINEER,
+      Role.ACCOUNTANT,
+      Role.PURCHASING,
+    ]);
   } catch (error) {
     if (error instanceof PermissionError) {
       return (

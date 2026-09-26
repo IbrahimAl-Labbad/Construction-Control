@@ -31,4 +31,6 @@ export {
   canCancelPayroll,
   canViewPayrollDetails,
   canViewProjectLaborAggregate,
+  canManageMilestones,
+  canViewProjectMilestones,
 } from './policies';

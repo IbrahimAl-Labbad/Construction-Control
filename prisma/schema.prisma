@@ -121,6 +121,14 @@ enum AssignmentStatus {
   INACTIVE
 }
 
+/// Operational and lifecycle status for project milestones (الشريحة الرأسية 12).
+enum MilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 
 // =============================================================================
 // IDENTITY & ACCESS MODELS
@@ -237,6 +245,10 @@ model User {
   createdAssignments  ProjectAssignment[] @relation("AssignmentCreator")
   removedAssignments  ProjectAssignment[] @relation("AssignmentRemover")
 
+  // Project Milestones (Vertical Slice 12)
+  createdMilestones ProjectMilestone[] @relation("MilestoneCreator")
+  updatedMilestones ProjectMilestone[] @relation("MilestoneUpdater")
+
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -325,6 +337,9 @@ model Project {
 
   /// Assigned Site Engineers (Vertical Slice 11)
   assignments           ProjectAssignment[] @relation("ProjectAssignments")
+
+  /// Milestones for this project (Vertical Slice 12)
+  milestones            ProjectMilestone[]
 
 
   /// Soft deletion timestamp
@@ -962,6 +977,58 @@ model ProjectAssignment {
   @@index([engineerId, status])
   @@index([status])
   @@map("project_assignments")
+}
+
+// =============================================================================
+// PROJECT PLANNING & MILESTONE DOMAIN MODELS (Vertical Slice 12)
+// =============================================================================
+
+/// Operational and control layer representation of a project milestone.
+/// Represents a high-level contractual/delivery gate.
+/// Managed and approved exclusively by Role.MANAGER.
+model ProjectMilestone {
+  id          String          @id @default(cuid())
+
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  /// Milestone title (2 to 150 characters)
+  title       String          @db.VarChar(150)
+
+  /// Optional description (<= 1000 characters)
+  description String?         @db.Text
+
+  /// Planned/Target completion date (@db.Date — calendar date only, no time component)
+  targetDate  DateTime        @db.Date
+
+  /// Actual completion timestamp — set by server on transition to COMPLETED
+  achievedAt  DateTime?       @db.Timestamptz
+
+  /// Operational lifecycle status
+  status      MilestoneStatus @default(PLANNED)
+
+  /// Order index within the project (0, 1, 2...)
+  orderIndex  Int             @default(0)
+
+  /// Creator and updater audit relations (Manager only)
+  createdById String
+  createdBy   User            @relation("MilestoneCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  updatedById String?
+  updatedBy   User?           @relation("MilestoneUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  /// Soft deletion timestamp (allowed for PLANNED status only)
+  deletedAt   DateTime?       @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt   DateTime        @default(now()) @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+  @@index([projectId, orderIndex])
+  @@index([targetDate])
+  @@index([deletedAt])
+  @@map("project_milestones")
 }
 
 
