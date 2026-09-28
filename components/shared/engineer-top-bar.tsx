@@ -10,7 +10,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut, ClipboardList } from 'lucide-react';
+import { LogOut, ClipboardList, FolderKanban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function EngineerTopBar() {
@@ -20,6 +20,7 @@ export function EngineerTopBar() {
     void signOut({ callbackUrl: '/login' });
   }
 
+  const isMyProjects = pathname.startsWith('/my-projects');
   const isMyReports = pathname.startsWith('/my-reports');
 
   return (
@@ -34,6 +35,18 @@ export function EngineerTopBar() {
             نظام متابعة التشييد
           </span>
           <nav className="flex items-center gap-2" aria-label="التنقل الرئيسي للمهندس">
+            <Link
+              href="/my-projects"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isMyProjects
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-my-projects-link"
+            >
+              <FolderKanban className="size-3.5" aria-hidden="true" />
+              مشاريعي
+            </Link>
             <Link
               href="/my-reports"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${

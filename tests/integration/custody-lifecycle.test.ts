@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus, BudgetCategory, CustodyStatus, ExpenseStatus } from '@prisma/client';
+import { Role, ProjectStatus, BudgetCategory, CustodyStatus, ExpenseStatus, AssignmentStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -142,6 +142,7 @@ describe('Custody Lifecycle Integration (Live PostgreSQL)', () => {
     cleanupCustodyIds.length = 0;
 
     for (const pId of cleanupProjectIds) {
+      await prisma.projectAssignment.deleteMany({ where: { projectId: pId } });
       await prisma.custody.deleteMany({ where: { projectId: pId } });
       await prisma.expense.deleteMany({ where: { projectId: pId } });
       await prisma.budgetLine.deleteMany({ where: { budget: { projectId: pId } } });
@@ -177,6 +178,15 @@ describe('Custody Lifecycle Integration (Live PostgreSQL)', () => {
     const approvedBudget = await approveBudget(budgetDraft.id);
 
     await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        engineerId: testEngineer.id,
+        assignedById: testManager.id,
+        status: AssignmentStatus.ACTIVE,
+      },
+    });
 
     const budgetLineId = approvedBudget.lines[0]!.id;
     return { project, budgetLineId };

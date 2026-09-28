@@ -116,6 +116,21 @@ test.describe('Expense Capture & Approval E2E Suite', () => {
     const targetLine = budget.lines[0];
     expect(targetLine).toBeDefined();
 
+    // Assign engineer to the project so they can submit expenses (Slice 11/14 invariant)
+    const engineerUser = await prisma.user.findFirstOrThrow({
+      where: { email: ENGINEER_EMAIL },
+      select: { id: true },
+    });
+
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        engineerId: engineerUser.id,
+        assignedById: managerUser.id,
+        status: 'ACTIVE',
+      },
+    });
+
     try {
       // ---------------------------------------------------------------------
       // Step A: Engineer logs in and creates draft expense
@@ -249,6 +264,7 @@ test.describe('Expense Capture & Approval E2E Suite', () => {
       await prisma.expense.deleteMany({ where: { projectId: project.id } });
       await prisma.budgetLine.deleteMany({ where: { budgetId: budget.id } });
       await prisma.budget.deleteMany({ where: { id: budget.id } });
+      await prisma.projectAssignment.deleteMany({ where: { projectId: project.id } });
       await prisma.project.deleteMany({ where: { id: project.id } });
     }
   });

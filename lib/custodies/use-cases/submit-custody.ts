@@ -16,6 +16,7 @@ import { BudgetStatus, CustodyStatus, ProjectStatus, Role } from '@prisma/client
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireRole } from '@/lib/permissions';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import { custodyIdSchema } from '@/lib/validation/schemas/custody';
 
@@ -50,6 +51,32 @@ export async function submitCustody(custodyId: unknown): Promise<CustodySummaryD
     // 3.1 Verify ownership
     if (custody.createdById !== actor.id) {
       throw new AppError('FORBIDDEN', 'لا يمكنك تقديم مسودة عهدة قام مستخدم آخر بإنشائها');
+    }
+
+    // 3.1.1 For Site Engineers: verify active project assignment (Slice 14 / BD-14-03)
+    if (actor.role === Role.ENGINEER) {
+      const isClaimantAssigned = await isEngineerAssignedToProject(custody.projectId, actor.id);
+      if (!isClaimantAssigned) {
+        throw new AppError(
+          'FORBIDDEN',
+          'لا يمكنك تقديم طلب عهدة نقدية لمشروع لست معيناً ضمن فريقه الهندسي',
+        );
+      }
+    }
+
+    // 3.1.2 For Engineer custodians: verify active project assignment (Slice 14 / BD-14-03)
+    const custodian = await tx.user.findFirst({
+      where: { id: custody.custodianUserId, deletedAt: null },
+      select: { role: true },
+    });
+    if (custodian?.role === Role.ENGINEER) {
+      const isCustodianAssigned = await isEngineerAssignedToProject(custody.projectId, custody.custodianUserId);
+      if (!isCustodianAssigned) {
+        throw new AppError(
+          'INVALID_CUSTODIAN',
+          'أمين العهدة المحدد لم يعد معيناً ضمن الفريق الهندسي للمشروع',
+        );
+      }
     }
 
     // 3.2 Verify state machine transition (DRAFT -> SUBMITTED)

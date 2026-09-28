@@ -14,12 +14,13 @@
  * 5. Atomicity: Status update + EXPENSE_SUBMITTED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, ExpenseStatus, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, ExpenseStatus, ProjectStatus, Role } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import { expenseIdSchema } from '@/lib/validation/schemas/expense';
 
@@ -62,6 +63,17 @@ export async function submitExpense(expenseId: unknown): Promise<ExpenseSummaryD
       'FORBIDDEN',
       'لا يمكنك تقديم مصروف قام بإنشائه مستخدم آخر',
     );
+  }
+
+  // 4.1 For Site Engineers: verify active project assignment (Slice 14 / BD-14-02)
+  if (actor.role === Role.ENGINEER) {
+    const isAssigned = await isEngineerAssignedToProject(existing.projectId, actor.id);
+    if (!isAssigned) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك تقديم مصروفات لمشروع لست معيناً ضمن فريقه الهندسي',
+      );
+    }
   }
 
   // 5. Assert state machine transition

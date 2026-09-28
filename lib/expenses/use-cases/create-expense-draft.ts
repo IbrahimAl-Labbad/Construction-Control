@@ -15,12 +15,13 @@
  * Follows AGENTS.md §8, §13, §21, and Slice 4 specifications.
  */
 
-import { BudgetStatus, Prisma, ProjectStatus } from '@prisma/client';
+import { BudgetStatus, Prisma, ProjectStatus, Role } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import { createExpenseDraftSchema } from '@/lib/validation/schemas/expense';
 
@@ -63,6 +64,17 @@ export async function createExpenseDraft(rawInput: unknown): Promise<ExpenseSumm
       'INVALID_PROJECT_STATUS',
       'لا يمكن تسجيل مصروفات إلا للمشاريع النشطة فقط (ACTIVE)',
     );
+  }
+
+  // 3.1 For Site Engineers: verify active project assignment (Slice 14 / BD-14-02)
+  if (actor.role === Role.ENGINEER) {
+    const isAssigned = await isEngineerAssignedToProject(projectId, actor.id);
+    if (!isAssigned) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك تسجيل مصروفات لمشروع لست معيناً ضمن فريقه الهندسي',
+      );
+    }
   }
 
   // 4. Verify project has an APPROVED, non-deleted budget

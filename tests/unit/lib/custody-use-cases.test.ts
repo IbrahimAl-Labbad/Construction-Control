@@ -45,6 +45,7 @@ vi.mock('@/lib/db/prisma', () => ({
       aggregate: vi.fn(),
     },
     auditLog: { create: vi.fn() },
+    projectAssignment: { count: vi.fn().mockResolvedValue(1) },
     $queryRaw: vi.fn(),
   },
 }));

@@ -13,12 +13,13 @@
  * 5. Atomicity: Status update + EXPENSE_REOPENED AuditLog in SAME transaction.
  */
 
-import { ExpenseStatus } from '@prisma/client';
+import { ExpenseStatus, ProjectStatus, Role } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import { expenseIdSchema } from '@/lib/validation/schemas/expense';
 
@@ -46,6 +47,9 @@ export async function reopenExpenseDraft(expenseId: unknown): Promise<ExpenseSum
   // 3. Fetch existing expense
   const existing = await prisma.expense.findFirst({
     where: { id, deletedAt: null },
+    include: {
+      project: { select: { id: true, status: true, deletedAt: true } },
+    },
   });
 
   if (!existing) {
@@ -58,6 +62,23 @@ export async function reopenExpenseDraft(expenseId: unknown): Promise<ExpenseSum
       'FORBIDDEN',
       'لا يمكنك إعادة فتح مصروف قام بإنشائه مستخدم آخر',
     );
+  }
+
+  // 4.1 For Site Engineers: verify active project assignment and active project status (Slice 14 / BD-14-02 & BD-14-04)
+  if (actor.role === Role.ENGINEER) {
+    const isAssigned = await isEngineerAssignedToProject(existing.projectId, actor.id);
+    if (!isAssigned) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك إعادة فتح مصروف لمشروع لست معيناً ضمن فريقه الهندسي',
+      );
+    }
+    if (existing.project && (existing.project.status !== ProjectStatus.ACTIVE || existing.project.deletedAt !== null)) {
+      throw new AppError(
+        'INVALID_PROJECT_STATUS',
+        'لا يمكن إعادة فتح المصروف لأن المشروع غير نشط حالياً',
+      );
+    }
   }
 
   // 5. Assert state machine transition (REJECTED -> DRAFT)

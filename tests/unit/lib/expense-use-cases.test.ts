@@ -64,6 +64,7 @@ const mockPurchasing: AuthenticatedUser = {
 describe('Expense Use Cases', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(prisma.projectAssignment, 'count').mockResolvedValue(1);
   });
 
   describe('createExpenseDraft', () => {

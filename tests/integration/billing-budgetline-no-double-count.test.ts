@@ -36,6 +36,7 @@ import {
   CommitmentStatus,
   ExpenseStatus,
   SubcontractorBillingStatus,
+  AssignmentStatus,
   Prisma,
 } from '@prisma/client';
 
@@ -190,6 +191,7 @@ describe('Billing BudgetLine No Double-Counting Integration (Live PostgreSQL)', 
     cleanupCommitmentIds.length = 0;
 
     for (const pId of cleanupProjectIds) {
+      await prisma.projectAssignment.deleteMany({ where: { projectId: pId } });
       await prisma.subcontractorBilling.deleteMany({ where: { projectId: pId } });
       await prisma.expense.deleteMany({ where: { projectId: pId } });
       await prisma.commitment.deleteMany({ where: { projectId: pId } });
@@ -230,6 +232,15 @@ describe('Billing BudgetLine No Double-Counting Integration (Live PostgreSQL)', 
     await submitBudget(budgetDraft.id);
     await approveBudget(budgetDraft.id);
     await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        engineerId: testEngineer.id,
+        assignedById: testManager.id,
+        status: AssignmentStatus.ACTIVE,
+      },
+    });
 
     const budgetLine = await prisma.budgetLine.findFirstOrThrow({
       where: { budgetId: budgetDraft.id },

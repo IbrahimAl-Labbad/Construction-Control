@@ -10,11 +10,12 @@
  * 4. Atomicity: State reset + CUSTODY_UPDATED AuditLog in SAME transaction.
  */
 
-import { CustodyStatus, Role } from '@prisma/client';
+import { CustodyStatus, ProjectStatus, Role } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireRole } from '@/lib/permissions';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import { custodyIdSchema } from '@/lib/validation/schemas/custody';
 
@@ -37,7 +38,9 @@ export async function reopenCustody(custodyId: unknown): Promise<CustodySummaryD
   const reopened = await prisma.$transaction(async (tx) => {
     const custody = await tx.custody.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, code: true, status: true, createdById: true },
+      include: {
+        project: { select: { id: true, status: true, deletedAt: true } },
+      },
     });
 
     if (!custody) {
@@ -47,6 +50,21 @@ export async function reopenCustody(custodyId: unknown): Promise<CustodySummaryD
     // 3.1 Verify ownership
     if (custody.createdById !== actor.id) {
       throw new AppError('FORBIDDEN', 'لا يمكنك إعادة فتح عهدة قام مستخدم آخر بإنشائها');
+    }
+
+    // 3.1.1 For Site Engineers: verify project status and active assignment (Slice 14 / BD-14-03, BD-14-04)
+    if (actor.role === Role.ENGINEER) {
+      if (custody.project.status !== ProjectStatus.ACTIVE || custody.project.deletedAt !== null) {
+        throw new AppError('INVALID_PROJECT_STATUS', 'المشروع غير نشط أو تم حذفه');
+      }
+
+      const isClaimantAssigned = await isEngineerAssignedToProject(custody.projectId, actor.id);
+      if (!isClaimantAssigned) {
+        throw new AppError(
+          'FORBIDDEN',
+          'لا يمكنك إعادة فتح عهدة نقدية لمشروع لست معيناً ضمن فريقه الهندسي',
+        );
+      }
     }
 
     // 3.2 Verify state transition (REJECTED -> DRAFT)

@@ -20,6 +20,7 @@ import { BudgetStatus, CustodyStatus, Prisma, ProjectStatus, Role } from '@prism
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireRole } from '@/lib/permissions';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import {
   createCustodyDraftSchema,
@@ -59,6 +60,17 @@ export async function createCustodyDraft(
         'INVALID_PROJECT_STATUS',
         `لا يمكن إنشاء عهدة لمشروع غير نشط (حالة المشروع الحالية: ${project.status})`,
       );
+    }
+
+    // 3.1.1 For Site Engineers: verify active project assignment (Slice 14 / BD-14-03)
+    if (actor.role === Role.ENGINEER) {
+      const isClaimantAssigned = await isEngineerAssignedToProject(data.projectId, actor.id);
+      if (!isClaimantAssigned) {
+        throw new AppError(
+          'FORBIDDEN',
+          'لا يمكنك طلب عهدة نقدية لمشروع لست معيناً ضمن فريقه الهندسي',
+        );
+      }
     }
 
     // 3.2 Verify active approved budget exists for project
@@ -113,6 +125,16 @@ export async function createCustodyDraft(
         'INVALID_CUSTODIAN',
         'أمين العهدة يجب أن يكون مهندساً ميدانياً أو محاسباً فقط',
       );
+    }
+
+    // 3.4.1 For Engineer custodians: verify active project assignment (Slice 14 / BD-14-03)
+    if (custodian.role === Role.ENGINEER) {
+      const isCustodianAssigned = await isEngineerAssignedToProject(data.projectId, custodian.id);
+      if (!isCustodianAssigned) {
+        throw new ValidationError([
+          { path: 'custodianUserId', message: 'أمين العهدة المحدد ليس معيناً ضمن الفريق الهندسي للمشروع' },
+        ]);
+      }
     }
 
     // 3.5 Invariant 8: Check if custodian already has an active/unsettled custody on this project

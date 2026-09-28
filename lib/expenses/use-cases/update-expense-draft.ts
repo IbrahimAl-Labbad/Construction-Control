@@ -15,12 +15,13 @@
  * 7. Atomicity: Expense update + EXPENSE_UPDATED AuditLog in SAME transaction.
  */
 
-import { BudgetStatus, ExpenseStatus, Prisma } from '@prisma/client';
+import { BudgetStatus, ExpenseStatus, Prisma, ProjectStatus, Role } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
+import { isEngineerAssignedToProject } from '@/lib/project-team';
 import { validate } from '@/lib/validation';
 import {
   expenseIdSchema,
@@ -60,6 +61,9 @@ export async function updateExpenseDraft(
   // 4. Fetch existing expense
   const existing = await prisma.expense.findFirst({
     where: { id, deletedAt: null },
+    include: {
+      project: { select: { id: true, status: true, deletedAt: true } },
+    },
   });
 
   if (!existing) {
@@ -84,6 +88,23 @@ export async function updateExpenseDraft(
       'EXPENSE_NOT_DRAFT',
       'لا يمكن تعديل المصروف إلا وهو في حالة مسودة (DRAFT)',
     );
+  }
+
+  // 6.1 For Site Engineers: verify active project assignment and active project status (Slice 14 / BD-14-02 & BD-14-04)
+  if (actor.role === Role.ENGINEER) {
+    const isAssigned = await isEngineerAssignedToProject(existing.projectId, actor.id);
+    if (!isAssigned) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك تعديل مصروفات لمشروع لست معيناً ضمن فريقه الهندسي',
+      );
+    }
+    if (existing.project && (existing.project.status !== ProjectStatus.ACTIVE || existing.project.deletedAt !== null)) {
+      throw new AppError(
+        'INVALID_PROJECT_STATUS',
+        'لا يمكن تعديل المصروف لأن المشروع غير نشط حالياً',
+      );
+    }
   }
 
   // 7. If budgetLineId changed, revalidate project/budget line relationship

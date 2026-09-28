@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus, BudgetCategory, ExpenseStatus } from '@prisma/client';
+import { Role, ProjectStatus, BudgetCategory, ExpenseStatus, AssignmentStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -99,6 +99,7 @@ describe('Expense Lifecycle Integration (Live PostgreSQL)', () => {
 
     // Clean up projects (and their budgets/lines)
     for (const pId of cleanupProjectIds) {
+      await prisma.projectAssignment.deleteMany({ where: { projectId: pId } });
       await prisma.expense.deleteMany({ where: { projectId: pId } });
       const budgets = await prisma.budget.findMany({ where: { projectId: pId } });
       for (const b of budgets) {
@@ -142,6 +143,16 @@ describe('Expense Lifecycle Integration (Live PostgreSQL)', () => {
 
     // Activate project
     await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    // Assign engineer to project (Slice 14 / BD-14-01)
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        engineerId: testEngineer.id,
+        assignedById: testManager.id,
+        status: AssignmentStatus.ACTIVE,
+      },
+    });
 
     // Fetch the approved budget line
     const budgetLine = await prisma.budgetLine.findFirstOrThrow({
