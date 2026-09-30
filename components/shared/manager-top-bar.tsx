@@ -18,7 +18,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut, FolderKanban, Users, LayoutDashboard, ClipboardList } from 'lucide-react';
+import { LogOut, FolderKanban, Users, LayoutDashboard, ClipboardList, CheckSquare } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -37,6 +37,7 @@ export function ManagerTopBar() {
   const isDashboard = pathname.startsWith('/dashboard');
   const isProjects = pathname.startsWith('/projects');
   const isProgressReports = pathname.startsWith('/progress-reports');
+  const isApprovals = pathname.startsWith('/approvals');
   const isUsers = pathname.startsWith('/users');
 
   return (
@@ -87,6 +88,18 @@ export function ManagerTopBar() {
             >
               <ClipboardList className="size-3.5" aria-hidden="true" />
               تقارير التقدم
+            </Link>
+            <Link
+              href="/approvals"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isApprovals
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-approvals-link"
+            >
+              <CheckSquare className="size-3.5" aria-hidden="true" />
+              الموافقات
             </Link>
             <Link
               href="/users"
