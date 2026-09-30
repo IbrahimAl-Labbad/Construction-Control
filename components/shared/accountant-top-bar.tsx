@@ -1,29 +1,49 @@
 'use client';
 
 /**
- * components/shared/engineer-top-bar.tsx
+ * components/shared/accountant-top-bar.tsx
  *
- * Minimal engineer top bar displayed across all site engineer pages.
- * Contains system name, navigation link to /my-reports, and logout button.
+ * Reusable top bar displayed across accountant pages.
+ *
+ * Contains:
+ * - Arabic system name (right side in RTL)
+ * - Navigation links for:
+ *   - Payroll (/payroll)
+ *   - Subcontractor Billings (/subcontractor-billings)
+ *   - Commitments (/commitments)
+ *   - Custodies (/custodies)
+ *   - Expenses (/expenses)
+ * - Logout button using NextAuth signOut (left side in RTL)
+ *
+ * See AGENTS.md §19 for RTL/Arabic UI rules.
  */
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { LogOut, ClipboardList, FolderKanban, Receipt, Wallet } from 'lucide-react';
+import {
+  LogOut,
+  Users,
+  FileText,
+  FileSignature,
+  Wallet,
+  Receipt,
+} from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 
-export function EngineerTopBar() {
+export function AccountantTopBar() {
   const pathname = usePathname();
 
   function handleLogout() {
     void signOut({ callbackUrl: '/login' });
   }
 
-  const isMyProjects = pathname.startsWith('/my-projects');
-  const isMyReports = pathname.startsWith('/my-reports');
-  const isExpenses = pathname.startsWith('/expenses');
+  const isPayroll = pathname.startsWith('/payroll');
+  const isBillings = pathname.startsWith('/subcontractor-billings');
+  const isCommitments = pathname.startsWith('/commitments');
   const isCustodies = pathname.startsWith('/custodies');
+  const isExpenses = pathname.startsWith('/expenses');
 
   return (
     <header
@@ -36,42 +56,42 @@ export function EngineerTopBar() {
           <span className="text-base font-semibold text-foreground">
             نظام متابعة التشييد
           </span>
-          <nav className="flex items-center gap-2" aria-label="التنقل الرئيسي للمهندس">
+          <nav className="flex items-center gap-2" aria-label="التنقل الرئيسي للمحاسب">
             <Link
-              href="/my-projects"
+              href="/payroll"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                isMyProjects
+                isPayroll
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
-              data-testid="nav-my-projects-link"
+              data-testid="nav-payroll-link"
             >
-              <FolderKanban className="size-3.5" aria-hidden="true" />
-              مشاريعي
+              <Users className="size-3.5" aria-hidden="true" />
+              الأجور والرواتب
             </Link>
             <Link
-              href="/my-reports"
+              href="/subcontractor-billings"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                isMyReports
+                isBillings
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
-              data-testid="nav-my-reports-link"
+              data-testid="nav-subcontractor-billings-link"
             >
-              <ClipboardList className="size-3.5" aria-hidden="true" />
-              تقارير التقدم الميداني
+              <FileText className="size-3.5" aria-hidden="true" />
+              مستخلصات المقاولين
             </Link>
             <Link
-              href="/expenses"
+              href="/commitments"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                isExpenses
+                isCommitments
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
-              data-testid="nav-expenses-link"
+              data-testid="nav-commitments-link"
             >
-              <Receipt className="size-3.5" aria-hidden="true" />
-              المصروفات
+              <FileSignature className="size-3.5" aria-hidden="true" />
+              الارتباطات
             </Link>
             <Link
               href="/custodies"
@@ -84,6 +104,18 @@ export function EngineerTopBar() {
             >
               <Wallet className="size-3.5" aria-hidden="true" />
               العهد
+            </Link>
+            <Link
+              href="/expenses"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isExpenses
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              data-testid="nav-expenses-link"
+            >
+              <Receipt className="size-3.5" aria-hidden="true" />
+              المصروفات
             </Link>
           </nav>
         </div>

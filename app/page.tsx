@@ -1,29 +1,50 @@
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'الصفحة الرئيسية',
-};
+import { redirect } from 'next/navigation';
+import { Role } from '@prisma/client';
+import { requireAuth } from '@/lib/auth';
+import type { AuthenticatedUser } from '@/lib/auth';
 
 /**
- * Root page — temporary landing.
+ * Root page — server-side role-based redirect.
  *
- * This page exists only as a structural placeholder.
- * In the next phase, this will redirect authenticated users to their
- * role-based dashboard and unauthenticated users to /login.
+ * Directs authenticated users to their primary role workspace:
+ * - MANAGER    -> /dashboard
+ * - ENGINEER   -> /my-projects
+ * - ACCOUNTANT -> /payroll
+ * - PURCHASING -> /commitments
  *
- * DO NOT add business content here — see AGENTS.md §22.
+ * Unauthenticated, inactive, or unverified sessions are redirected to /login.
+ *
+ * See AGENTS.md §5 and §18.
  */
-export default function HomePage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold text-foreground">
-          نظام متابعة التشييد
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          جاهز للتكوين
-        </p>
-      </div>
-    </main>
-  );
+export default async function HomePage() {
+  let user: AuthenticatedUser | null = null;
+
+  try {
+    user = await requireAuth();
+  } catch {
+    user = null;
+  }
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  switch (user.role) {
+    case Role.MANAGER:
+      redirect('/dashboard');
+      break;
+    case Role.ENGINEER:
+      redirect('/my-projects');
+      break;
+    case Role.ACCOUNTANT:
+      redirect('/payroll');
+      break;
+    case Role.PURCHASING:
+      redirect('/commitments');
+      break;
+    default:
+      redirect('/login');
+      break;
+  }
 }
+

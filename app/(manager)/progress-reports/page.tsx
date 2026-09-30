@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ProgressReportStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { requireManager } from '@/lib/permissions';
 import { getAllProgressReports } from '@/lib/progress-reports';
 import { ProgressReportStatusBadge, ProjectFilterSelect } from '@/components/progress-reports';
 import { ClipboardList, Calendar, FolderKanban, ArrowLeft, User } from 'lucide-react';
@@ -18,6 +19,9 @@ interface ManagerProgressReportsPageProps {
 export default async function ManagerProgressReportsPage({
   searchParams,
 }: ManagerProgressReportsPageProps) {
+  // Page-level manager authorization guard
+  await requireManager();
+
   const params = await searchParams;
   const currentProjectId = params.projectId || undefined;
   const currentStatus = params.status as ProgressReportStatus | undefined;

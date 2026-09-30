@@ -77,37 +77,35 @@ export function PendingApprovalsPanel({ approvals }: PendingApprovalsPanelProps)
       label: 'مصروفات معلقة',
       count: approvals.expenses,
       icon: <Receipt className="size-4.5" aria-hidden="true" />,
-      // Per-project route only — /projects is the meaningful entry point
-      href: '/projects',
+      href: '/approvals?tab=expenses',
       testId: 'pending-expenses-count',
     },
     {
       label: 'ارتباطات معلقة',
       count: approvals.commitments,
       icon: <FileSignature className="size-4.5" aria-hidden="true" />,
-      href: '/projects',
+      href: '/approvals?tab=commitments',
       testId: 'pending-commitments-count',
     },
     {
       label: 'عهد معلقة',
       count: approvals.custodies,
       icon: <Wallet className="size-4.5" aria-hidden="true" />,
-      href: '/projects',
+      href: '/approvals?tab=custodies',
       testId: 'pending-custodies-count',
     },
     {
       label: 'رواتب معلقة',
       count: approvals.payrollEntries,
       icon: <Users className="size-4.5" aria-hidden="true" />,
-      href: '/projects',
+      href: '/approvals?tab=payroll',
       testId: 'pending-payroll-count',
     },
     {
       label: 'مستخلصات معلقة',
       count: approvals.subcontractorBillings,
       icon: <FileText className="size-4.5" aria-hidden="true" />,
-      // Company-wide list exists at /subcontractor-billings (BD-29b inspection)
-      href: '/subcontractor-billings',
+      href: '/approvals?tab=billings',
       testId: 'pending-billings-count',
     },
   ];

@@ -13,6 +13,9 @@ import {
   FileSignature,
   Users,
   Flag,
+  Wallet,
+  Banknote,
+  ClipboardList,
 } from 'lucide-react';
 
 import { requireManager } from '@/lib/permissions';
@@ -145,6 +148,36 @@ export default async function ProjectDetailsPage({
           >
             <Flag className="size-4" aria-hidden="true" />
             <span>المعالم التخطيطية ({dashboard.milestones.totalCount})</span>
+          </Link>
+
+          {/* Custodies Link */}
+          <Link
+            href={`/projects/${dashboard.projectId}/custodies`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-custodies-button"
+          >
+            <Wallet className="size-4" aria-hidden="true" />
+            <span>العهد النقدية</span>
+          </Link>
+
+          {/* Payroll Link */}
+          <Link
+            href={`/projects/${dashboard.projectId}/payroll`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-payroll-button"
+          >
+            <Banknote className="size-4" aria-hidden="true" />
+            <span>الأجور والعمالة</span>
+          </Link>
+
+          {/* Progress Reports Link */}
+          <Link
+            href={`/projects/${dashboard.projectId}/progress`}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            data-testid="project-progress-button"
+          >
+            <ClipboardList className="size-4" aria-hidden="true" />
+            <span>تقارير التقدم</span>
           </Link>
 
           {/* Edit metadata */}
