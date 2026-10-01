@@ -13,9 +13,13 @@ import * as permissions from '@/lib/permissions';
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@/lib/auth';
 
-vi.mock('@/lib/permissions', () => ({
-  requireManager: vi.fn(),
-}));
+vi.mock('@/lib/permissions', async (importOriginal) => {
+  const actual = await importOriginal<typeof permissions>();
+  return {
+    ...actual,
+    requireManager: vi.fn(),
+  };
+});
 
 vi.mock('@/lib/progress-reports', () => ({
   getAllProgressReports: vi.fn().mockResolvedValue([]),
@@ -61,5 +65,46 @@ describe('ManagerProgressReportsPage Page-Level Guard (Slice 16)', () => {
 
     expect(permissions.requireManager).toHaveBeenCalledTimes(1);
     expect(pageResult).toBeDefined();
+  });
+});
+
+describe('ManagerReportDetailPage & Actions Guards (Slice 17)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects action execution when requireManager throws PermissionError', async () => {
+    const { approveProgressReportAction, rejectProgressReportAction, cancelProgressReportAction } =
+      await import('@/app/(manager)/progress-reports/actions');
+
+    vi.mocked(permissions.requireManager).mockRejectedValue(
+      new permissions.PermissionError('INSUFFICIENT_ROLE', [Role.MANAGER], Role.ENGINEER),
+    );
+
+    const approveRes = await approveProgressReportAction('rep-1');
+    expect(approveRes.success).toBe(false);
+    expect(approveRes.error).toBeDefined();
+
+    const rejectRes = await rejectProgressReportAction('rep-1', 'سبب الرفض');
+    expect(rejectRes.success).toBe(false);
+    expect(rejectRes.error).toBeDefined();
+
+    const cancelRes = await cancelProgressReportAction('rep-1', 'سبب الإلغاء');
+    expect(cancelRes.success).toBe(false);
+    expect(cancelRes.error).toBeDefined();
+  });
+
+  it('rejects ManagerReportDetailPage if requireManager throws', async () => {
+    const ManagerReportDetailPage = (await import('@/app/(manager)/progress-reports/[id]/page')).default;
+
+    vi.mocked(permissions.requireManager).mockRejectedValue(new Error('FORBIDDEN_MANAGER'));
+
+    await expect(
+      ManagerReportDetailPage({
+        params: Promise.resolve({ id: 'rep-1' }),
+      }),
+    ).rejects.toThrow('FORBIDDEN_MANAGER');
+
+    expect(permissions.requireManager).toHaveBeenCalled();
   });
 });

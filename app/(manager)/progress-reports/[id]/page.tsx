@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProgressReport } from '@/lib/progress-reports';
+import { requireManager } from '@/lib/permissions';
 import { ProgressReportStatusBadge } from '@/components/progress-reports';
 import { ManagerReportActions } from './components/manager-report-actions';
 import { AppError } from '@/lib/errors';
@@ -27,6 +28,9 @@ export const metadata: Metadata = {
 };
 
 export default async function ManagerReportDetailPage({ params }: ManagerReportDetailPageProps) {
+  // Page-level manager authorization guard
+  await requireManager();
+
   const { id } = await params;
 
   let report;

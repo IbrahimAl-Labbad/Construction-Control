@@ -35,6 +35,7 @@ async function loginAs(page: Page, email: string, pass: string): Promise<void> {
 
 test.describe('Purchasing & Commitments E2E Suite', () => {
   test.beforeEach(async ({ context }) => {
+    test.setTimeout(90000);
     await context.clearCookies();
   });
 

@@ -2,6 +2,7 @@
   "name": "construction-control",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Construction Company Management Control Layer",
   "scripts": {
     "dev": "next dev",
