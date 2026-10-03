@@ -67,11 +67,14 @@ function handleUseCaseError(error: unknown): ActionFailure {
 
 function revalidateBillingPaths(projectId?: string): void {
   revalidatePath('/subcontractor-billings');
+  revalidatePath('/approvals');
+  revalidatePath('/dashboard');
   if (projectId) {
     revalidatePath(`/projects/${projectId}`);
     revalidatePath(`/projects/${projectId}/billings`);
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Server Actions

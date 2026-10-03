@@ -67,6 +67,8 @@ function handleUseCaseError(error: unknown): ActionFailure {
 
 function revalidatePayrollPaths(projectId?: string, payrollId?: string): void {
   revalidatePath('/payroll');
+  revalidatePath('/approvals');
+  revalidatePath('/dashboard');
   if (payrollId) {
     revalidatePath(`/payroll/${payrollId}`);
   }
@@ -75,6 +77,7 @@ function revalidatePayrollPaths(projectId?: string, payrollId?: string): void {
     revalidatePath(`/projects/${projectId}/payroll`);
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Server Actions

@@ -182,7 +182,10 @@ test.describe('Project Planning & Milestones E2E Suite (Vertical Slice 12)', () 
     await page.getByTestId('milestone-target-date-input').fill('2026-11-20');
     await page.getByTestId('confirm-create-milestone-button').click();
 
+    await expect(page.getByTestId('milestone-title').nth(1)).toContainText('صب الخرسانة المسلحة');
     await expect(page.getByTestId('summary-total-count')).toHaveText('2');
+
+
 
     // 5. Edit Milestone 1
     const editBtn = page.getByTestId('edit-milestone-button').first();

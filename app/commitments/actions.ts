@@ -98,11 +98,14 @@ export async function submitCommitmentAction(commitmentId: string): Promise<Acti
     const commitment = await submitCommitment(commitmentId);
     revalidatePath('/commitments');
     revalidatePath(`/projects/${commitment.projectId}/commitments`);
+    revalidatePath('/approvals');
+    revalidatePath('/dashboard');
     return { success: true, data: commitment };
   } catch (error) {
     return handleUseCaseError(error);
   }
 }
+
 
 /**
  * Reopens a rejected commitment back to draft.

@@ -57,12 +57,15 @@ function handleUseCaseError(error: unknown): ActionFailure {
 function revalidateCustodies(projectId?: string): void {
   revalidatePath('/custodies');
   revalidatePath('/expenses');
+  revalidatePath('/approvals');
+  revalidatePath('/dashboard');
   if (projectId) {
     revalidatePath(`/projects/${projectId}`);
     revalidatePath(`/projects/${projectId}/custodies`);
     revalidatePath(`/projects/${projectId}/expenses`);
   }
 }
+
 
 export async function createCustodyAction(
   input: CreateCustodyDraftInput,

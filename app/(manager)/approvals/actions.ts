@@ -60,6 +60,16 @@ function validateRejectionReason(reason: string): ApprovalActionResult | null {
 }
 
 // -----------------------------------------------------------------------------
+// Cache revalidation helper
+// -----------------------------------------------------------------------------
+
+function revalidateApprovalHub(domainPath: string): void {
+  revalidatePath('/approvals');
+  revalidatePath('/dashboard');
+  revalidatePath(domainPath);
+}
+
+// -----------------------------------------------------------------------------
 // EXPENSE ACTIONS
 // -----------------------------------------------------------------------------
 
@@ -75,10 +85,10 @@ export async function approveExpenseHubAction(id: string): Promise<ApprovalActio
 
   try {
     await approveExpense(id);
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/expenses');
     return { success: true, domain: 'EXPENSE', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/expenses');
     return handleUseCaseError(error);
   }
 }
@@ -98,10 +108,10 @@ export async function rejectExpenseHubAction(id: string, reason: string): Promis
 
   try {
     await rejectExpense(id, { rejectionReason: reason });
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/expenses');
     return { success: true, domain: 'EXPENSE', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/expenses');
     return handleUseCaseError(error);
   }
 }
@@ -122,10 +132,10 @@ export async function approveCommitmentHubAction(id: string): Promise<ApprovalAc
 
   try {
     await approveCommitment(id);
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/commitments');
     return { success: true, domain: 'COMMITMENT', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/commitments');
     return handleUseCaseError(error);
   }
 }
@@ -145,10 +155,10 @@ export async function rejectCommitmentHubAction(id: string, reason: string): Pro
 
   try {
     await rejectCommitment(id, { rejectionReason: reason });
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/commitments');
     return { success: true, domain: 'COMMITMENT', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/commitments');
     return handleUseCaseError(error);
   }
 }
@@ -169,10 +179,10 @@ export async function approveCustodyHubAction(id: string): Promise<ApprovalActio
 
   try {
     await approveCustody(id);
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/custodies');
     return { success: true, domain: 'CUSTODY', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/custodies');
     return handleUseCaseError(error);
   }
 }
@@ -192,10 +202,10 @@ export async function rejectCustodyHubAction(id: string, reason: string): Promis
 
   try {
     await rejectCustody({ id, rejectionReason: reason });
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/custodies');
     return { success: true, domain: 'CUSTODY', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/custodies');
     return handleUseCaseError(error);
   }
 }
@@ -216,10 +226,10 @@ export async function approvePayrollHubAction(id: string): Promise<ApprovalActio
 
   try {
     await approvePayroll(id);
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/payroll');
     return { success: true, domain: 'PAYROLL', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/payroll');
     return handleUseCaseError(error);
   }
 }
@@ -239,10 +249,10 @@ export async function rejectPayrollHubAction(id: string, reason: string): Promis
 
   try {
     await rejectPayroll(id, { rejectionReason: reason });
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/payroll');
     return { success: true, domain: 'PAYROLL', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/payroll');
     return handleUseCaseError(error);
   }
 }
@@ -263,10 +273,10 @@ export async function approveBillingHubAction(id: string): Promise<ApprovalActio
 
   try {
     await approveBilling(id);
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/subcontractor-billings');
     return { success: true, domain: 'SUBCONTRACTOR_BILLING', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/subcontractor-billings');
     return handleUseCaseError(error);
   }
 }
@@ -286,10 +296,11 @@ export async function rejectBillingHubAction(id: string, reason: string): Promis
 
   try {
     await rejectBilling(id, { rejectionReason: reason });
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/subcontractor-billings');
     return { success: true, domain: 'SUBCONTRACTOR_BILLING', id };
   } catch (error) {
-    revalidatePath('/approvals');
+    revalidateApprovalHub('/subcontractor-billings');
     return handleUseCaseError(error);
   }
 }
+

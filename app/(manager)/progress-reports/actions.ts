@@ -26,9 +26,11 @@ export async function approveProgressReportAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireManager();
-    await approveProgressReport(id);
+    const report = await approveProgressReport(id);
     revalidatePath('/progress-reports');
     revalidatePath(`/progress-reports/${id}`);
+    revalidatePath(`/projects/${report.projectId}`);
+    revalidatePath(`/projects/${report.projectId}/progress`);
     return { success: true };
   } catch (error) {
     return formatActionFailure(error, 'فشل اعتماد التقرير');
@@ -41,9 +43,11 @@ export async function rejectProgressReportAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireManager();
-    await rejectProgressReport(id, { rejectionReason: reason });
+    const report = await rejectProgressReport(id, { rejectionReason: reason });
     revalidatePath('/progress-reports');
     revalidatePath(`/progress-reports/${id}`);
+    revalidatePath(`/projects/${report.projectId}`);
+    revalidatePath(`/projects/${report.projectId}/progress`);
     return { success: true };
   } catch (error) {
     return formatActionFailure(error, 'فشل رفض التقرير');
@@ -56,11 +60,14 @@ export async function cancelProgressReportAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireManager();
-    await cancelProgressReport(id, { cancellationReason: reason });
+    const report = await cancelProgressReport(id, { cancellationReason: reason });
     revalidatePath('/progress-reports');
     revalidatePath(`/progress-reports/${id}`);
+    revalidatePath(`/projects/${report.projectId}`);
+    revalidatePath(`/projects/${report.projectId}/progress`);
     return { success: true };
   } catch (error) {
     return formatActionFailure(error, 'فشل إلغاء التقرير');
   }
 }
+

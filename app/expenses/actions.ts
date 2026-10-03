@@ -95,11 +95,14 @@ export async function submitExpenseAction(expenseId: string): Promise<ActionResu
     const expense = await submitExpense(expenseId);
     revalidatePath('/expenses');
     revalidatePath(`/projects/${expense.projectId}/expenses`);
+    revalidatePath('/approvals');
+    revalidatePath('/dashboard');
     return { success: true, data: expense };
   } catch (error) {
     return handleUseCaseError(error);
   }
 }
+
 
 /**
  * Reopens a rejected expense claim back to draft.

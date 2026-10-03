@@ -23,8 +23,8 @@ export default defineConfig({
   forbidOnly: !!process.env['CI'],
   // Retry on CI only
   retries: process.env['CI'] ? 2 : 0,
-  // Opt out of parallel tests on CI
-  ...(process.env['CI'] ? { workers: 1 } : {}),
+  // Opt out of parallel tests to avoid database and session concurrency collisions
+  workers: 1,
   // Reporter
   reporter: [
     ['html', { outputFolder: 'tests/e2e/reports' }],
