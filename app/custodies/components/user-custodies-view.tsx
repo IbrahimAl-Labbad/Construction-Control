@@ -7,7 +7,7 @@
  * Supports: Requesting advances, editing drafts, submitting, disbursing cash, recording cash return, viewing balances.
  */
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CustodyStatus } from '@prisma/client';
 
@@ -21,12 +21,13 @@ import {
   closeCustodyAction,
   cancelCustodyAction,
 } from '../actions';
-import type { CustodyFormDataDTO } from '@/lib/custodies';
+import type { CustodyFormDataDTO, UserCustodiesTotals } from '@/lib/custodies';
 import type { CustodySummaryDTO } from '@/lib/custodies/types';
 import { CustodyStatusBadge } from './custody-status-badge';
 
 interface UserCustodiesViewProps {
   initialCustodies: CustodySummaryDTO[];
+  initialTotals?: UserCustodiesTotals;
   formData: CustodyFormDataDTO;
   canCreate: boolean;
   isAccountant: boolean;
@@ -36,6 +37,7 @@ interface UserCustodiesViewProps {
 
 export function UserCustodiesView({
   initialCustodies,
+  initialTotals,
   formData,
   canCreate,
   isAccountant,
@@ -44,10 +46,29 @@ export function UserCustodiesView({
 }: UserCustodiesViewProps) {
   const router = useRouter();
   const [custodies, setCustodies] = useState<CustodySummaryDTO[]>(initialCustodies);
+  const [totals, setTotals] = useState<UserCustodiesTotals>(
+    initialTotals ?? {
+      totalIssued: '0.00',
+      totalSettled: '0.00',
+      totalReturned: '0.00',
+      totalOutstanding: '0.00',
+    },
+  );
   const [selectedTab, setSelectedTab] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'SETTLED' | 'DRAFTS'>('ALL');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isReturnCashOpen, setIsReturnCashOpen] = useState<CustodySummaryDTO | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState<CustodySummaryDTO | null>(null);
+
+  // Sync state with server-provided updates
+  useEffect(() => {
+    setCustodies(initialCustodies);
+  }, [initialCustodies]);
+
+  useEffect(() => {
+    if (initialTotals) {
+      setTotals(initialTotals);
+    }
+  }, [initialTotals]);
 
   // Form states
   const [selectedProjectId, setSelectedProjectId] = useState(formData.projects[0]?.id ?? '');
@@ -65,17 +86,6 @@ export function UserCustodiesView({
   const [isPending, startTransition] = useTransition();
 
   const selectedProject = formData.projects.find((p) => p.id === selectedProjectId);
-
-  // Calculate totals
-  const totalIssued = custodies
-    .filter((c) => c.status !== CustodyStatus.DRAFT && c.status !== CustodyStatus.SUBMITTED && c.status !== CustodyStatus.CANCELLED && c.status !== CustodyStatus.REJECTED)
-    .reduce((acc, c) => acc + parseFloat(c.amount), 0);
-
-  const totalSettled = custodies.reduce((acc, c) => acc + parseFloat(c.settledExpensesAmount), 0);
-  const totalReturned = custodies.reduce((acc, c) => acc + parseFloat(c.cashReturnedAmount), 0);
-  const totalOutstanding = custodies
-    .filter((c) => c.status === CustodyStatus.ISSUED || c.status === CustodyStatus.PARTIALLY_SETTLED)
-    .reduce((acc, c) => acc + parseFloat(c.remainingBalance), 0);
 
   // Filtered custodies
   const filteredCustodies = custodies.filter((c) => {
@@ -257,25 +267,25 @@ export function UserCustodiesView({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground">إجمالي العهد المنصرفة</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{totalIssued.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{Number(totals.totalIssued).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
           <span className="text-[11px] text-muted-foreground">مبالغ خرجت من الشركة</span>
         </div>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground">المصروفات المسواة</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{totalSettled.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{Number(totals.totalSettled).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
           <span className="text-[11px] text-muted-foreground">فواتير معتمدة أصولاً</span>
         </div>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground">الفائض المسترجع</p>
-          <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{totalReturned.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
+          <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{Number(totals.totalReturned).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
           <span className="text-[11px] text-muted-foreground">نقد استرجع للشركة</span>
         </div>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground">الرصيد المتبقي بالميدان</p>
-          <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">{totalOutstanding.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
+          <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">{Number(totals.totalOutstanding).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</p>
           <span className="text-[11px] text-muted-foreground">في ذمة الموظفين حالياً</span>
         </div>
       </div>

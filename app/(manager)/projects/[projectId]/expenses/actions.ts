@@ -13,9 +13,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { AppError, ValidationError } from '@/lib/errors';
-import { PermissionError } from '@/lib/permissions';
-import { AuthError } from '@/lib/auth';
+import { handleActionError } from '@/lib/errors';
 import {
   approveExpense,
   rejectExpense,
@@ -37,44 +35,7 @@ export type ActionFailure = {
 export type ActionResult<T = ExpenseSummaryDTO> = ActionSuccess<T> | ActionFailure;
 
 function handleUseCaseError(error: unknown): ActionFailure {
-  if (error instanceof ValidationError) {
-    return {
-      success: false,
-      error: 'VALIDATION_ERROR',
-      message: 'بيانات غير صالحة',
-      details: error.details,
-    };
-  }
-
-  if (error instanceof AppError) {
-    return {
-      success: false,
-      error: error.code,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof PermissionError) {
-    return {
-      success: false,
-      error: 'FORBIDDEN',
-      message: error.message,
-    };
-  }
-
-  if (error instanceof AuthError) {
-    return {
-      success: false,
-      error: 'UNAUTHENTICATED',
-      message: error.message,
-    };
-  }
-
-  return {
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: 'حدث خطأ غير متوقع أثناء معالجة المصروف',
-  };
+  return handleActionError(error, 'حدث خطأ غير متوقع أثناء معالجة المصروف');
 }
 
 /**

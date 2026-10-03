@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DollarSign,
   Clock,
@@ -28,11 +29,17 @@ export function ProjectExpensesView({
   initialOverview,
   currentUserId,
 }: ProjectExpensesViewProps) {
+  const router = useRouter();
   const [overview, setOverview] = useState<ProjectExpensesOverviewDTO>(initialOverview);
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync with server-provided overview updates (e.g. following router.refresh())
+  useEffect(() => {
+    setOverview(initialOverview);
+  }, [initialOverview]);
 
   // Reject modal state
   const [rejectingExpense, setRejectingExpense] = useState<ExpenseSummaryDTO | null>(null);
@@ -69,62 +76,16 @@ export function ProjectExpensesView({
         return;
       }
 
-      // Update state locally
-      setOverview((prev) => {
-        const updatedExpenses = prev.expenses.map((e) =>
+      // Update state locally for immediate feedback while server refreshes authoritative overview
+      setOverview((prev) => ({
+        ...prev,
+        expenses: prev.expenses.map((e) =>
           e.id === expenseId ? result.data : e,
-        );
-
-        // Recalculate financial breakdown
-        const updatedExpense = result.data;
-        const line = prev.lines.find((l) => l.budgetLineId === updatedExpense.budgetLineId);
-        if (!line) return { ...prev, expenses: updatedExpenses };
-
-        const lineExpenses = updatedExpenses.filter(
-          (e) => e.budgetLineId === updatedExpense.budgetLineId,
-        );
-        const actualSpend = lineExpenses
-          .filter((e) => e.status === 'APPROVED')
-          .reduce((sum, e) => sum + parseFloat(e.amount), 0);
-        const pendingExposure = lineExpenses
-          .filter((e) => e.status === 'SUBMITTED')
-          .reduce((sum, e) => sum + parseFloat(e.amount), 0);
-        const auth = parseFloat(line.authorizedAmount);
-        const avail = auth - actualSpend;
-
-        const updatedLines = prev.lines.map((l) =>
-          l.budgetLineId === line.budgetLineId
-            ? {
-                ...l,
-                actualSpend: actualSpend.toFixed(2),
-                pendingExposure: pendingExposure.toFixed(2),
-                availableBalance: avail.toFixed(2),
-                projectedBalance: (avail - pendingExposure).toFixed(2),
-              }
-            : l,
-        );
-
-        const totalActual = updatedExpenses
-          .filter((e) => e.status === 'APPROVED')
-          .reduce((sum, e) => sum + parseFloat(e.amount), 0);
-        const totalPending = updatedExpenses
-          .filter((e) => e.status === 'SUBMITTED')
-          .reduce((sum, e) => sum + parseFloat(e.amount), 0);
-        const totalAuth = parseFloat(prev.totalAuthorizedBudget);
-        const totalAvail = totalAuth - totalActual;
-
-        return {
-          ...prev,
-          totalActualSpend: totalActual.toFixed(2),
-          totalPendingExposure: totalPending.toFixed(2),
-          totalAvailableBalance: totalAvail.toFixed(2),
-          totalProjectedBalance: (totalAvail - totalPending).toFixed(2),
-          lines: updatedLines,
-          expenses: updatedExpenses,
-        };
-      });
+        ),
+      }));
 
       setApprovingExpense(null);
+      router.refresh();
     } finally {
       setActionLoadingId(null);
     }
@@ -151,28 +112,18 @@ export function ProjectExpensesView({
         return;
       }
 
-      // Update state locally
-      setOverview((prev) => {
-        const updatedExpenses = prev.expenses.map((e) =>
+      // Update state locally for immediate feedback while server refreshes authoritative overview
+      // Fixes stale UI bug: server refresh ensures lines and totals stay 100% in sync
+      setOverview((prev) => ({
+        ...prev,
+        expenses: prev.expenses.map((e) =>
           e.id === rejectingExpense.id ? result.data : e,
-        );
-
-        // Update pending exposure
-        const totalPending = updatedExpenses
-          .filter((e) => e.status === 'SUBMITTED')
-          .reduce((sum, e) => sum + parseFloat(e.amount), 0);
-        const totalAvail = parseFloat(prev.totalAvailableBalance);
-
-        return {
-          ...prev,
-          totalPendingExposure: totalPending.toFixed(2),
-          totalProjectedBalance: (totalAvail - totalPending).toFixed(2),
-          expenses: updatedExpenses,
-        };
-      });
+        ),
+      }));
 
       setRejectingExpense(null);
       setRejectionReason('');
+      router.refresh();
     } finally {
       setActionLoadingId(null);
     }

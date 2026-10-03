@@ -39,6 +39,8 @@ import { commitmentIdSchema } from '@/lib/validation/schemas/commitment';
 
 import { toCommitmentSummaryDTO } from '../mappers';
 import { assertCanTransitionCommitmentStatus } from '../state-machine';
+import { isBudgetLineOverCeiling, calculateRemainingBudgetLineBalance } from '@/lib/budget';
+import { sumOutstandingCustodyBalances } from '@/lib/custodies';
 import type { CommitmentSummaryDTO } from '../types';
 
 /**
@@ -192,12 +194,7 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
       },
     });
 
-    let outstandingCustodies = new Prisma.Decimal('0.00');
-    for (const c of activeCustodies) {
-      const settled = c.expenses.reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-      outstandingCustodies = outstandingCustodies.add(remaining);
-    }
+    const outstandingCustodies = sumOutstandingCustodyBalances(activeCustodies);
 
     // D. Aggregate APPROVED payroll entries on this budget line
     const approvedPayrollAgg = tx.payrollEntry
@@ -217,11 +214,12 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
       .add(approvedCommitments)
       .add(outstandingCustodies)
       .add(approvedPayroll);
+
     const newTotalExposure = currentExposure.add(commitmentToApprove.amount);
 
     // 6.4 Enforce hard budget line ceiling
-    if (newTotalExposure.greaterThan(lockedLine.amount)) {
-      const remainingAvailable = lockedLine.amount.sub(currentExposure);
+    if (isBudgetLineOverCeiling(currentExposure, commitmentToApprove.amount, lockedLine.amount)) {
+      const remainingAvailable = calculateRemainingBudgetLineBalance(lockedLine.amount, currentExposure);
       throw new AppError(
         'BUDGET_LINE_EXCEEDED',
         `مبلغ الالتزام (${commitmentToApprove.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتاح لبند الموازنة (${remainingAvailable.toFixed(2)} ر.س)`,

@@ -11,9 +11,7 @@
  * - Never returns internal database errors or stack traces.
  */
 
-import { AppError, ValidationError } from '@/lib/errors';
-import { PermissionError } from '@/lib/permissions';
-import { AuthError } from '@/lib/auth';
+import { handleActionError } from '@/lib/errors';
 import {
   createProject,
   updateProject,
@@ -45,44 +43,7 @@ export type ActionResult<T = ProjectSummary> = ActionSuccess<T> | ActionFailure;
 // ---------------------------------------------------------------------------
 
 function handleUseCaseError(error: unknown): ActionFailure {
-  if (error instanceof ValidationError) {
-    return {
-      success: false,
-      error: 'VALIDATION_ERROR',
-      message: 'بيانات غير صالحة',
-      details: error.details,
-    };
-  }
-
-  if (error instanceof AppError) {
-    return {
-      success: false,
-      error: error.code,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof PermissionError) {
-    return {
-      success: false,
-      error: 'FORBIDDEN',
-      message: 'غير مصرح بهذا الإجراء',
-    };
-  }
-
-  if (error instanceof AuthError) {
-    return {
-      success: false,
-      error: 'UNAUTHENTICATED',
-      message: 'يرجى تسجيل الدخول أولاً',
-    };
-  }
-
-  return {
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
-  };
+  return handleActionError(error, 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
 }
 
 // ---------------------------------------------------------------------------

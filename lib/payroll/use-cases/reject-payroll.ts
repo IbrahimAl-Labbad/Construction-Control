@@ -25,6 +25,7 @@ import {
 } from '@/lib/validation/schemas/payroll';
 
 import { PAYROLL_INCLUDE, toPayrollSummaryDTO } from '../mappers';
+import { assertPayrollCanBeRejected } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 export async function rejectPayroll(
@@ -71,12 +72,7 @@ export async function rejectPayroll(
       throw new AppError('RECORD_DELETED', 'لا يمكن رفض قيد راتب محذوف');
     }
 
-    if (existing.status !== PayrollStatus.SUBMITTED) {
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن رفض قيد الراتب وهو في حالة "${existing.status}"، الرفض متاح فقط للقيود المقدمة (SUBMITTED)`,
-      );
-    }
+    assertPayrollCanBeRejected(existing.status);
 
     if (!policies.canRejectPayroll(actor, existing)) {
       throw new AppError('FORBIDDEN', 'غير مصرح لك برفض قيد الراتب');

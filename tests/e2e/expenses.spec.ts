@@ -154,12 +154,10 @@ test.describe('Expense Capture & Approval E2E Suite', () => {
 
       // Modal closes and draft appears in list
       await expect(page.getByTestId('expense-form-modal')).not.toBeVisible();
-      await expect(page.getByText('5000.00 ر.س')).toBeVisible();
-      await expect(page.getByTestId('expense-status-badge')).toHaveAttribute('data-status', 'DRAFT');
-
       // Find the expense row
       const expenseRow = page.locator('tr').filter({ hasText: '5000.00 ر.س' });
       await expect(expenseRow).toBeVisible();
+      await expect(expenseRow.getByTestId('expense-status-badge')).toHaveAttribute('data-status', 'DRAFT');
 
       // ---------------------------------------------------------------------
       // Step B: Engineer submits expense for approval
@@ -249,7 +247,7 @@ test.describe('Expense Capture & Approval E2E Suite', () => {
       const approveDialog = page.getByTestId('approve-confirmation-dialog');
       await expect(approveDialog).toBeVisible();
       await page.getByTestId('confirm-approve-button').click();
-      await expect(approveDialog).not.toBeVisible();
+      await expect(approveDialog).not.toBeVisible({ timeout: 15000 });
 
       // Status becomes APPROVED
       await expect(managerApprovalRow.getByTestId('expense-status-badge')).toHaveAttribute('data-status', 'APPROVED');

@@ -27,7 +27,7 @@ import { AppError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
 
-import { calculateBudgetLineExposure } from '../calculations';
+import { calculateBudgetLineExposure, sumOutstandingCustodyBalances } from '../calculations';
 import { toCustodySummaryDTO } from '../mappers';
 import type {
   BudgetLineCustodySpendDTO,
@@ -135,7 +135,7 @@ export async function getProjectCustodies(
   });
 
   // 6. Calculate exposure metrics per budget line
-  const linesBreakdown: BudgetLineCustodySpendDTO[] = (approvedBudget?.lines ?? []).map((line) => {
+  const linesMetrics = (approvedBudget?.lines ?? []).map((line) => {
     const lineCommitments = commitments.filter((c) => c.budgetLineId === line.id);
     const lineExpenses = expenses.filter((e) => e.budgetLineId === line.id);
     const lineCustodies = custodies.filter((c) => c.budgetLineId === line.id);
@@ -157,16 +157,7 @@ export async function getProjectCustodies(
       .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
 
     // Outstanding Custodies (active cash in field)
-    let outstandingCustodies = new Prisma.Decimal('0.00');
-    for (const c of lineCustodies) {
-      if (c.status === CustodyStatus.ISSUED || c.status === CustodyStatus.PARTIALLY_SETTLED) {
-        const settled = c.expenses
-          .filter((e) => e.status === ExpenseStatus.APPROVED)
-          .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-        const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-        outstandingCustodies = outstandingCustodies.add(remaining);
-      }
-    }
+    const outstandingCustodies = sumOutstandingCustodyBalances(lineCustodies);
 
     // Approved payroll (Vertical Slice 8)
     const approvedPayroll = linePayroll
@@ -203,7 +194,7 @@ export async function getProjectCustodies(
       pendingPayroll,
     });
 
-    return {
+    const dto: BudgetLineCustodySpendDTO = {
       budgetLineId: line.id,
       category: line.category,
       description: line.description,
@@ -217,56 +208,33 @@ export async function getProjectCustodies(
       totalPendingExposure: metrics.totalPendingExposure.toFixed(2),
       projectedBalance: metrics.projectedBalance.toFixed(2),
     };
+
+    return {
+      dto,
+      metrics,
+    };
   });
 
-  // 7. Calculate overall project totals
-  const totalAuthorizedBudget = (approvedBudget?.lines ?? []).reduce(
-    (acc, l) => acc.add(l.amount),
-    new Prisma.Decimal('0.00'),
-  );
-
-  const totalApprovedCommitments = commitments
-    .filter((c) => c.status === CommitmentStatus.APPROVED)
-    .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
-
-  const totalApprovedExpenses = expenses
-    .filter((e) => e.status === ExpenseStatus.APPROVED)
-    .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-
+  // 7. Calculate overall project totals from canonical line metrics (D2 bug fix: includes payroll)
+  let totalAuthorizedBudget = new Prisma.Decimal('0.00');
+  let totalApprovedExpenses = new Prisma.Decimal('0.00');
+  let totalApprovedCommitments = new Prisma.Decimal('0.00');
   let totalOutstandingCustodies = new Prisma.Decimal('0.00');
-  for (const c of custodies) {
-    if (c.status === CustodyStatus.ISSUED || c.status === CustodyStatus.PARTIALLY_SETTLED) {
-      const settled = c.expenses
-        .filter((e) => e.status === ExpenseStatus.APPROVED)
-        .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-      totalOutstandingCustodies = totalOutstandingCustodies.add(remaining);
-    }
+  let totalActiveExposure = new Prisma.Decimal('0.00');
+  let totalAvailableBalance = new Prisma.Decimal('0.00');
+  let totalPendingExposure = new Prisma.Decimal('0.00');
+  let totalProjectedBalance = new Prisma.Decimal('0.00');
+
+  for (const item of linesMetrics) {
+    totalAuthorizedBudget = totalAuthorizedBudget.add(item.metrics.authorizedAmount);
+    totalApprovedExpenses = totalApprovedExpenses.add(item.metrics.approvedExpenses);
+    totalApprovedCommitments = totalApprovedCommitments.add(item.metrics.approvedCommitments);
+    totalOutstandingCustodies = totalOutstandingCustodies.add(item.metrics.outstandingCustodies);
+    totalActiveExposure = totalActiveExposure.add(item.metrics.totalActiveExposure);
+    totalAvailableBalance = totalAvailableBalance.add(item.metrics.availableBalance);
+    totalPendingExposure = totalPendingExposure.add(item.metrics.totalPendingExposure);
+    totalProjectedBalance = totalProjectedBalance.add(item.metrics.projectedBalance);
   }
-
-  const totalActiveExposure = totalApprovedCommitments
-    .add(totalApprovedExpenses)
-    .add(totalOutstandingCustodies);
-
-  const totalAvailableBalance = totalAuthorizedBudget.sub(totalActiveExposure);
-
-  const totalPendingCommitments = commitments
-    .filter((c) => c.status === CommitmentStatus.SUBMITTED)
-    .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
-
-  const totalPendingDirectExpenses = expenses
-    .filter((e) => e.status === ExpenseStatus.SUBMITTED && e.custodyId === null)
-    .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-
-  const totalPendingCustodies = custodies
-    .filter((c) => c.status === CustodyStatus.SUBMITTED)
-    .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
-
-  const totalPendingExposure = totalPendingCommitments
-    .add(totalPendingDirectExpenses)
-    .add(totalPendingCustodies);
-
-  const totalProjectedBalance = totalAvailableBalance.sub(totalPendingExposure);
 
   return {
     projectId: project.id,
@@ -280,7 +248,7 @@ export async function getProjectCustodies(
     totalAvailableBalance: totalAvailableBalance.toFixed(2),
     totalPendingExposure: totalPendingExposure.toFixed(2),
     totalProjectedBalance: totalProjectedBalance.toFixed(2),
-    lines: linesBreakdown,
+    lines: linesMetrics.map((m) => m.dto),
     custodies: custodies.map(toCustodySummaryDTO),
   };
 }

@@ -34,6 +34,8 @@ import { custodyIdSchema } from '@/lib/validation/schemas/custody';
 
 import { toCustodySummaryDTO } from '../mappers';
 import { assertCanTransitionCustodyStatus } from '../state-machine';
+import { isBudgetLineOverCeiling, calculateRemainingBudgetLineBalance } from '@/lib/budget';
+import { sumOutstandingCustodyBalances } from '../calculations';
 import type { CustodySummaryDTO } from '../types';
 
 export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDTO> {
@@ -163,12 +165,7 @@ export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDT
       },
     });
 
-    let existingOutstandingCustodies = new Prisma.Decimal('0.00');
-    for (const c of otherActiveCustodies) {
-      const settled = c.expenses.reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-      existingOutstandingCustodies = existingOutstandingCustodies.add(remaining);
-    }
+    const existingOutstandingCustodies = sumOutstandingCustodyBalances(otherActiveCustodies);
 
     // D. Aggregate APPROVED payroll entries on this line
     const payrollAgg = tx.payrollEntry
@@ -192,8 +189,8 @@ export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDT
     const newTotalExposure = currentActiveExposure.add(lockedCustody.amount);
 
     // Enforce hard ceiling
-    if (newTotalExposure.greaterThan(lockedLine.amount)) {
-      const remainingAvailable = lockedLine.amount.sub(currentActiveExposure);
+    if (isBudgetLineOverCeiling(currentActiveExposure, lockedCustody.amount, lockedLine.amount)) {
+      const remainingAvailable = calculateRemainingBudgetLineBalance(lockedLine.amount, currentActiveExposure);
       throw new AppError(
         'BUDGET_LINE_EXCEEDED',
         `مبلغ العهدة (${lockedCustody.amount.toFixed(2)} ر.س) يتجاوز الرصيد المتاح لبند الموازنة (${remainingAvailable.toFixed(2)} ر.س)`,

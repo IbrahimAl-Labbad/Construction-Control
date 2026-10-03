@@ -261,3 +261,14 @@ export class ValidationError extends AppError {
     this.details = details;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Action error handling
+// ---------------------------------------------------------------------------
+
+export {
+  handleActionError,
+  type ActionFailure,
+  type HandleActionErrorOptions,
+} from './action-error-handler';
+

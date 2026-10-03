@@ -18,9 +18,7 @@
  * See AGENTS.md §17 for security rules.
  */
 
-import { AppError, ValidationError } from '@/lib/errors';
-import { PermissionError } from '@/lib/permissions';
-import { AuthError } from '@/lib/auth';
+import { handleActionError } from '@/lib/errors';
 import { createUser, deactivateUser, reactivateUser } from '@/lib/user-management';
 
 import type { UserSummary } from '@/lib/user-management';
@@ -48,45 +46,7 @@ export type ActionResult<T = UserSummary> = ActionSuccess<T> | ActionFailure;
 // ---------------------------------------------------------------------------
 
 function handleUseCaseError(error: unknown): ActionFailure {
-  if (error instanceof ValidationError) {
-    return {
-      success: false,
-      error: 'VALIDATION_ERROR',
-      message: 'بيانات غير صالحة',
-      details: error.details,
-    };
-  }
-
-  if (error instanceof AppError) {
-    return {
-      success: false,
-      error: error.code,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof PermissionError) {
-    return {
-      success: false,
-      error: 'FORBIDDEN',
-      message: 'غير مصرح بهذا الإجراء',
-    };
-  }
-
-  if (error instanceof AuthError) {
-    return {
-      success: false,
-      error: 'UNAUTHENTICATED',
-      message: 'يرجى تسجيل الدخول أولاً',
-    };
-  }
-
-  // Unexpected error — never expose details
-  return {
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
-  };
+  return handleActionError(error, 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
 }
 
 // ---------------------------------------------------------------------------

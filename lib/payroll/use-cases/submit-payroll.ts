@@ -29,6 +29,7 @@ import { payrollIdSchema } from '@/lib/validation/schemas/payroll';
 
 import { buildPayrollDuplicateKey, normalizePayrollWorkerName } from '../calculations';
 import { PAYROLL_INCLUDE, toPayrollSummaryDTO } from '../mappers';
+import { assertValidPayrollTransition } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 export async function submitPayroll(payrollId: unknown): Promise<PayrollEntrySummaryDTO> {
@@ -71,12 +72,7 @@ export async function submitPayroll(payrollId: unknown): Promise<PayrollEntrySum
       throw new AppError('RECORD_DELETED', 'لا يمكن تقديم قيد راتب محذوف');
     }
 
-    if (existing.status !== PayrollStatus.DRAFT) {
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن تقديم قيد الراتب وهو في حالة "${existing.status}"، التقديم متاح فقط للمسودات (DRAFT)`,
-      );
-    }
+    assertValidPayrollTransition(existing.status, PayrollStatus.SUBMITTED);
 
     if (!policies.canSubmitPayroll(actor, existing)) {
       throw new AppError('FORBIDDEN', 'غير مصرح لك بتقديم مسودة قيد رواتب لم تقم بإنشائها');

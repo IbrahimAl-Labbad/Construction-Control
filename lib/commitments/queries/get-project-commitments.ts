@@ -15,12 +15,21 @@
  * Soft-delete filter: only records with deletedAt === null are included.
  */
 
-import { BudgetStatus, CommitmentStatus, ExpenseStatus, Prisma } from '@prisma/client';
+import {
+  BudgetStatus,
+  CommitmentStatus,
+  CustodyStatus,
+  ExpenseStatus,
+  PayrollStatus,
+  Prisma,
+} from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
+import { calculateBudgetLineExposure } from '@/lib/budget/calculations';
+import { sumOutstandingCustodyBalances } from '@/lib/custodies';
 
 import { toCommitmentSummaryDTO } from '../mappers';
 import type {
@@ -77,8 +86,42 @@ export async function getProjectCommitments(
     orderBy: { createdAt: 'desc' },
   });
 
-  // 4. Fetch all non-deleted expenses for this project (needed for joint exposure & pending calculations)
+  // 4. Fetch non-deleted expenses for this project (distinguishing direct vs custody-linked spend)
   const expenses = await prisma.expense.findMany({
+    where: {
+      projectId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      budgetLineId: true,
+      custodyId: true,
+      amount: true,
+      status: true,
+    },
+  });
+
+  // 5. Fetch non-deleted custodies for joint outstanding advance exposure
+  const custodies = await prisma.custody.findMany({
+    where: {
+      projectId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      budgetLineId: true,
+      amount: true,
+      cashReturnedAmount: true,
+      status: true,
+      expenses: {
+        where: { deletedAt: null },
+        select: { id: true, amount: true, status: true },
+      },
+    },
+  });
+
+  // 6. Fetch non-deleted payroll entries for joint labor exposure
+  const payrollEntries = await prisma.payrollEntry.findMany({
     where: {
       projectId,
       deletedAt: null,
@@ -91,84 +134,109 @@ export async function getProjectCommitments(
     },
   });
 
-  // 5. Calculate exposure metrics per budget line using exact Decimal arithmetic (Correction 1)
-  const linesBreakdown: BudgetLineCommitmentSpendDTO[] = (approvedBudget?.lines ?? []).map((line) => {
+  // 7. Calculate exposure metrics per budget line using canonical calculateBudgetLineExposure
+  const linesMetrics = (approvedBudget?.lines ?? []).map((line) => {
     const lineCommitments = commitments.filter((c) => c.budgetLineId === line.id);
     const lineExpenses = expenses.filter((e) => e.budgetLineId === line.id);
+    const lineCustodies = custodies.filter((c) => c.budgetLineId === line.id);
+    const linePayroll = payrollEntries.filter((p) => p.budgetLineId === line.id);
 
-    // Realized spend (Expenses)
-    const approvedExpenses = lineExpenses
-      .filter((e) => e.status === ExpenseStatus.APPROVED)
-      .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-
-    // Approved commitments
     const approvedCommitments = lineCommitments
       .filter((c) => c.status === CommitmentStatus.APPROVED)
       .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
 
-    // Total Exposure = ApprovedExpenses + ApprovedCommitments
-    const totalExposure = approvedExpenses.add(approvedCommitments);
+    const directActualSpend = lineExpenses
+      .filter((e) => e.status === ExpenseStatus.APPROVED && e.custodyId === null)
+      .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
 
-    // Available Balance = BudgetLine.amount - TotalExposure
-    const availableBalance = line.amount.sub(totalExposure);
+    const custodyActualSpend = lineExpenses
+      .filter((e) => e.status === ExpenseStatus.APPROVED && e.custodyId !== null)
+      .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
 
-    // Pending Exposures
+    const outstandingCustodies = sumOutstandingCustodyBalances(lineCustodies);
+
+    const approvedPayroll = linePayroll
+      .filter((p) => p.status === PayrollStatus.APPROVED)
+      .reduce((acc, p) => acc.add(p.amount), new Prisma.Decimal('0.00'));
+
     const pendingCommitmentExposure = lineCommitments
       .filter((c) => c.status === CommitmentStatus.SUBMITTED)
       .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
+
+    const pendingDirectExpenses = lineExpenses
+      .filter((e) => e.status === ExpenseStatus.SUBMITTED && e.custodyId === null)
+      .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
+
+    const pendingCustodies = lineCustodies
+      .filter((c) => c.status === CustodyStatus.SUBMITTED)
+      .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
+
+    const pendingPayroll = linePayroll
+      .filter((p) => p.status === PayrollStatus.SUBMITTED)
+      .reduce((acc, p) => acc.add(p.amount), new Prisma.Decimal('0.00'));
+
+    const metrics = calculateBudgetLineExposure({
+      authorizedAmount: line.amount,
+      approvedCommitments,
+      directActualSpend,
+      custodyActualSpend,
+      outstandingCustodies,
+      approvedPayroll,
+      pendingCommitments: pendingCommitmentExposure,
+      pendingDirectExpenses,
+      pendingCustodies,
+      pendingPayroll,
+    });
 
     const pendingExpenseExposure = lineExpenses
       .filter((e) => e.status === ExpenseStatus.SUBMITTED)
       .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
 
-    const totalPendingExposure = pendingCommitmentExposure.add(pendingExpenseExposure);
-
-    // Projected Balance = AvailableBalance - TotalPendingExposure
-    const projectedBalance = availableBalance.sub(totalPendingExposure);
-
-    return {
+    const dto: BudgetLineCommitmentSpendDTO = {
       budgetLineId: line.id,
       category: line.category,
       description: line.description,
-      authorizedAmount: line.amount.toFixed(2),
-      approvedExpenses: approvedExpenses.toFixed(2),
-      approvedCommitments: approvedCommitments.toFixed(2),
-      totalExposure: totalExposure.toFixed(2),
-      availableBalance: availableBalance.toFixed(2),
+      authorizedAmount: metrics.authorizedAmount.toFixed(2),
+      approvedExpenses: metrics.approvedExpenses.toFixed(2),
+      approvedCommitments: metrics.approvedCommitments.toFixed(2),
+      totalExposure: metrics.totalActiveExposure.toFixed(2),
+      availableBalance: metrics.availableBalance.toFixed(2),
       pendingCommitmentExposure: pendingCommitmentExposure.toFixed(2),
       pendingExpenseExposure: pendingExpenseExposure.toFixed(2),
-      totalPendingExposure: totalPendingExposure.toFixed(2),
-      projectedBalance: projectedBalance.toFixed(2),
+      totalPendingExposure: metrics.totalPendingExposure.toFixed(2),
+      projectedBalance: metrics.projectedBalance.toFixed(2),
+    };
+
+    return {
+      dto,
+      metrics,
+      pendingCommitmentExposure,
+      pendingExpenseExposure,
     };
   });
 
-  // 6. Calculate overall project totals
-  const totalAuthorizedBudget = (approvedBudget?.lines ?? []).reduce(
-    (acc, l) => acc.add(l.amount),
-    new Prisma.Decimal('0.00'),
-  );
+  // 8. Calculate overall project totals from canonical line metrics
+  let totalAuthorizedBudget = new Prisma.Decimal('0.00');
+  let totalApprovedExpenses = new Prisma.Decimal('0.00');
+  let totalApprovedCommitments = new Prisma.Decimal('0.00');
+  let totalExposure = new Prisma.Decimal('0.00');
+  let totalAvailableBalance = new Prisma.Decimal('0.00');
+  let totalPendingCommitmentExposure = new Prisma.Decimal('0.00');
+  let totalPendingExpenseExposure = new Prisma.Decimal('0.00');
+  let totalPendingExposure = new Prisma.Decimal('0.00');
+  let totalProjectedBalance = new Prisma.Decimal('0.00');
 
-  const totalApprovedExpenses = expenses
-    .filter((e) => e.status === ExpenseStatus.APPROVED)
-    .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-
-  const totalApprovedCommitments = commitments
-    .filter((c) => c.status === CommitmentStatus.APPROVED)
-    .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
-
-  const totalExposure = totalApprovedExpenses.add(totalApprovedCommitments);
-  const totalAvailableBalance = totalAuthorizedBudget.sub(totalExposure);
-
-  const totalPendingCommitmentExposure = commitments
-    .filter((c) => c.status === CommitmentStatus.SUBMITTED)
-    .reduce((acc, c) => acc.add(c.amount), new Prisma.Decimal('0.00'));
-
-  const totalPendingExpenseExposure = expenses
-    .filter((e) => e.status === ExpenseStatus.SUBMITTED)
-    .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-
-  const totalPendingExposure = totalPendingCommitmentExposure.add(totalPendingExpenseExposure);
-  const totalProjectedBalance = totalAvailableBalance.sub(totalPendingExposure);
+  for (const item of linesMetrics) {
+    totalAuthorizedBudget = totalAuthorizedBudget.add(item.metrics.authorizedAmount);
+    totalApprovedExpenses = totalApprovedExpenses.add(item.metrics.approvedExpenses);
+    totalApprovedCommitments = totalApprovedCommitments.add(item.metrics.approvedCommitments);
+    totalExposure = totalExposure.add(item.metrics.totalActiveExposure);
+    totalAvailableBalance = totalAvailableBalance.add(item.metrics.availableBalance);
+    totalPendingCommitmentExposure = totalPendingCommitmentExposure.add(item.pendingCommitmentExposure);
+    totalPendingExpenseExposure = totalPendingExpenseExposure.add(item.pendingExpenseExposure);
+    totalPendingExposure = totalPendingExposure.add(item.metrics.totalPendingExposure);
+    totalProjectedBalance = totalProjectedBalance.add(item.metrics.projectedBalance);
+  }
 
   return {
     projectId: project.id,
@@ -183,7 +251,7 @@ export async function getProjectCommitments(
     totalPendingExpenseExposure: totalPendingExpenseExposure.toFixed(2),
     totalPendingExposure: totalPendingExposure.toFixed(2),
     totalProjectedBalance: totalProjectedBalance.toFixed(2),
-    lines: linesBreakdown,
+    lines: linesMetrics.map((m) => m.dto),
     commitments: commitments.map(toCommitmentSummaryDTO),
   };
 }

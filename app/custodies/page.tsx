@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/permissions';
 import {
   getUserCustodies,
   getActiveProjectsForCustodies,
+  calculateUserCustodiesTotals,
 } from '@/lib/custodies';
 import { UserCustodiesView } from './components/user-custodies-view';
 
@@ -27,11 +28,14 @@ export default async function CustodiesPage() {
       : Promise.resolve({ projects: [], custodians: [] }),
   ]);
 
+  const totals = calculateUserCustodiesTotals(custodies);
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <UserCustodiesView
           initialCustodies={custodies}
+          initialTotals={totals}
           formData={formData}
           canCreate={canCreate}
           isAccountant={isAccountant}

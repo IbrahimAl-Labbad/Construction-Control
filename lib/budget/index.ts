@@ -24,6 +24,15 @@ export {
   getAllowedNextBudgetStatuses,
 } from './state-machine';
 
+// Financial calculations
+export {
+  calculateBudgetLineExposure,
+  isBudgetLineOverCeiling,
+  calculateRemainingBudgetLineBalance,
+  type BudgetLineActiveExposureResult,
+  type CalculateBudgetLineExposureParams,
+} from './calculations';
+
 // Types
 export type {
   BudgetStatus,
@@ -33,3 +42,4 @@ export type {
   BudgetDetailsDTO,
   BudgetUserInfo,
 } from './types';
+

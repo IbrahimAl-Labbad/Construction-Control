@@ -15,7 +15,12 @@ import {
   reopenProgressReport,
   cancelProgressReport,
 } from '@/lib/progress-reports';
-import { AppError, ValidationError } from '@/lib/errors';
+import { handleActionError } from '@/lib/errors';
+
+function formatActionFailure(error: unknown, fallbackMessage: string): { success: false; error: string } {
+  const result = handleActionError(error, fallbackMessage);
+  return { success: false, error: result.message };
+}
 
 export async function createProgressReportDraftAction(formData: FormData): Promise<{
   success: boolean;
@@ -46,13 +51,7 @@ export async function createProgressReportDraftAction(formData: FormData): Promi
     revalidatePath('/my-reports');
     return { success: true, id: report.id };
   } catch (error) {
-    if (error instanceof ValidationError) {
-      return { success: false, error: error.message };
-    }
-    if (error instanceof AppError) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: 'حدث خطأ غير متوقع أثناء حفظ التقرير' };
+    return formatActionFailure(error, 'حدث خطأ غير متوقع أثناء حفظ التقرير');
   }
 }
 
@@ -86,13 +85,7 @@ export async function updateProgressReportDraftAction(
     revalidatePath(`/my-reports/${id}/edit`);
     return { success: true, id: report.id };
   } catch (error) {
-    if (error instanceof ValidationError) {
-      return { success: false, error: error.message };
-    }
-    if (error instanceof AppError) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: 'حدث خطأ غير متوقع أثناء تحديث التقرير' };
+    return formatActionFailure(error, 'حدث خطأ غير متوقع أثناء تحديث التقرير');
   }
 }
 
@@ -105,10 +98,7 @@ export async function submitProgressReportAction(
     revalidatePath(`/my-reports/${id}`);
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: 'فشل تقديم التقرير' };
+    return formatActionFailure(error, 'فشل تقديم التقرير');
   }
 }
 
@@ -121,10 +111,7 @@ export async function reopenProgressReportAction(
     revalidatePath(`/my-reports/${id}`);
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: 'فشل إعادة فتح التقرير' };
+    return formatActionFailure(error, 'فشل إعادة فتح التقرير');
   }
 }
 
@@ -138,9 +125,6 @@ export async function cancelProgressReportAction(
     revalidatePath(`/my-reports/${id}`);
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: 'فشل إلغاء التقرير' };
+    return formatActionFailure(error, 'فشل إلغاء التقرير');
   }
 }

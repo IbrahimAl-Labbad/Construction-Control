@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   FileSignature,
   DollarSign,
@@ -29,82 +30,21 @@ interface ProjectCommitmentsViewProps {
   currentUserId: string;
 }
 
-function recalculateOverview(
-  prev: ProjectCommitmentsOverviewDTO,
-  updatedCommitments: CommitmentSummaryDTO[],
-): ProjectCommitmentsOverviewDTO {
-  const updatedLines = prev.lines.map((line) => {
-    const lineCommitments = updatedCommitments.filter(
-      (c) => c.budgetLineId === line.budgetLineId,
-    );
-
-    const approvedCommNum = lineCommitments
-      .filter((c) => c.status === 'APPROVED')
-      .reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
-    const pendingCommNum = lineCommitments
-      .filter((c) => c.status === 'SUBMITTED')
-      .reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
-    const authNum = parseFloat(line.authorizedAmount);
-    const approvedExpNum = parseFloat(line.approvedExpenses);
-    const pendingExpNum = parseFloat(line.pendingExpenseExposure);
-
-    const totalExposureNum = approvedExpNum + approvedCommNum;
-    const availableBalanceNum = authNum - totalExposureNum;
-    const totalPendingNum = pendingCommNum + pendingExpNum;
-    const projectedBalanceNum = availableBalanceNum - totalPendingNum;
-
-    return {
-      ...line,
-      approvedCommitments: approvedCommNum.toFixed(2),
-      totalExposure: totalExposureNum.toFixed(2),
-      availableBalance: availableBalanceNum.toFixed(2),
-      pendingCommitmentExposure: pendingCommNum.toFixed(2),
-      totalPendingExposure: totalPendingNum.toFixed(2),
-      projectedBalance: projectedBalanceNum.toFixed(2),
-    };
-  });
-
-  const totalApprovedCommNum = updatedCommitments
-    .filter((c) => c.status === 'APPROVED')
-    .reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
-  const totalPendingCommNum = updatedCommitments
-    .filter((c) => c.status === 'SUBMITTED')
-    .reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
-  const totalAuthNum = parseFloat(prev.totalAuthorizedBudget);
-  const totalApprovedExpNum = parseFloat(prev.totalApprovedExpenses);
-  const totalPendingExpNum = parseFloat(prev.totalPendingExpenseExposure);
-
-  const totalExposureNum = totalApprovedExpNum + totalApprovedCommNum;
-  const totalAvailableNum = totalAuthNum - totalExposureNum;
-  const totalPendingNum = totalPendingCommNum + totalPendingExpNum;
-  const totalProjectedNum = totalAvailableNum - totalPendingNum;
-
-  return {
-    ...prev,
-    totalApprovedCommitments: totalApprovedCommNum.toFixed(2),
-    totalExposure: totalExposureNum.toFixed(2),
-    totalAvailableBalance: totalAvailableNum.toFixed(2),
-    totalPendingCommitmentExposure: totalPendingCommNum.toFixed(2),
-    totalPendingExposure: totalPendingNum.toFixed(2),
-    totalProjectedBalance: totalProjectedNum.toFixed(2),
-    lines: updatedLines,
-    commitments: updatedCommitments,
-  };
-}
-
 export function ProjectCommitmentsView({
   initialOverview,
   currentUserId,
 }: ProjectCommitmentsViewProps) {
+  const router = useRouter();
   const [overview, setOverview] = useState<ProjectCommitmentsOverviewDTO>(initialOverview);
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync with server-provided overview updates (e.g. following router.refresh())
+  useEffect(() => {
+    setOverview(initialOverview);
+  }, [initialOverview]);
 
   // Reject modal state
   const [rejectingCommitment, setRejectingCommitment] = useState<CommitmentSummaryDTO | null>(null);
@@ -141,14 +81,15 @@ export function ProjectCommitmentsView({
         return;
       }
 
-      // Update state locally with reactive recalculation
-      setOverview((prev) => {
-        const updatedCommitments = prev.commitments.map((c) =>
+      // Update state locally for immediate feedback while server refreshes authoritative overview
+      setOverview((prev) => ({
+        ...prev,
+        commitments: prev.commitments.map((c) =>
           c.id === commitmentId ? result.data : c,
-        );
-        return recalculateOverview(prev, updatedCommitments);
-      });
+        ),
+      }));
       setApprovingCommitment(null);
+      router.refresh();
     } finally {
       setActionLoadingId(null);
     }
@@ -174,15 +115,17 @@ export function ProjectCommitmentsView({
         return;
       }
 
-      setOverview((prev) => {
-        const updatedCommitments = prev.commitments.map((c) =>
+      // Update state locally for immediate feedback while server refreshes authoritative overview
+      setOverview((prev) => ({
+        ...prev,
+        commitments: prev.commitments.map((c) =>
           c.id === rejectingCommitment.id ? result.data : c,
-        );
-        return recalculateOverview(prev, updatedCommitments);
-      });
+        ),
+      }));
 
       setRejectingCommitment(null);
       setRejectionReason('');
+      router.refresh();
     } finally {
       setActionLoadingId(null);
     }

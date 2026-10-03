@@ -33,6 +33,7 @@ import {
 
 import { buildPayrollDuplicateKey, normalizePayrollWorkerName } from '../calculations';
 import { PAYROLL_INCLUDE, toPayrollSummaryDTO } from '../mappers';
+import { assertPayrollIsEditable } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 export async function updatePayrollDraft(
@@ -85,12 +86,7 @@ export async function updatePayrollDraft(
     }
 
     // Assert status is DRAFT
-    if (existing.status !== PayrollStatus.DRAFT) {
-      throw new AppError(
-        'RECORD_NOT_EDITABLE',
-        `لا يمكن تعديل قيد الراتب في الحالة الحالية: "${existing.status}". التعديل متاح فقط للمسودات (DRAFT)`,
-      );
-    }
+    assertPayrollIsEditable(existing.status);
 
     // Assert creator ownership
     if (!policies.canManagePayrollDraft(actor, existing)) {

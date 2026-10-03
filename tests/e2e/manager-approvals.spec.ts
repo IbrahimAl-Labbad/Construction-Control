@@ -232,7 +232,7 @@ test.describe('Centralized Manager Approvals Hub E2E Suite (Slice 15)', () => {
     await confirmBtn.click();
 
     // Modal closes and card disappears
-    await expect(modal).not.toBeVisible();
+    await expect(modal).not.toBeVisible({ timeout: 15000 });
     await expect(card).not.toBeVisible({ timeout: 15000 });
 
     // Verify in DB

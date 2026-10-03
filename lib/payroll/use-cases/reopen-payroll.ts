@@ -21,6 +21,7 @@ import { validate } from '@/lib/validation';
 import { payrollIdSchema } from '@/lib/validation/schemas/payroll';
 
 import { PAYROLL_INCLUDE, toPayrollSummaryDTO } from '../mappers';
+import { assertValidPayrollTransition } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 export async function reopenPayroll(payrollId: unknown): Promise<PayrollEntrySummaryDTO> {
@@ -58,12 +59,7 @@ export async function reopenPayroll(payrollId: unknown): Promise<PayrollEntrySum
       throw new AppError('RECORD_DELETED', 'لا يمكن إعادة فتح قيد راتب محذوف');
     }
 
-    if (existing.status !== PayrollStatus.REJECTED) {
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن إعادة فتح قيد الراتب وهو في حالة "${existing.status}"، إعادة الفتح متاحة فقط للقيود المرفوضة (REJECTED)`,
-      );
-    }
+    assertValidPayrollTransition(existing.status, PayrollStatus.DRAFT);
 
     if (!policies.canReopenPayroll(actor, existing)) {
       throw new AppError('FORBIDDEN', 'غير مصرح لك بإعادة فتح قيد راتب لم تقم بإنشائه');

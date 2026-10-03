@@ -34,7 +34,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import { calculateBudgetLineExposure } from '@/lib/custodies/calculations';
+import { calculateBudgetLineExposure, sumOutstandingCustodyBalances } from '@/lib/custodies/calculations';
 import { prisma } from '@/lib/db/prisma';
 import { AppError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
@@ -167,15 +167,7 @@ export async function getProjectLaborSummary(
     const approvedPayroll = payrollExposure.approvedPayroll;
     const pendingPayroll = payrollExposure.pendingPayroll;
 
-    let outstandingCustodies = new Prisma.Decimal('0.00');
-    for (const c of activeCustodies) {
-      const settled = c.expenses.reduce(
-        (acc, e) => acc.add(e.amount),
-        new Prisma.Decimal('0.00'),
-      );
-      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-      outstandingCustodies = outstandingCustodies.add(remaining);
-    }
+    const outstandingCustodies = sumOutstandingCustodyBalances(activeCustodies);
 
     const exposure = calculateBudgetLineExposure({
       authorizedAmount: line.amount,

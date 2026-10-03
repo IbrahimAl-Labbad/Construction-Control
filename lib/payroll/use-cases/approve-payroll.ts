@@ -49,7 +49,7 @@ import {
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
-import { calculateBudgetLineExposure } from '@/lib/custodies/calculations';
+import { calculateBudgetLineExposure, sumOutstandingCustodyBalances } from '@/lib/custodies/calculations';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { payrollIdSchema } from '@/lib/validation/schemas/payroll';
@@ -57,6 +57,7 @@ import { payrollIdSchema } from '@/lib/validation/schemas/payroll';
 import { checkPayrollBudgetLineCeiling } from '../calculations';
 import { toPayrollSummaryDTO } from '../mappers';
 import { getBudgetLinePayrollExposure } from '../queries/get-budget-line-payroll-exposure';
+import { assertPayrollCanBeApproved } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 /**
@@ -104,12 +105,7 @@ export async function approvePayroll(payrollId: unknown): Promise<PayrollEntrySu
   }
 
   // Pre-transaction assertion: status must be SUBMITTED
-  if (preCheck.status !== PayrollStatus.SUBMITTED) {
-    throw new AppError(
-      'INVALID_STATE_TRANSITION',
-      `لا يمكن اعتماد قيد الراتب وهو في حالة "${preCheck.status}"، يجب أن يكون قيد الاعتماد (SUBMITTED)`,
-    );
-  }
+  assertPayrollCanBeApproved(preCheck.status);
 
   // 4. Execute atomic approval transaction with Canonical Lock Hierarchy
   const now = new Date();
@@ -200,12 +196,7 @@ export async function approvePayroll(payrollId: unknown): Promise<PayrollEntrySu
       throw new AppError('RECORD_DELETED', 'لا يمكن اعتماد قيد راتب محذوف');
     }
 
-    if (lockedEntry.status !== PayrollStatus.SUBMITTED) {
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن اعتماد قيد الراتب وهو في حالة "${lockedEntry.status}"، يجب أن يكون قيد الاعتماد (SUBMITTED)`,
-      );
-    }
+    assertPayrollCanBeApproved(lockedEntry.status);
 
     // Re-assert separation of duties inside transaction
     if (lockedEntry.createdById === actor.id) {
@@ -274,12 +265,7 @@ export async function approvePayroll(payrollId: unknown): Promise<PayrollEntrySu
     const custodyActualSpend = custodyExpensesAgg._sum.amount ?? new Prisma.Decimal('0.00');
     const approvedPayroll = payrollExposure.approvedPayroll;
 
-    let outstandingCustodies = new Prisma.Decimal('0.00');
-    for (const c of activeCustodies) {
-      const settled = c.expenses.reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
-      const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
-      outstandingCustodies = outstandingCustodies.add(remaining);
-    }
+    const outstandingCustodies = sumOutstandingCustodyBalances(activeCustodies);
 
     // Compute canonical total active exposure
     const exposureResult = calculateBudgetLineExposure({

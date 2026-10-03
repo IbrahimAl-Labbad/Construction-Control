@@ -11,7 +11,6 @@
  * 4. Atomicity: Soft delete + PAYROLL_ENTRY_DELETED AuditLog in SAME transaction.
  */
 
-import { PayrollStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -19,6 +18,7 @@ import { requireAuth } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
 import { validate } from '@/lib/validation';
 import { payrollIdSchema } from '@/lib/validation/schemas/payroll';
+import { assertPayrollIsEditable } from '../state-machine';
 
 export type DeletePayrollDraftResult = {
   success: boolean;
@@ -60,12 +60,7 @@ export async function deletePayrollDraft(payrollId: unknown): Promise<DeletePayr
       throw new AppError('RECORD_DELETED', 'قيد الراتب محذوف بالفعل');
     }
 
-    if (existing.status !== PayrollStatus.DRAFT) {
-      throw new AppError(
-        'RECORD_NOT_EDITABLE',
-        `لا يمكن حذف قيد الراتب في الحالة الحالية: "${existing.status}". الحذف متاح فقط للمسودات (DRAFT)`,
-      );
-    }
+    assertPayrollIsEditable(existing.status);
 
     if (!policies.canManagePayrollDraft(actor, existing)) {
       throw new AppError('FORBIDDEN', 'غير مصرح لك بحذف مسودة قيد رواتب لم تقم بإنشائها');

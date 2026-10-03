@@ -13,19 +13,12 @@ import {
   rejectProgressReport,
   cancelProgressReport,
 } from '@/lib/progress-reports';
-import { AppError, ValidationError } from '@/lib/errors';
-import { PermissionError, requireManager } from '@/lib/permissions';
-import { AuthError } from '@/lib/auth';
+import { handleActionError } from '@/lib/errors';
+import { requireManager } from '@/lib/permissions';
 
-function handleActionError(error: unknown, fallbackMessage: string): { success: boolean; error: string } {
-  if (error instanceof ValidationError) {
-    return { success: false, error: 'بيانات غير صالحة' };
-  }
-  if (error instanceof AppError || error instanceof PermissionError || error instanceof AuthError) {
-    return { success: false, error: error.message };
-  }
-  const msg = error instanceof Error ? error.message : fallbackMessage;
-  return { success: false, error: msg };
+function formatActionFailure(error: unknown, fallbackMessage: string): { success: false; error: string } {
+  const result = handleActionError(error, fallbackMessage);
+  return { success: false, error: result.message };
 }
 
 export async function approveProgressReportAction(
@@ -38,7 +31,7 @@ export async function approveProgressReportAction(
     revalidatePath(`/progress-reports/${id}`);
     return { success: true };
   } catch (error) {
-    return handleActionError(error, 'فشل اعتماد التقرير');
+    return formatActionFailure(error, 'فشل اعتماد التقرير');
   }
 }
 
@@ -53,7 +46,7 @@ export async function rejectProgressReportAction(
     revalidatePath(`/progress-reports/${id}`);
     return { success: true };
   } catch (error) {
-    return handleActionError(error, 'فشل رفض التقرير');
+    return formatActionFailure(error, 'فشل رفض التقرير');
   }
 }
 
@@ -68,6 +61,6 @@ export async function cancelProgressReportAction(
     revalidatePath(`/progress-reports/${id}`);
     return { success: true };
   } catch (error) {
-    return handleActionError(error, 'فشل إلغاء التقرير');
+    return formatActionFailure(error, 'فشل إلغاء التقرير');
   }
 }

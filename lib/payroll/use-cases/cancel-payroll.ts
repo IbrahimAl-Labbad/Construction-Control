@@ -29,6 +29,7 @@ import {
 } from '@/lib/validation/schemas/payroll';
 
 import { PAYROLL_INCLUDE, toPayrollSummaryDTO } from '../mappers';
+import { assertPayrollCanBeCancelled, isTerminalPayrollStatus } from '../state-machine';
 import type { PayrollEntrySummaryDTO } from '../types';
 
 export async function cancelPayroll(
@@ -75,19 +76,14 @@ export async function cancelPayroll(
       throw new AppError('RECORD_DELETED', 'لا يمكن إلغاء قيد راتب محذوف');
     }
 
-    if (existing.status === PayrollStatus.APPROVED || existing.status === PayrollStatus.CANCELLED) {
+    if (isTerminalPayrollStatus(existing.status)) {
       throw new AppError(
         'RECORD_NOT_EDITABLE',
         `لا يمكن إلغاء قيد الراتب وهو في حالة نهائية: "${existing.status}"`,
       );
     }
 
-    if (existing.status === PayrollStatus.REJECTED) {
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        'لا يمكن إلغاء قيد الراتب وهو في حالة مرفوض (REJECTED)، يجب إعادة فتحه أولاً أو تركه',
-      );
-    }
+    assertPayrollCanBeCancelled(existing.status);
 
     if (!policies.canCancelPayroll(actor, existing)) {
       throw new AppError('FORBIDDEN', 'غير مصرح لك بإلغاء قيد الراتب');

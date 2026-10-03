@@ -5,7 +5,7 @@
  * Strictly adheres to AGENTS.md §13 (no JS Number calculations).
  */
 
-import { Prisma } from '@prisma/client';
+import { CustodyStatus, ExpenseStatus, Prisma } from '@prisma/client';
 
 export type CustodyCalculatedBalances = {
   settledExpenses: Prisma.Decimal;
@@ -40,97 +40,106 @@ export function calculateCustodyBalances(params: {
   };
 }
 
-export type BudgetLineActiveExposureResult = {
-  authorizedAmount: Prisma.Decimal;
-  approvedExpenses: Prisma.Decimal;
-  approvedCommitments: Prisma.Decimal;
-  approvedPayroll: Prisma.Decimal;
-  outstandingCustodies: Prisma.Decimal;
-  totalActiveExposure: Prisma.Decimal;
-  availableBalance: Prisma.Decimal;
-  pendingCustodies: Prisma.Decimal;
-  pendingPayroll: Prisma.Decimal;
-  totalPendingExposure: Prisma.Decimal;
-  projectedBalance: Prisma.Decimal;
+export type UserCustodiesTotals = {
+  totalIssued: string;
+  totalSettled: string;
+  totalReturned: string;
+  totalOutstanding: string;
 };
 
 /**
- * Calculates budget line active and projected exposure metrics ensuring zero double counting.
- *
- * Canonical Exposure Formula (AGENTS.md §13 & Vertical Slice 8):
- *   TotalActiveExposure = ApprovedCommitments
- *                         + DirectActualSpend
- *                         + CustodyActualSpend
- *                         + OutstandingCustodies
- *                         + ApprovedPayroll
- *
- *   AvailableBalance = AuthorizedAmount - TotalActiveExposure
- *
- *   TotalPendingExposure = PendingCommitments
- *                          + PendingDirectExpenses
- *                          + PendingCustodies
- *                          + PendingPayroll
- *
- *   ProjectedBalance = AvailableBalance - TotalPendingExposure
- *
- * Backward compatibility: approvedPayroll and pendingPayroll default to 0.00 if omitted.
+ * Calculates project or user-level custody totals using exact Prisma.Decimal arithmetic.
+ * Eliminates client-side float math in custody views.
  */
-export function calculateBudgetLineExposure(params: {
-  authorizedAmount: Prisma.Decimal;
-  approvedCommitments: Prisma.Decimal;
-  directActualSpend: Prisma.Decimal;
-  custodyActualSpend: Prisma.Decimal;
-  outstandingCustodies: Prisma.Decimal;
-  approvedPayroll?: Prisma.Decimal;
-  pendingCommitments?: Prisma.Decimal;
-  pendingDirectExpenses?: Prisma.Decimal;
-  pendingCustodies?: Prisma.Decimal;
-  pendingPayroll?: Prisma.Decimal;
-}): BudgetLineActiveExposureResult {
-  const zero = new Prisma.Decimal('0.00');
-  const authorizedAmount = params.authorizedAmount;
-  const approvedCommitments = params.approvedCommitments;
-  const directActualSpend = params.directActualSpend;
-  const custodyActualSpend = params.custodyActualSpend;
-  const outstandingCustodies = params.outstandingCustodies;
-  const approvedPayroll = params.approvedPayroll ?? zero;
-  const pendingPayroll = params.pendingPayroll ?? zero;
+export function calculateUserCustodiesTotals(
+  custodies: Array<{
+    status: CustodyStatus;
+    amount: string;
+    settledExpensesAmount: string;
+    cashReturnedAmount: string;
+    remainingBalance: string;
+  }>,
+): UserCustodiesTotals {
+  let totalIssued = new Prisma.Decimal('0.00');
+  let totalSettled = new Prisma.Decimal('0.00');
+  let totalReturned = new Prisma.Decimal('0.00');
+  let totalOutstanding = new Prisma.Decimal('0.00');
 
-  // Total approved expenses = direct + custody settled expenses
-  const approvedExpenses = directActualSpend.add(custodyActualSpend);
+  for (const c of custodies) {
+    if (
+      c.status !== CustodyStatus.DRAFT &&
+      c.status !== CustodyStatus.SUBMITTED &&
+      c.status !== CustodyStatus.CANCELLED &&
+      c.status !== CustodyStatus.REJECTED
+    ) {
+      totalIssued = totalIssued.add(new Prisma.Decimal(c.amount));
+    }
 
-  // Total Active Exposure = Commitments + Direct Spend + Custody Spend + Outstanding Custodies + Approved Payroll
-  const totalActiveExposure = approvedCommitments
-    .add(directActualSpend)
-    .add(custodyActualSpend)
-    .add(outstandingCustodies)
-    .add(approvedPayroll);
+    totalSettled = totalSettled.add(new Prisma.Decimal(c.settledExpensesAmount));
+    totalReturned = totalReturned.add(new Prisma.Decimal(c.cashReturnedAmount));
 
-  const availableBalance = authorizedAmount.sub(totalActiveExposure);
-
-  const pendingCommitments = params.pendingCommitments ?? zero;
-  const pendingDirectExpenses = params.pendingDirectExpenses ?? zero;
-  const pendingCustodies = params.pendingCustodies ?? zero;
-
-  const totalPendingExposure = pendingCommitments
-    .add(pendingDirectExpenses)
-    .add(pendingCustodies)
-    .add(pendingPayroll);
-
-  const projectedBalance = availableBalance.sub(totalPendingExposure);
+    if (c.status === CustodyStatus.ISSUED || c.status === CustodyStatus.PARTIALLY_SETTLED) {
+      totalOutstanding = totalOutstanding.add(new Prisma.Decimal(c.remainingBalance));
+    }
+  }
 
   return {
-    authorizedAmount,
-    approvedExpenses,
-    approvedCommitments,
-    approvedPayroll,
-    outstandingCustodies,
-    totalActiveExposure,
-    availableBalance,
-    pendingCustodies,
-    pendingPayroll,
-    totalPendingExposure,
-    projectedBalance,
+    totalIssued: totalIssued.toFixed(2),
+    totalSettled: totalSettled.toFixed(2),
+    totalReturned: totalReturned.toFixed(2),
+    totalOutstanding: totalOutstanding.toFixed(2),
   };
 }
+
+export interface CustodyForOutstandingCalculation {
+  status?: CustodyStatus;
+  amount: Prisma.Decimal;
+  cashReturnedAmount: Prisma.Decimal;
+  expenses: Array<{
+    amount: Prisma.Decimal;
+    status?: ExpenseStatus;
+  }>;
+}
+
+/**
+ * Calculates the total outstanding advance balance held in the field across a list of custodies.
+ * Outstanding = amount - settledExpenses (APPROVED) - cashReturnedAmount.
+ * Only applies to active custodies (ISSUED and PARTIALLY_SETTLED). If status is omitted,
+ * assumes the custody has already been pre-filtered to active envelopes.
+ */
+export function sumOutstandingCustodyBalances(
+  custodies: CustodyForOutstandingCalculation[],
+): Prisma.Decimal {
+  let totalOutstanding = new Prisma.Decimal('0.00');
+
+  for (const c of custodies) {
+    if (
+      c.status !== undefined &&
+      c.status !== CustodyStatus.ISSUED &&
+      c.status !== CustodyStatus.PARTIALLY_SETTLED
+    ) {
+      continue;
+    }
+
+    const settled = c.expenses
+      .filter((e) => e.status === undefined || e.status === ExpenseStatus.APPROVED)
+      .reduce((acc, e) => acc.add(e.amount), new Prisma.Decimal('0.00'));
+
+    const remaining = c.amount.sub(settled).sub(c.cashReturnedAmount);
+    totalOutstanding = totalOutstanding.add(remaining);
+  }
+
+  return totalOutstanding;
+}
+
+// ---------------------------------------------------------------------------
+// Re-export canonical BudgetLine exposure calculation from the Budget domain.
+// Preserves 100% backward compatibility with Slices 6, 8, 9, and 13 callers.
+// ---------------------------------------------------------------------------
+export {
+  calculateBudgetLineExposure,
+  type BudgetLineActiveExposureResult,
+  type CalculateBudgetLineExposureParams,
+} from '@/lib/budget/calculations';
+
 

@@ -18,10 +18,14 @@ export {
 export {
   calculateCustodyBalances,
   calculateBudgetLineExposure,
+  calculateUserCustodiesTotals,
+  sumOutstandingCustodyBalances,
 } from './calculations';
 export type {
   CustodyCalculatedBalances,
   BudgetLineActiveExposureResult,
+  UserCustodiesTotals,
+  CustodyForOutstandingCalculation,
 } from './calculations';
 
 // Mappers
