@@ -40,6 +40,18 @@ function createMockItem(
       return { ...base, domain, workerName: 'W', tradeOrTitle: null, periodYear: 2026, periodMonth: 9, description: 'pay' };
     case 'SUBCONTRACTOR_BILLING':
       return { ...base, domain, subcontractorName: 'Sub', referenceNumber: null, billingPeriod: '2026-09', claimDate: '2026-09-01', commitmentReference: null, commitmentAmount: '0.00' };
+    case 'VARIATION_ORDER':
+      return {
+        ...base,
+        domain,
+        orderNumber: 'VO-001',
+        title: 'vo',
+        reason: 'reason',
+        scopeImpact: null,
+        commitmentReference: null,
+        commitmentVendorName: null,
+        linesCount: 0,
+      };
   }
 }
 

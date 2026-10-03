@@ -26,6 +26,7 @@ import { approveCommitment, rejectCommitment } from '@/lib/commitments';
 import { approveCustody, rejectCustody } from '@/lib/custodies';
 import { approvePayroll, rejectPayroll } from '@/lib/payroll';
 import { approveBilling, rejectBilling } from '@/lib/subcontractor-billings';
+import { approveVariationOrder, rejectVariationOrder } from '@/lib/variation-orders';
 
 export type ApprovalActionResult =
   | { success: true; domain: ApprovalDomain; id: string }
@@ -300,6 +301,53 @@ export async function rejectBillingHubAction(id: string, reason: string): Promis
     return { success: true, domain: 'SUBCONTRACTOR_BILLING', id };
   } catch (error) {
     revalidateApprovalHub('/subcontractor-billings');
+    return handleUseCaseError(error);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// VARIATION ORDER ACTIONS
+// -----------------------------------------------------------------------------
+
+export async function approveVariationOrderHubAction(id: string): Promise<ApprovalActionResult> {
+  try {
+    await requireManager();
+  } catch (error) {
+    return handleUseCaseError(error);
+  }
+
+  const idError = validateId(id);
+  if (idError) return idError;
+
+  try {
+    await approveVariationOrder({ id });
+    revalidateApprovalHub('/variation-orders');
+    return { success: true, domain: 'VARIATION_ORDER', id };
+  } catch (error) {
+    revalidateApprovalHub('/variation-orders');
+    return handleUseCaseError(error);
+  }
+}
+
+export async function rejectVariationOrderHubAction(id: string, reason: string): Promise<ApprovalActionResult> {
+  try {
+    await requireManager();
+  } catch (error) {
+    return handleUseCaseError(error);
+  }
+
+  const idError = validateId(id);
+  if (idError) return idError;
+
+  const reasonError = validateRejectionReason(reason);
+  if (reasonError) return reasonError;
+
+  try {
+    await rejectVariationOrder({ id, rejectionReason: reason });
+    revalidateApprovalHub('/variation-orders');
+    return { success: true, domain: 'VARIATION_ORDER', id };
+  } catch (error) {
+    revalidateApprovalHub('/variation-orders');
     return handleUseCaseError(error);
   }
 }

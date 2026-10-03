@@ -15,6 +15,7 @@ import type {
   CustodyApprovalItemDTO,
   PayrollApprovalItemDTO,
   BillingApprovalItemDTO,
+  VariationOrderApprovalItemDTO,
 } from './types';
 
 // Helper for exact decimal string formatting
@@ -255,5 +256,54 @@ export function toBillingApprovalItemDTO(row: BillingQueryRow): BillingApprovalI
     claimDate: formatRequiredDateOnly(row.claimDate),
     commitmentReference: row.commitment?.referenceNumber ?? null,
     commitmentAmount: row.commitment ? formatAmount(row.commitment.amount) : '0.00',
+  };
+}
+
+export type VariationOrderApprovalsRow = {
+  id: string;
+  orderNumber: string;
+  projectId: string;
+  project: { code: string; name: string };
+  budgetLine?: { category: string; description: string } | null;
+  impactAmount: { toFixed: (n: number) => string } | string;
+  currency: string;
+  title: string;
+  reason: string;
+  scopeImpact: string | null;
+  status: string;
+  createdBy: { name: string };
+  commitment?: { referenceNumber: string | null; vendorName: string } | null;
+  _count?: { lines: number };
+  lines?: unknown[];
+  submittedAt: Date | string | null;
+  createdAt: Date | string;
+};
+
+export function toVariationOrderApprovalItemDTO(
+  row: VariationOrderApprovalsRow,
+): VariationOrderApprovalItemDTO {
+  const linesCount = row._count?.lines ?? row.lines?.length ?? 0;
+  return {
+    id: row.id,
+    domain: 'VARIATION_ORDER',
+    status: 'SUBMITTED',
+    projectId: row.projectId,
+    projectCode: row.project.code,
+    projectName: row.project.name,
+    amount: formatAmount(row.impactAmount),
+    currency: 'SAR',
+    budgetLineCategory: row.budgetLine?.category ?? 'عام',
+    budgetLineDescription: row.budgetLine?.description ?? 'تغيير على مستوى المشروع',
+    initiatorName: row.createdBy.name,
+    createdAt: formatRequiredIsoTimestamp(row.createdAt),
+    submittedAt: formatOptionalIsoTimestamp(row.submittedAt),
+    detailsHref: `/variation-orders/${row.id}`,
+    orderNumber: row.orderNumber,
+    title: row.title,
+    reason: row.reason,
+    scopeImpact: row.scopeImpact ?? null,
+    commitmentReference: row.commitment?.referenceNumber ?? null,
+    commitmentVendorName: row.commitment?.vendorName ?? null,
+    linesCount,
   };
 }

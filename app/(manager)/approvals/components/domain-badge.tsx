@@ -36,6 +36,10 @@ const DOMAIN_CONFIG: Record<
     label: 'مستخلص',
     className: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-400',
   },
+  VARIATION_ORDER: {
+    label: 'أمر تغيير',
+    className: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400',
+  },
 };
 
 export function DomainBadge({ domain, className = '' }: DomainBadgeProps) {

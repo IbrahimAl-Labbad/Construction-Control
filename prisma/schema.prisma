@@ -129,6 +129,15 @@ enum MilestoneStatus {
   CANCELLED
 }
 
+/// Operational and approval lifecycle status for Variation Orders / Change Orders (Slice 20).
+enum VariationOrderStatus {
+  DRAFT       // Created by Engineer, editable
+  SUBMITTED   // Submitted for Manager review, locked
+  APPROVED    // Approved by Manager — strictly immutable financial record
+  REJECTED    // Rejected by Manager, can be reopened to DRAFT
+}
+
+
 
 // =============================================================================
 // IDENTITY & ACCESS MODELS
@@ -249,6 +258,13 @@ model User {
   createdMilestones ProjectMilestone[] @relation("MilestoneCreator")
   updatedMilestones ProjectMilestone[] @relation("MilestoneUpdater")
 
+  // Variation Orders (Vertical Slice 20)
+  createdVariationOrders   VariationOrder[] @relation("VariationOrderCreator")
+  submittedVariationOrders VariationOrder[] @relation("VariationOrderSubmitter")
+  approvedVariationOrders  VariationOrder[] @relation("VariationOrderApprover")
+  rejectedVariationOrders  VariationOrder[] @relation("VariationOrderRejecter")
+
+
 
   // Audit trail
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -341,6 +357,10 @@ model Project {
   /// Milestones for this project (Vertical Slice 12)
   milestones            ProjectMilestone[]
 
+  /// Variation Orders for this project (Vertical Slice 20)
+  variationOrders       VariationOrder[]
+
+
 
   /// Soft deletion timestamp
   deletedAt   DateTime?     @db.Timestamptz
@@ -431,6 +451,10 @@ model BudgetLine {
 
   /// Related payroll entries against this budget line (Vertical Slice 8)
   payrollEntries        PayrollEntry[]
+
+  /// Related variation orders modifying this budget line (Vertical Slice 20)
+  variationOrders       VariationOrder[]
+
 
 
   @@index([budgetId])
@@ -565,6 +589,10 @@ model Commitment {
 
   /// Subcontractor Billing claims drawn against this commitment (Vertical Slice 7)
   subcontractorBillings SubcontractorBilling[]
+
+  /// Related variation orders modifying this commitment (Vertical Slice 20)
+  variationOrders       VariationOrder[]
+
 
   @@index([projectId, status])
   @@index([budgetLineId, status])
@@ -1030,6 +1058,137 @@ model ProjectMilestone {
   @@index([deletedAt])
   @@map("project_milestones")
 }
+
+// =============================================================================
+// VARIATION ORDER / CHANGE ORDER DOMAIN MODELS (Vertical Slice 20)
+// =============================================================================
+
+/// Operational and control layer representation of a Variation Order / Change Order.
+/// Captures formal project scope, BOQ quantity/rate adjustments, and financial deltas.
+/// Authored by Role.ENGINEER. Reviewed (approved/rejected) by Role.MANAGER.
+/// Approved records are strictly immutable financial records (AGENTS.md §13).
+model VariationOrder {
+  id              String               @id @default(cuid())
+
+  /// Unique order number per project (e.g. "VO-001")
+  orderNumber     String               @db.VarChar(50)
+
+  /// The project this variation order belongs to
+  projectId       String
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  /// Optional budget line linkage if adjusting a specific cost category
+  budgetLineId    String?
+  budgetLine      BudgetLine?          @relation(fields: [budgetLineId], references: [id], onDelete: Restrict)
+
+  /// Optional commitment linkage if adjusting an existing subcontractor/vendor contract
+  commitmentId    String?
+  commitment      Commitment?          @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+
+  /// Brief descriptive title (<= 200 chars)
+  title           String               @db.VarChar(200)
+
+  /// Narrative description of the scope change
+  description     String               @db.Text
+
+  /// Technical and site justification / reason
+  reason          String               @db.Text
+
+  /// Contractual or physical scope impact description
+  scopeImpact     String?              @db.Text
+
+  /// Operational and approval lifecycle status
+  status          VariationOrderStatus @default(DRAFT)
+
+  /// Total net financial impact in SAR. Can be positive, negative, or zero. Decimal(15, 2).
+  impactAmount    Decimal              @db.Decimal(15, 2)
+  currency        String               @default("SAR")
+
+  /// Date the variation was requested
+  requestedDate   DateTime             @default(now()) @db.Timestamptz
+
+  /// Creator tracking (Site Engineer assigned to project)
+  createdById     String
+  createdBy       User                 @relation("VariationOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  /// Submitter tracking
+  submittedById   String?
+  submittedBy     User?                @relation("VariationOrderSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt     DateTime?            @db.Timestamptz
+
+  /// Approval tracking (Manager only)
+  approvedById    String?
+  approvedBy      User?                @relation("VariationOrderApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  approvedAt      DateTime?            @db.Timestamptz
+
+  /// Rejection tracking
+  rejectedById    String?
+  rejectedBy      User?                @relation("VariationOrderRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectedAt      DateTime?            @db.Timestamptz
+  rejectionReason String?              @db.Text
+
+  /// Soft deletion timestamp (AGENTS.md §14)
+  deletedAt       DateTime?            @db.Timestamptz
+
+  /// Audit timestamps
+  createdAt       DateTime             @default(now()) @db.Timestamptz
+  updatedAt       DateTime             @updatedAt @db.Timestamptz
+
+  /// BOQ line items
+  lines           VariationOrderLine[]
+
+  @@unique([projectId, orderNumber])
+  @@index([projectId, status])
+  @@index([budgetLineId, status])
+  @@index([commitmentId, status])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([deletedAt])
+  @@map("variation_orders")
+}
+
+/// Granular line item under a Variation Order representing specific BOQ or scope change.
+model VariationOrderLine {
+  id               String         @id @default(cuid())
+
+  variationOrderId String
+  variationOrder   VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
+
+  /// Line item description (<= 1000 chars)
+  description      String         @db.Text
+
+  /// Unit of measurement (e.g. "م2", "م3", "طن", "بند", "عدد", "متر طولي")
+  unit             String         @db.VarChar(50)
+
+  /// Original approved BOQ quantity. Non-negative Decimal(15, 2).
+  originalQuantity Decimal        @db.Decimal(15, 2)
+
+  /// Revised proposed BOQ quantity. Non-negative Decimal(15, 2).
+  revisedQuantity  Decimal        @db.Decimal(15, 2)
+
+  /// Quantity difference: revisedQuantity - originalQuantity. Decimal(15, 2).
+  quantityDelta    Decimal        @db.Decimal(15, 2)
+
+  /// Original unit rate in SAR. Non-negative Decimal(15, 2).
+  originalRate     Decimal        @db.Decimal(15, 2)
+
+  /// Revised unit rate in SAR. Non-negative Decimal(15, 2).
+  revisedRate      Decimal        @db.Decimal(15, 2)
+
+  /// Financial delta: (revisedQuantity * revisedRate) - (originalQuantity * originalRate). Decimal(15, 2).
+  financialDelta   Decimal        @db.Decimal(15, 2)
+
+  /// Optional remarks or notes
+  notes            String?        @db.Text
+
+  /// Audit timestamps
+  createdAt        DateTime       @default(now()) @db.Timestamptz
+  updatedAt        DateTime       @updatedAt @db.Timestamptz
+
+  @@index([variationOrderId])
+  @@map("variation_order_lines")
+}
+
 
 
 // NextAuth.js adapter required models below.

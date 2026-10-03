@@ -218,8 +218,82 @@ const canViewBillings: Policy = (user) =>
   isManager(user) || user.role === Role.ENGINEER || user.role === Role.ACCOUNTANT;
 
 // ---------------------------------------------------------------------------
+// Variation Order policies (Vertical Slice 20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user can create a variation order draft.
+ * Restricted to active Site Engineers.
+ */
+const canCreateVariationOrder: Policy = (user) => user.isActive && user.role === Role.ENGINEER;
+
+/**
+ * Whether the user can edit or delete a variation order draft.
+ * Restricted to active Site Engineers.
+ * Object-level: only creator may edit their own draft.
+ */
+const canManageVariationOrderDraft: Policy<{ createdById?: string }> = (
+  user,
+  resource,
+) =>
+  user.isActive &&
+  user.role === Role.ENGINEER &&
+  (!resource?.createdById || resource.createdById === user.id);
+
+/**
+ * Whether the user can submit a variation order draft.
+ * Restricted to active Site Engineers (creator only).
+ */
+const canSubmitVariationOrder: Policy<{ createdById?: string }> = (
+  user,
+  resource,
+) =>
+  user.isActive &&
+  user.role === Role.ENGINEER &&
+  (!resource?.createdById || resource.createdById === user.id);
+
+/**
+ * Whether the user can approve a submitted variation order.
+ * Restricted to active Managers.
+ * Separation of duties: creator or submitter cannot approve.
+ */
+const canApproveVariationOrder: Policy<{ createdById?: string; submittedById?: string | null }> = (
+  user,
+  resource,
+) =>
+  user.isActive &&
+  isManager(user) &&
+  (!resource ||
+    (resource.createdById !== user.id && resource.submittedById !== user.id));
+
+/**
+ * Whether the user can reject a submitted variation order.
+ * Restricted to active Managers.
+ */
+const canRejectVariationOrder: Policy = (user) => user.isActive && isManager(user);
+
+/**
+ * Whether the user can reopen a rejected variation order to draft.
+ * Restricted to active Site Engineers (creator only).
+ */
+const canReopenVariationOrder: Policy<{ createdById?: string }> = (
+  user,
+  resource,
+) =>
+  user.isActive &&
+  user.role === Role.ENGINEER &&
+  (!resource?.createdById || resource.createdById === user.id);
+
+/**
+ * Whether the user can view variation orders.
+ * All active authenticated users have read access within their project scope.
+ */
+const canViewVariationOrders: Policy = (user) => user.isActive;
+
+// ---------------------------------------------------------------------------
 // Future financial policies (stubs — to be populated in feature tasks)
 // ---------------------------------------------------------------------------
+
 // These stubs document the expected shape of future policies.
 // They return false by default to enforce "deny by default" (AGENTS.md §6).
 
@@ -706,5 +780,14 @@ export const policies = {
   // Project Planning & Milestones (Vertical Slice 12)
   canManageMilestones,
   canViewProjectMilestones,
+
+  // Variation Orders (Vertical Slice 20)
+  canCreateVariationOrder,
+  canManageVariationOrderDraft,
+  canSubmitVariationOrder,
+  canApproveVariationOrder,
+  canRejectVariationOrder,
+  canReopenVariationOrder,
+  canViewVariationOrders,
 } as const;
 

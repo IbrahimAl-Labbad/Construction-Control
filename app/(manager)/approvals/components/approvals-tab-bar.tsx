@@ -62,6 +62,12 @@ export function ApprovalsTabBar({ activeTab, counts }: ApprovalsTabBarProps) {
       href: '/approvals?tab=billings',
       count: counts.billings,
     },
+    {
+      key: 'variations',
+      label: 'أوامر التغيير',
+      href: '/approvals?tab=variations',
+      count: counts.variations,
+    },
   ];
 
   return (

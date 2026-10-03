@@ -29,6 +29,8 @@ import {
   rejectPayrollHubAction,
   approveBillingHubAction,
   rejectBillingHubAction,
+  approveVariationOrderHubAction,
+  rejectVariationOrderHubAction,
 } from '../actions';
 
 interface ApprovalCardProps {
@@ -66,6 +68,9 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
         case 'SUBCONTRACTOR_BILLING':
           result = await approveBillingHubAction(item.id);
           break;
+        case 'VARIATION_ORDER':
+          result = await approveVariationOrderHubAction(item.id);
+          break;
       }
 
       if (!result.success) {
@@ -98,6 +103,9 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
         break;
       case 'SUBCONTRACTOR_BILLING':
         result = await rejectBillingHubAction(item.id, reason);
+        break;
+      case 'VARIATION_ORDER':
+        result = await rejectVariationOrderHubAction(item.id, reason);
         break;
     }
 
@@ -298,6 +306,39 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
                   </span>
                 </div>
               )}
+            </>
+          )}
+
+          {item.domain === 'VARIATION_ORDER' && (
+            <>
+              <div>
+                <span className="text-muted-foreground">رقم أمر التغيير: </span>
+                <span className="font-medium text-foreground">{item.orderNumber}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">العنوان: </span>
+                <span className="font-medium text-foreground">{item.title}</span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground">المبرر الفني: </span>
+                <span className="text-foreground">{item.reason}</span>
+              </div>
+              {item.scopeImpact && (
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground">أثر نطاق العمل: </span>
+                  <span className="text-foreground">{item.scopeImpact}</span>
+                </div>
+              )}
+              {item.commitmentVendorName && (
+                <div>
+                  <span className="text-muted-foreground">المقاول / المورد: </span>
+                  <span className="font-medium text-foreground">{item.commitmentVendorName}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-muted-foreground">عدد بنود الكميات: </span>
+                <span className="font-medium text-foreground">{item.linesCount}</span>
+              </div>
             </>
           )}
 

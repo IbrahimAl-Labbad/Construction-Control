@@ -15,7 +15,8 @@ export type ApprovalDomain =
   | 'COMMITMENT'
   | 'CUSTODY'
   | 'PAYROLL'
-  | 'SUBCONTRACTOR_BILLING';
+  | 'SUBCONTRACTOR_BILLING'
+  | 'VARIATION_ORDER';
 
 export type BaseApprovalItemDTO = {
   id: string;
@@ -97,12 +98,24 @@ export type BillingApprovalItemDTO = BaseApprovalItemDTO & {
   commitmentAmount: string;
 };
 
+export type VariationOrderApprovalItemDTO = BaseApprovalItemDTO & {
+  domain: 'VARIATION_ORDER';
+  orderNumber: string;
+  title: string;
+  reason: string;
+  scopeImpact: string | null;
+  commitmentReference: string | null;
+  commitmentVendorName: string | null;
+  linesCount: number;
+};
+
 export type ApprovalItemDTO =
   | ExpenseApprovalItemDTO
   | CommitmentApprovalItemDTO
   | CustodyApprovalItemDTO
   | PayrollApprovalItemDTO
-  | BillingApprovalItemDTO;
+  | BillingApprovalItemDTO
+  | VariationOrderApprovalItemDTO;
 
 /** True pending counts — sourced from DB COUNT queries, never from items.length */
 export type PendingCountsDTO = {
@@ -111,12 +124,13 @@ export type PendingCountsDTO = {
   custodies: number;
   payroll: number;
   billings: number;
+  variations: number;
   total: number;
 };
 
 /** Response shape for a paginated domain-specific tab */
 export type DomainTabFeedDTO = {
-  activeTab: 'expenses' | 'commitments' | 'custodies' | 'payroll' | 'billings';
+  activeTab: 'expenses' | 'commitments' | 'custodies' | 'payroll' | 'billings' | 'variations';
   items: ApprovalItemDTO[];
   counts: PendingCountsDTO;
   pagination: {
@@ -151,7 +165,8 @@ export type ApprovalsTab =
   | 'commitments'
   | 'custodies'
   | 'payroll'
-  | 'billings';
+  | 'billings'
+  | 'variations';
 
 export type ManagerApprovalsFeedDTO = AllTabFeedDTO | DomainTabFeedDTO;
 

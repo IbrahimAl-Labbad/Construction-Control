@@ -19,12 +19,14 @@ import { PENDING_COMMITMENTS_SELECT } from './get-pending-commitments';
 import { PENDING_CUSTODIES_SELECT } from './get-pending-custodies';
 import { PENDING_PAYROLL_SELECT } from './get-pending-payroll';
 import { PENDING_BILLINGS_SELECT } from './get-pending-billings';
+import { PENDING_VARIATIONS_SELECT } from './get-pending-variations';
 import {
   toExpenseApprovalItemDTO,
   toCommitmentApprovalItemDTO,
   toCustodyApprovalItemDTO,
   toPayrollApprovalItemDTO,
   toBillingApprovalItemDTO,
+  toVariationOrderApprovalItemDTO,
 } from '../mappers';
 import type { AllTabFeedDTO, ApprovalItemDTO } from '../types';
 
@@ -47,6 +49,7 @@ export async function getAllTabTriage(): Promise<AllTabFeedDTO> {
     rawCustodies,
     rawPayroll,
     rawBillings,
+    rawVariations,
     counts,
   ] = await Promise.all([
     prisma.expense.findMany({
@@ -79,6 +82,12 @@ export async function getAllTabTriage(): Promise<AllTabFeedDTO> {
       orderBy,
       take: ALL_TAB_PER_DOMAIN_LIMIT,
     }),
+    prisma.variationOrder.findMany({
+      where,
+      select: PENDING_VARIATIONS_SELECT,
+      orderBy,
+      take: ALL_TAB_PER_DOMAIN_LIMIT,
+    }),
     getPendingCounts(),
   ]);
 
@@ -88,6 +97,7 @@ export async function getAllTabTriage(): Promise<AllTabFeedDTO> {
     ...rawCustodies.map(toCustodyApprovalItemDTO),
     ...rawPayroll.map(toPayrollApprovalItemDTO),
     ...rawBillings.map(toBillingApprovalItemDTO),
+    ...rawVariations.map(toVariationOrderApprovalItemDTO),
   ];
 
   candidates.sort((a, b) => {

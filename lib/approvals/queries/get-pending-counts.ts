@@ -14,12 +14,13 @@ import type { PendingCountsDTO } from '../types';
 export async function getPendingCounts(): Promise<PendingCountsDTO> {
   await requireManager();
 
-  const [expenses, commitments, custodies, payroll, billings] = await Promise.all([
+  const [expenses, commitments, custodies, payroll, billings, variations] = await Promise.all([
     prisma.expense.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
     prisma.commitment.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
     prisma.custody.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
     prisma.payrollEntry.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
     prisma.subcontractorBilling.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
+    prisma.variationOrder.count({ where: { status: 'SUBMITTED', deletedAt: null } }),
   ]);
 
   return {
@@ -28,6 +29,7 @@ export async function getPendingCounts(): Promise<PendingCountsDTO> {
     custodies,
     payroll,
     billings,
-    total: expenses + commitments + custodies + payroll + billings,
+    variations,
+    total: expenses + commitments + custodies + payroll + billings + variations,
   };
 }

@@ -8,6 +8,7 @@ import {
   getPendingCustodies,
   getPendingPayroll,
   getPendingBillings,
+  getPendingVariations,
   type ApprovalsTab,
   type ApprovalItemDTO,
   type PendingCountsDTO,
@@ -31,6 +32,7 @@ const VALID_TABS: readonly ApprovalsTab[] = [
   'custodies',
   'payroll',
   'billings',
+  'variations',
 ];
 
 interface ApprovalsPageProps {
@@ -62,6 +64,7 @@ export default async function ApprovalsPage({ searchParams }: ApprovalsPageProps
     custodies: 0,
     payroll: 0,
     billings: 0,
+    variations: 0,
     total: 0,
   };
   let hasMoreBeyondWindow = false;
@@ -91,6 +94,9 @@ export default async function ApprovalsPage({ searchParams }: ApprovalsPageProps
         break;
       case 'billings':
         domainPromise = getPendingBillings({ page, pageSize });
+        break;
+      case 'variations':
+        domainPromise = getPendingVariations({ page, pageSize });
         break;
     }
 
