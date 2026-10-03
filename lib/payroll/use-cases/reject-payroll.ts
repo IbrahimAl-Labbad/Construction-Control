@@ -16,6 +16,7 @@ import { PayrollStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { policies } from '@/lib/permissions/policies';
 import { validate } from '@/lib/validation';
@@ -49,71 +50,90 @@ export async function rejectPayroll(
   const data = inputValidation.data;
 
   // 3. Execute atomic rejection transaction
-  const rejected = await prisma.$transaction(async (tx) => {
-    const existing = await tx.payrollEntry.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        projectId: true,
-        budgetLineId: true,
-        workerName: true,
-        amount: true,
-        status: true,
-        createdById: true,
-        deletedAt: true,
-      },
-    });
+  let rejected;
+  try {
+    rejected = await prisma.$transaction(async (tx) => {
+      const existing = await tx.payrollEntry.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          projectId: true,
+          budgetLineId: true,
+          workerName: true,
+          amount: true,
+          status: true,
+          createdById: true,
+          deletedAt: true,
+        },
+      });
 
-    if (!existing) {
-      throw new AppError('NOT_FOUND', 'قيد الراتب غير موجود');
-    }
+      if (!existing) {
+        throw new AppError('NOT_FOUND', 'قيد الراتب غير موجود');
+      }
 
-    if (existing.deletedAt !== null) {
-      throw new AppError('RECORD_DELETED', 'لا يمكن رفض قيد راتب محذوف');
-    }
+      if (existing.deletedAt !== null) {
+        throw new AppError('RECORD_DELETED', 'لا يمكن رفض قيد راتب محذوف');
+      }
 
-    assertPayrollCanBeRejected(existing.status);
+      assertPayrollCanBeRejected(existing.status);
 
-    if (!policies.canRejectPayroll(actor, existing)) {
-      throw new AppError('FORBIDDEN', 'غير مصرح لك برفض قيد الراتب');
-    }
+      if (!policies.canRejectPayroll(actor, existing)) {
+        throw new AppError('FORBIDDEN', 'غير مصرح لك برفض قيد الراتب');
+      }
 
-    const now = new Date();
+      const now = new Date();
 
-    const updated = await tx.payrollEntry.update({
-      where: { id },
-      data: {
-        status: PayrollStatus.REJECTED,
-        rejectedById: actor.id,
-        rejectedAt: now,
-        rejectionReason: data.rejectionReason,
-      },
-      include: PAYROLL_INCLUDE,
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'PAYROLL_ENTRY_REJECTED',
-        entityType: 'PAYROLL_ENTRY',
-        entityId: updated.id,
-        metadata: {
-          payrollEntryId: updated.id,
-          projectId: updated.projectId,
-          budgetLineId: updated.budgetLineId,
-          periodYear: updated.periodYear,
-          periodMonth: updated.periodMonth,
-          amount: updated.amount.toFixed(2),
-          previousStatus: PayrollStatus.SUBMITTED,
-          newStatus: PayrollStatus.REJECTED,
+      const updated = await tx.payrollEntry.update({
+        where: { id },
+        data: {
+          status: PayrollStatus.REJECTED,
           rejectedById: actor.id,
-          rejectedAt: now.toISOString(),
+          rejectedAt: now,
           rejectionReason: data.rejectionReason,
         },
-      },
-    });
+        include: PAYROLL_INCLUDE,
+      });
 
-    return updated;
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'PAYROLL_ENTRY_REJECTED',
+          entityType: 'PAYROLL_ENTRY',
+          entityId: updated.id,
+          metadata: {
+            payrollEntryId: updated.id,
+            projectId: updated.projectId,
+            budgetLineId: updated.budgetLineId,
+            periodYear: updated.periodYear,
+            periodMonth: updated.periodMonth,
+            amount: updated.amount.toFixed(2),
+            previousStatus: PayrollStatus.SUBMITTED,
+            newStatus: PayrollStatus.REJECTED,
+            rejectedById: actor.id,
+            rejectedAt: now.toISOString(),
+            rejectionReason: data.rejectionReason,
+          },
+        },
+      });
+
+      return updated;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('payroll.rejection_transaction_failed', {
+        payrollId: id,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('payroll.rejected', {
+    payrollId: rejected.id,
+    projectId: rejected.projectId,
+    actorId: actor.id,
   });
 
   return toPayrollSummaryDTO(rejected);

@@ -15,6 +15,7 @@
 
 import { getServerSession as nextAuthGetServerSession } from 'next-auth';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/db/prisma';
 
 import { authOptions } from './config';
@@ -62,6 +63,7 @@ export async function requireAuth(): Promise<AuthenticatedUser> {
   const session = await getSession();
 
   if (!session?.user?.id || !session.user.sessionToken) {
+    logger.warn('auth.missing_session');
     throw new AuthError('UNAUTHENTICATED');
   }
 
@@ -85,11 +87,13 @@ export async function requireAuth(): Promise<AuthenticatedUser> {
 
   // Session revoked or expired
   if (!dbSession || dbSession.expires < new Date()) {
+    logger.warn('auth.session_expired_or_revoked', { userId: session.user.id });
     throw new AuthError('UNAUTHENTICATED');
   }
 
   // Account deactivated or soft-deleted
   if (!dbSession.user.isActive || dbSession.user.deletedAt !== null) {
+    logger.warn('auth.inactive_user', { userId: dbSession.user.id });
     throw new AuthError('ACCOUNT_INACTIVE');
   }
 

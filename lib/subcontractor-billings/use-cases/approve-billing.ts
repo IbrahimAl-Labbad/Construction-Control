@@ -37,6 +37,7 @@ import {
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { billingIdSchema } from '@/lib/validation/schemas/subcontractor-billing';
@@ -99,7 +100,9 @@ export async function approveBilling(billingId: unknown): Promise<SubcontractorB
 
   // 6. Execute atomic approval transaction with hierarchical row-level locking
   const now = new Date();
-  const approved = await prisma.$transaction(async (tx) => {
+  let approved;
+  try {
+    approved = await prisma.$transaction(async (tx) => {
     // 6.1 Lock parent budget line (Lock 1)
     const lockedLines = await tx.$queryRaw<Array<{ id: string; amount: Prisma.Decimal }>>`
       SELECT id, amount FROM budget_lines
@@ -271,6 +274,25 @@ export async function approveBilling(billingId: unknown): Promise<SubcontractorB
 
     return updatedBilling;
   });
+} catch (error) {
+  if (!(error instanceof AppError)) {
+    logger.error('billing.approval_transaction_failed', {
+      billingId: id,
+      actorId: actor.id,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+  throw error;
+}
 
-  return toSubcontractorBillingSummaryDTO(approved);
+logger.info('billing.approved', {
+  billingId: approved.id,
+  projectId: approved.projectId,
+  commitmentId: approved.commitmentId,
+  actorId: actor.id,
+  grossAmount: approved.grossAmount.toFixed(2),
+});
+
+return toSubcontractorBillingSummaryDTO(approved);
 }

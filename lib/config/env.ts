@@ -47,6 +47,30 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+export type EnvValidationResult =
+  | { success: true; data: Env }
+  | { success: false; errors: string[] };
+
+/**
+ * Pure environment validation helper.
+ * Validates an environment variable dictionary without mutating process.env.
+ * Never outputs secret values in error descriptions.
+ */
+export function validateEnvConfig(
+  input: Record<string, string | undefined>,
+): EnvValidationResult {
+  const result = envSchema.safeParse(input);
+
+  if (!result.success) {
+    const errors = result.error.issues.map(
+      (issue) => `${issue.path.join('.')}: ${issue.message}`,
+    );
+    return { success: false, errors };
+  }
+
+  return { success: true, data: result.data };
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -59,12 +83,10 @@ export type Env = z.infer<typeof envSchema>;
  * application startup, making misconfiguration immediately obvious.
  */
 function validateEnv(): Env {
-  const result = envSchema.safeParse(process.env);
+  const validation = validateEnvConfig(process.env);
 
-  if (!result.success) {
-    const formatted = result.error.issues
-      .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
-      .join('\n');
+  if (!validation.success) {
+    const formatted = validation.errors.map((err) => `  - ${err}`).join('\n');
 
     throw new Error(
       `\n\n❌ Environment variable validation failed:\n${formatted}\n\n` +
@@ -72,7 +94,7 @@ function validateEnv(): Env {
     );
   }
 
-  return result.data;
+  return validation.data;
 }
 
 // ---------------------------------------------------------------------------

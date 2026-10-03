@@ -49,6 +49,7 @@ import {
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { calculateBudgetLineExposure, sumOutstandingCustodyBalances } from '@/lib/custodies/calculations';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
@@ -109,7 +110,9 @@ export async function approvePayroll(payrollId: unknown): Promise<PayrollEntrySu
 
   // 4. Execute atomic approval transaction with Canonical Lock Hierarchy
   const now = new Date();
-  const approved = await prisma.$transaction(async (tx) => {
+  let approved;
+  try {
+    approved = await prisma.$transaction(async (tx) => {
     // 4.1 Canonical Lock Order 1: Lock the parent BudgetLine row
     const lockedLines = await tx.$queryRaw<
       Array<{
@@ -343,6 +346,25 @@ export async function approvePayroll(payrollId: unknown): Promise<PayrollEntrySu
 
     return updatedPayroll;
   });
+} catch (error) {
+  if (!(error instanceof AppError)) {
+    logger.error('payroll.approval_transaction_failed', {
+      payrollId: id,
+      actorId: actor.id,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+  throw error;
+}
 
-  return toPayrollSummaryDTO(approved);
+logger.info('payroll.approved', {
+  payrollId: approved.id,
+  projectId: approved.projectId,
+  budgetLineId: approved.budgetLineId,
+  actorId: actor.id,
+  amount: approved.amount.toFixed(2),
+});
+
+return toPayrollSummaryDTO(approved);
 }

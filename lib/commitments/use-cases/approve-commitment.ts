@@ -33,6 +33,7 @@ import { BudgetStatus, CommitmentStatus, CustodyStatus, ExpenseStatus, PayrollSt
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { commitmentIdSchema } from '@/lib/validation/schemas/commitment';
@@ -88,7 +89,9 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
 
   // 6. Execute atomic approval transaction with BudgetLine row-level locking
   const now = new Date();
-  const approved = await prisma.$transaction(async (tx) => {
+  let approved;
+  try {
+    approved = await prisma.$transaction(async (tx) => {
     // 6.1 Lock the parent budget line row (SELECT ... FOR UPDATE)
     const lockedLines = await tx.$queryRaw<Array<{ id: string; amount: Prisma.Decimal }>>`
       SELECT id, amount FROM budget_lines
@@ -267,6 +270,25 @@ export async function approveCommitment(commitmentId: unknown): Promise<Commitme
 
     return updatedCommitment;
   });
+} catch (error) {
+  if (!(error instanceof AppError)) {
+    logger.error('commitment.approval_transaction_failed', {
+      commitmentId: id,
+      actorId: actor.id,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+  throw error;
+}
 
-  return toCommitmentSummaryDTO(approved);
+logger.info('commitment.approved', {
+  commitmentId: approved.id,
+  projectId: approved.projectId,
+  budgetLineId: approved.budgetLineId,
+  actorId: actor.id,
+  amount: approved.amount.toFixed(2),
+});
+
+return toCommitmentSummaryDTO(approved);
 }

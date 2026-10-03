@@ -14,6 +14,7 @@ import { CustodyStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { custodyIdSchema } from '@/lib/validation/schemas/custody';
@@ -86,6 +87,12 @@ export async function closeCustody(custodyId: unknown): Promise<CustodySummaryDT
     });
 
     return updated;
+  });
+
+  logger.info('custody.closed', {
+    custodyId: closed.id,
+    code: closed.code,
+    actorId: actor.id,
   });
 
   return toCustodySummaryDTO(closed);

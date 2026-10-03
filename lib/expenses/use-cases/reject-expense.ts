@@ -17,6 +17,7 @@ import { ExpenseStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import {
@@ -66,41 +67,60 @@ export async function rejectExpense(
 
   // 6. Atomic transaction: update rejection metadata + audit log (Gate 30)
   const now = new Date();
-  const rejected = await prisma.$transaction(async (tx) => {
-    const updated = await tx.expense.update({
-      where: { id },
-      data: {
-        status: ExpenseStatus.REJECTED,
-        rejectedById: actor.id,
-        rejectedAt: now,
-        rejectionReason,
-      },
-      include: {
-        submittedBy: { select: { id: true, name: true, email: true } },
-        approvedBy: { select: { id: true, name: true, email: true } },
-        rejectedBy: { select: { id: true, name: true, email: true } },
-        budgetLine: { select: { id: true, category: true, description: true, amount: true } },
-        project: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'EXPENSE_REJECTED',
-        entityType: 'EXPENSE',
-        entityId: updated.id,
-        metadata: {
-          projectId: updated.projectId,
-          budgetLineId: updated.budgetLineId,
-          amount: updated.amount.toFixed(2),
+  let rejected;
+  try {
+    rejected = await prisma.$transaction(async (tx) => {
+      const updated = await tx.expense.update({
+        where: { id },
+        data: {
+          status: ExpenseStatus.REJECTED,
+          rejectedById: actor.id,
+          rejectedAt: now,
           rejectionReason,
-          rejectedAt: now.toISOString(),
         },
-      },
-    });
+        include: {
+          submittedBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, email: true } },
+          rejectedBy: { select: { id: true, name: true, email: true } },
+          budgetLine: { select: { id: true, category: true, description: true, amount: true } },
+          project: { select: { id: true, name: true, code: true } },
+        },
+      });
 
-    return updated;
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'EXPENSE_REJECTED',
+          entityType: 'EXPENSE',
+          entityId: updated.id,
+          metadata: {
+            projectId: updated.projectId,
+            budgetLineId: updated.budgetLineId,
+            amount: updated.amount.toFixed(2),
+            rejectionReason,
+            rejectedAt: now.toISOString(),
+          },
+        },
+      });
+
+      return updated;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('expense.rejection_transaction_failed', {
+        expenseId: id,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('expense.rejected', {
+    expenseId: rejected.id,
+    projectId: rejected.projectId,
+    actorId: actor.id,
   });
 
   return toExpenseSummaryDTO(rejected);

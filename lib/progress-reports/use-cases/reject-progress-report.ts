@@ -21,6 +21,7 @@
 import { ProgressReportStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import {
@@ -49,65 +50,84 @@ export async function rejectProgressReport(
   }
   const data = validation.data;
 
-  const rejected = await prisma.$transaction(async (tx) => {
-    const rejectionTime = new Date();
+  let rejected;
+  try {
+    rejected = await prisma.$transaction(async (tx) => {
+      const rejectionTime = new Date();
 
-    // 1. Atomic compare-and-set update
-    const result = await tx.progressReport.updateMany({
-      where: {
-        id: reportId,
-        status: ProgressReportStatus.SUBMITTED,
-        deletedAt: null,
-      },
-      data: {
-        status: ProgressReportStatus.REJECTED,
-        rejectedById: actor.id,
-        rejectedAt: rejectionTime,
-        rejectionReason: data.rejectionReason ?? null,
-      },
-    });
-
-    if (result.count === 0) {
-      const existing = await tx.progressReport.findFirst({
-        where: { id: reportId, deletedAt: null },
-        select: { id: true, status: true },
-      });
-
-      if (!existing) {
-        throw new AppError('NOT_FOUND', 'تقرير التقدم غير موجود');
-      }
-
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن رفض التقرير إلا في حالة قيد المراجعة (الحالة الحالية: ${existing.status})`,
-      );
-    }
-
-    const report = await tx.progressReport.findUniqueOrThrow({
-      where: { id: reportId },
-      include: PROGRESS_REPORT_INCLUDE,
-    });
-
-    // 2. Write PROGRESS_REPORT_REJECTED AuditLog in SAME transaction
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'PROGRESS_REPORT_REJECTED',
-        entityType: 'PROGRESS_REPORT',
-        entityId: report.id,
-        metadata: {
-          projectId: report.projectId,
-          reportDate: formatReportDateString(report.reportDate),
+      // 1. Atomic compare-and-set update
+      const result = await tx.progressReport.updateMany({
+        where: {
+          id: reportId,
+          status: ProgressReportStatus.SUBMITTED,
+          deletedAt: null,
+        },
+        data: {
           status: ProgressReportStatus.REJECTED,
           rejectedById: actor.id,
-          rejectedAt: rejectionTime.toISOString(),
-          rejectionReason: report.rejectionReason,
-          createdById: report.createdById,
+          rejectedAt: rejectionTime,
+          rejectionReason: data.rejectionReason ?? null,
         },
-      },
-    });
+      });
 
-    return report;
+      if (result.count === 0) {
+        const existing = await tx.progressReport.findFirst({
+          where: { id: reportId, deletedAt: null },
+          select: { id: true, status: true },
+        });
+
+        if (!existing) {
+          throw new AppError('NOT_FOUND', 'تقرير التقدم غير موجود');
+        }
+
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          `لا يمكن رفض التقرير إلا في حالة قيد المراجعة (الحالة الحالية: ${existing.status})`,
+        );
+      }
+
+      const report = await tx.progressReport.findUniqueOrThrow({
+        where: { id: reportId },
+        include: PROGRESS_REPORT_INCLUDE,
+      });
+
+      // 2. Write PROGRESS_REPORT_REJECTED AuditLog in SAME transaction
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'PROGRESS_REPORT_REJECTED',
+          entityType: 'PROGRESS_REPORT',
+          entityId: report.id,
+          metadata: {
+            projectId: report.projectId,
+            reportDate: formatReportDateString(report.reportDate),
+            status: ProgressReportStatus.REJECTED,
+            rejectedById: actor.id,
+            rejectedAt: rejectionTime.toISOString(),
+            rejectionReason: report.rejectionReason,
+            createdById: report.createdById,
+          },
+        },
+      });
+
+      return report;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('progress_report.rejection_transaction_failed', {
+        reportId,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('progress_report.rejected', {
+    reportId: rejected.id,
+    projectId: rejected.projectId,
+    actorId: actor.id,
   });
 
   return toProgressReportDetailDTO(rejected);

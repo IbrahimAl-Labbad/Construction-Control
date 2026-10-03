@@ -20,6 +20,7 @@ import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 
 import { prisma } from '@/lib/db/prisma';
+import { logger } from '@/lib/logger';
 import type { Role } from '@/lib/permissions/roles';
 
 import { verifyPassword } from './password';
@@ -57,6 +58,11 @@ export async function authorizeUser(
 
   // 2. Reject if user not found, soft-deleted, or inactive
   if (!user || !user.isActive || user.deletedAt !== null) {
+    if (!user) {
+      logger.warn('auth.user_not_found', { email: normalizedEmail });
+    } else {
+      logger.warn('auth.inactive_user', { email: normalizedEmail, userId: user.id });
+    }
     try {
       await prisma.auditLog.create({
         data: {
@@ -73,6 +79,7 @@ export async function authorizeUser(
 
   // 3. User has no password credentials set
   if (!user.credential) {
+    logger.warn('auth.missing_credential', { email: normalizedEmail, userId: user.id });
     try {
       await prisma.auditLog.create({
         data: {
@@ -96,6 +103,7 @@ export async function authorizeUser(
   );
 
   if (!isPasswordValid) {
+    logger.warn('auth.invalid_password', { email: normalizedEmail, userId: user.id });
     try {
       await prisma.auditLog.create({
         data: {
@@ -133,7 +141,13 @@ export async function authorizeUser(
         entityId: user.id,
       },
     });
-  } catch {
+
+    logger.info('auth.login_success', { userId: user.id, role: user.role });
+  } catch (err) {
+    logger.error('auth.session_sync_failure', {
+      userId: user.id,
+      errorName: err instanceof Error ? err.name : 'UnknownError',
+    });
     // If DB write fails, auth cannot proceed safely
     return null;
   }

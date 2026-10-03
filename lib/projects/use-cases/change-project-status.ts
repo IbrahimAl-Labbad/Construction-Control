@@ -20,6 +20,7 @@
 import { ProjectStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { hasApprovedBudget } from '@/lib/budget/queries/has-approved-budget';
@@ -91,30 +92,50 @@ export async function changeProjectStatus(
   }
 
   // 6. Atomic transaction: update status + audit
-  const updated = await prisma.$transaction(async (tx) => {
-    const project = await tx.project.update({
-      where: { id },
-      data: { status: newStatus },
-      include: {
-        manager: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'PROJECT_STATUS_CHANGED',
-        entityType: 'PROJECT',
-        entityId: project.id,
-        metadata: {
-          previousStatus: existing.status,
-          newStatus,
-          reason: reason ?? null,
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.update({
+        where: { id },
+        data: { status: newStatus },
+        include: {
+          manager: { select: { id: true, name: true, email: true } },
         },
-      },
-    });
+      });
 
-    return project;
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'PROJECT_STATUS_CHANGED',
+          entityType: 'PROJECT',
+          entityId: project.id,
+          metadata: {
+            previousStatus: existing.status,
+            newStatus,
+            reason: reason ?? null,
+          },
+        },
+      });
+
+      return project;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('project.status_change_transaction_failed', {
+        projectId: id,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('project.status_changed', {
+    projectId: updated.id,
+    previousStatus: existing.status,
+    newStatus,
+    actorId: actor.id,
   });
 
   return updated;

@@ -17,6 +17,7 @@ import { BudgetStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { budgetIdSchema } from '@/lib/validation/schemas/budget';
@@ -61,39 +62,59 @@ export async function approveBudget(budgetId: unknown): Promise<BudgetDetailsDTO
 
   // 5. Atomic transaction: update status, record approver, write audit log
   const now = new Date();
-  const approved = await prisma.$transaction(async (tx) => {
-    const budget = await tx.budget.update({
-      where: { id },
-      data: {
-        status: BudgetStatus.APPROVED,
-        approvedById: actor.id,
-        approvedAt: now,
-        rejectionReason: null,
-      },
-      include: {
-        createdBy: { select: { id: true, name: true, email: true } },
-        approvedBy: { select: { id: true, name: true, email: true } },
-        lines: true,
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'BUDGET_APPROVED',
-        entityType: 'BUDGET',
-        entityId: budget.id,
-        metadata: {
-          projectId: budget.projectId,
-          version: budget.version,
-          totalAmount: budget.totalAmount.toFixed(2),
-          approvedAt: now.toISOString(),
-          lineCount: budget.lines.length,
+  let approved;
+  try {
+    approved = await prisma.$transaction(async (tx) => {
+      const budget = await tx.budget.update({
+        where: { id },
+        data: {
+          status: BudgetStatus.APPROVED,
+          approvedById: actor.id,
+          approvedAt: now,
+          rejectionReason: null,
         },
-      },
-    });
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, email: true } },
+          lines: true,
+        },
+      });
 
-    return budget;
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'BUDGET_APPROVED',
+          entityType: 'BUDGET',
+          entityId: budget.id,
+          metadata: {
+            projectId: budget.projectId,
+            version: budget.version,
+            totalAmount: budget.totalAmount.toFixed(2),
+            approvedAt: now.toISOString(),
+            lineCount: budget.lines.length,
+          },
+        },
+      });
+
+      return budget;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('budget.approval_transaction_failed', {
+        budgetId: id,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('budget.approved', {
+    budgetId: approved.id,
+    projectId: approved.projectId,
+    totalAmount: approved.totalAmount.toFixed(2),
+    actorId: actor.id,
   });
 
   return toBudgetDetailsDTO(approved);

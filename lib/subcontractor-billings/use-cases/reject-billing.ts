@@ -18,6 +18,7 @@ import { SubcontractorBillingStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import {
@@ -62,65 +63,84 @@ export async function rejectBilling(
 
   // 3. Execute atomic rejection transaction
   const now = new Date();
-  const rejected = await prisma.$transaction(async (tx) => {
-    const existing = await tx.subcontractorBilling.findFirst({
-      where: { id, deletedAt: null },
-      select: {
-        id: true,
-        status: true,
-        createdById: true,
-        submittedById: true,
-        projectId: true,
-        commitmentId: true,
-        grossAmount: true,
-      },
-    });
-
-    if (!existing) {
-      throw new AppError('NOT_FOUND', 'المستخلص غير موجود');
-    }
-
-    // Assert separation of duties
-    if (existing.createdById === actor.id || existing.submittedById === actor.id) {
-      throw new AppError(
-        'FORBIDDEN_SELF_APPROVAL',
-        'لا يمكن للمعتمد رفض مستخلص مالي قام بإنشائه أو تقديمه بنفسه (مبدأ فصل المهام)',
-      );
-    }
-
-    // Assert state machine transition (SUBMITTED -> REJECTED)
-    assertCanTransitionBillingStatus(existing.status, SubcontractorBillingStatus.REJECTED);
-
-    // Update status to REJECTED
-    const updated = await tx.subcontractorBilling.update({
-      where: { id },
-      data: {
-        status: SubcontractorBillingStatus.REJECTED,
-        rejectedById: actor.id,
-        rejectedAt: now,
-        rejectionReason: data.rejectionReason,
-      },
-      include: BILLING_INCLUDE,
-    });
-
-    // Write SUBCONTRACTOR_BILLING_REJECTED AuditLog in same transaction
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'SUBCONTRACTOR_BILLING_REJECTED',
-        entityType: 'SUBCONTRACTOR_BILLING',
-        entityId: updated.id,
-        metadata: {
-          projectId: updated.projectId,
-          commitmentId: updated.commitmentId,
-          grossAmount: updated.grossAmount.toFixed(2),
-          rejectionReason: data.rejectionReason,
-          rejectedAt: now.toISOString(),
+  let rejected;
+  try {
+    rejected = await prisma.$transaction(async (tx) => {
+      const existing = await tx.subcontractorBilling.findFirst({
+        where: { id, deletedAt: null },
+        select: {
+          id: true,
+          status: true,
+          createdById: true,
+          submittedById: true,
+          projectId: true,
+          commitmentId: true,
+          grossAmount: true,
         },
-      },
-    });
+      });
 
-    return updated;
+      if (!existing) {
+        throw new AppError('NOT_FOUND', 'المستخلص غير موجود');
+      }
+
+      // Assert separation of duties
+      if (existing.createdById === actor.id || existing.submittedById === actor.id) {
+        throw new AppError(
+          'FORBIDDEN_SELF_APPROVAL',
+          'لا يمكن للمعتمد رفض مستخلص مالي قام بإنشائه أو تقديمه بنفسه (مبدأ فصل المهام)',
+        );
+      }
+
+      // Assert state machine transition (SUBMITTED -> REJECTED)
+      assertCanTransitionBillingStatus(existing.status, SubcontractorBillingStatus.REJECTED);
+
+      // Update status to REJECTED
+      const updated = await tx.subcontractorBilling.update({
+        where: { id },
+        data: {
+          status: SubcontractorBillingStatus.REJECTED,
+          rejectedById: actor.id,
+          rejectedAt: now,
+          rejectionReason: data.rejectionReason,
+        },
+        include: BILLING_INCLUDE,
+      });
+
+      // Write SUBCONTRACTOR_BILLING_REJECTED AuditLog in same transaction
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'SUBCONTRACTOR_BILLING_REJECTED',
+          entityType: 'SUBCONTRACTOR_BILLING',
+          entityId: updated.id,
+          metadata: {
+            projectId: updated.projectId,
+            commitmentId: updated.commitmentId,
+            grossAmount: updated.grossAmount.toFixed(2),
+            rejectionReason: data.rejectionReason,
+            rejectedAt: now.toISOString(),
+          },
+        },
+      });
+
+      return updated;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('billing.rejection_transaction_failed', {
+        billingId: id,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('billing.rejected', {
+    billingId: rejected.id,
+    projectId: rejected.projectId,
+    actorId: actor.id,
   });
 
   return toSubcontractorBillingSummaryDTO(rejected);

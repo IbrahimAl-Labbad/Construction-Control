@@ -19,6 +19,14 @@
  */
 
 import { env, isProduction } from '@/lib/config/env';
+import { getCorrelationId } from './correlation';
+
+export {
+  getCorrelationId,
+  runWithCorrelationId,
+  generateCorrelationId,
+  sanitizeCorrelationId,
+} from './correlation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,10 +35,12 @@ import { env, isProduction } from '@/lib/config/env';
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 export interface LogContext {
+  /** Event identifier for structured search and aggregation */
+  event?: string | undefined;
   /** Request correlation ID — set by middleware for traceability */
-  correlationId?: string;
+  correlationId?: string | undefined;
   /** User ID for audit trail */
-  userId?: string;
+  userId?: string | undefined;
   /** Additional structured context */
   [key: string]: unknown;
 }
@@ -51,7 +61,16 @@ const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
 // ---------------------------------------------------------------------------
 
 const SENSITIVE_KEY_PATTERN =
-  /^(password|passwordhash|token|secret|authorization|cookie|sessiontoken|creditcard|apikey|accesstoken|refreshtoken)$/i;
+  /^(password|passwordhash|token|secret|authorization|cookie|sessiontoken|creditcard|apikey|accesstoken|refreshtoken|database_url|nextauth_secret|connectionstring|connstring)$/i;
+
+/**
+ * Normalizes a key by stripping underscores and dashes for pattern matching.
+ */
+function isSensitiveKey(key: string): boolean {
+  if (SENSITIVE_KEY_PATTERN.test(key)) return true;
+  const normalized = key.replace(/[-_]/g, '');
+  return SENSITIVE_KEY_PATTERN.test(normalized);
+}
 
 /**
  * Recursively traverses and redacts sensitive keys in log payloads.
@@ -77,7 +96,7 @@ export function redactSensitiveData(value: unknown, depth = 0): unknown {
 
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (SENSITIVE_KEY_PATTERN.test(k)) {
+      if (isSensitiveKey(k)) {
         cleaned[k] = '[REDACTED]';
       } else {
         cleaned[k] = redactSensitiveData(v, depth + 1);
@@ -108,24 +127,36 @@ function formatMessage(
   context?: LogContext,
 ): string {
   const timestamp = new Date().toISOString();
+  const correlationId =
+    context?.correlationId ??
+    (context?.requestId as string | undefined) ??
+    getCorrelationId();
+
   const sanitizedContext = context
     ? (redactSensitiveData(context) as LogContext)
     : undefined;
+
+  const mergedPayload: Record<string, unknown> = {
+    ...(correlationId ? { correlationId } : {}),
+    ...(sanitizedContext ?? {}),
+  };
 
   if (isProduction) {
     // Structured JSON for log aggregators
     return JSON.stringify({
       timestamp,
       level,
+      event: context?.event ?? message,
       message,
-      ...sanitizedContext,
+      ...mergedPayload,
     });
   }
 
   // Human-readable format for development
-  const contextStr = sanitizedContext
-    ? ` ${JSON.stringify(sanitizedContext)}`
-    : '';
+  const contextStr =
+    Object.keys(mergedPayload).length > 0
+      ? ` ${JSON.stringify(mergedPayload)}`
+      : '';
   return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
 }
 

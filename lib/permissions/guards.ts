@@ -29,6 +29,7 @@ import { Role } from '@prisma/client';
 
 import { requireAuth, type AuthError } from '@/lib/auth/session';
 import type { AuthenticatedUser } from '@/lib/auth/types';
+import { logger } from '@/lib/logger';
 
 // Re-export AuthError so callers only need one import
 export type { AuthError };
@@ -96,6 +97,11 @@ export async function requireRole(
   const allowedRoles = Array.isArray(role) ? role : [role];
 
   if (!allowedRoles.includes(user.role)) {
+    logger.warn('auth.role_authorization_failure', {
+      userId: user.id,
+      actualRole: user.role,
+      requiredRoles: allowedRoles,
+    });
     throw new PermissionError('INSUFFICIENT_ROLE', allowedRoles, user.role);
   }
 

@@ -28,6 +28,7 @@ import {
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireRole } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { custodyIdSchema } from '@/lib/validation/schemas/custody';
@@ -71,7 +72,9 @@ export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDT
 
   // 5. Execute atomic issuance transaction with Canonical Lock Hierarchy
   const now = new Date();
-  const issued = await prisma.$transaction(async (tx) => {
+  let issued;
+  try {
+    issued = await prisma.$transaction(async (tx) => {
     // 5.1 STEP 1: Lock the parent BudgetLine row (Canonical Lock Order 1)
     const lockedLines = await tx.$queryRaw<Array<{ id: string; amount: Prisma.Decimal }>>`
       SELECT id, amount FROM budget_lines
@@ -238,6 +241,25 @@ export async function issueCustody(custodyId: unknown): Promise<CustodySummaryDT
 
     return updated;
   });
+} catch (error) {
+  if (!(error instanceof AppError)) {
+    logger.error('custody.issuance_transaction_failed', {
+      custodyId: id,
+      actorId: actor.id,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+  throw error;
+}
 
-  return toCustodySummaryDTO(issued);
+logger.info('custody.issued', {
+  custodyId: issued.id,
+  projectId: issued.projectId,
+  budgetLineId: issued.budgetLineId,
+  actorId: actor.id,
+  amount: issued.amount.toFixed(2),
+});
+
+return toCustodySummaryDTO(issued);
 }

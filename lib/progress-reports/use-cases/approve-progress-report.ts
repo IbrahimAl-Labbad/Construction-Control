@@ -20,6 +20,7 @@
 import { ProgressReportStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { progressReportIdSchema } from '@/lib/validation/schemas/progress-report';
@@ -36,63 +37,82 @@ export async function approveProgressReport(idInput: string): Promise<ProgressRe
   }
   const reportId = idValidation.data;
 
-  const approved = await prisma.$transaction(async (tx) => {
-    const approvalTime = new Date();
+  let approved;
+  try {
+    approved = await prisma.$transaction(async (tx) => {
+      const approvalTime = new Date();
 
-    // 1. Atomic compare-and-set update
-    const result = await tx.progressReport.updateMany({
-      where: {
-        id: reportId,
-        status: ProgressReportStatus.SUBMITTED,
-        deletedAt: null,
-      },
-      data: {
-        status: ProgressReportStatus.APPROVED,
-        approvedById: actor.id,
-        approvedAt: approvalTime,
-      },
-    });
-
-    if (result.count === 0) {
-      const existing = await tx.progressReport.findFirst({
-        where: { id: reportId, deletedAt: null },
-        select: { id: true, status: true },
-      });
-
-      if (!existing) {
-        throw new AppError('NOT_FOUND', 'تقرير التقدم غير موجود');
-      }
-
-      throw new AppError(
-        'INVALID_STATE_TRANSITION',
-        `لا يمكن اعتماد التقرير إلا في حالة قيد المراجعة (الحالة الحالية: ${existing.status})`,
-      );
-    }
-
-    const report = await tx.progressReport.findUniqueOrThrow({
-      where: { id: reportId },
-      include: PROGRESS_REPORT_INCLUDE,
-    });
-
-    // 2. Write PROGRESS_REPORT_APPROVED AuditLog in SAME transaction
-    await tx.auditLog.create({
-      data: {
-        actorId: actor.id,
-        action: 'PROGRESS_REPORT_APPROVED',
-        entityType: 'PROGRESS_REPORT',
-        entityId: report.id,
-        metadata: {
-          projectId: report.projectId,
-          reportDate: formatReportDateString(report.reportDate),
+      // 1. Atomic compare-and-set update
+      const result = await tx.progressReport.updateMany({
+        where: {
+          id: reportId,
+          status: ProgressReportStatus.SUBMITTED,
+          deletedAt: null,
+        },
+        data: {
           status: ProgressReportStatus.APPROVED,
           approvedById: actor.id,
-          approvedAt: approvalTime.toISOString(),
-          createdById: report.createdById,
+          approvedAt: approvalTime,
         },
-      },
-    });
+      });
 
-    return report;
+      if (result.count === 0) {
+        const existing = await tx.progressReport.findFirst({
+          where: { id: reportId, deletedAt: null },
+          select: { id: true, status: true },
+        });
+
+        if (!existing) {
+          throw new AppError('NOT_FOUND', 'تقرير التقدم غير موجود');
+        }
+
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          `لا يمكن اعتماد التقرير إلا في حالة قيد المراجعة (الحالة الحالية: ${existing.status})`,
+        );
+      }
+
+      const report = await tx.progressReport.findUniqueOrThrow({
+        where: { id: reportId },
+        include: PROGRESS_REPORT_INCLUDE,
+      });
+
+      // 2. Write PROGRESS_REPORT_APPROVED AuditLog in SAME transaction
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'PROGRESS_REPORT_APPROVED',
+          entityType: 'PROGRESS_REPORT',
+          entityId: report.id,
+          metadata: {
+            projectId: report.projectId,
+            reportDate: formatReportDateString(report.reportDate),
+            status: ProgressReportStatus.APPROVED,
+            approvedById: actor.id,
+            approvedAt: approvalTime.toISOString(),
+            createdById: report.createdById,
+          },
+        },
+      });
+
+      return report;
+    });
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('progress_report.approval_transaction_failed', {
+        reportId,
+        actorId: actor.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+
+  logger.info('progress_report.approved', {
+    reportId: approved.id,
+    projectId: approved.projectId,
+    actorId: actor.id,
   });
 
   return toProgressReportDetailDTO(approved);
