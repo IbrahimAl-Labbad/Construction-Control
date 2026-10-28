@@ -36,6 +36,14 @@ export async function reopenCustody(custodyId: unknown): Promise<CustodySummaryD
 
   // 3. Execute atomic transaction to reopen custody
   const reopened = await prisma.$transaction(async (tx) => {
+    if (tx.$queryRaw) {
+      await tx.$queryRaw`
+        SELECT id FROM custodies
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+    }
+
     const custody = await tx.custody.findFirst({
       where: { id, deletedAt: null },
       include: {

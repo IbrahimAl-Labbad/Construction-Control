@@ -7,7 +7,10 @@
  * 1. Authorization: Role.ENGINEER only.
  * 2. Status guard: Only DRAFT records can be deleted. Approved or submitted records cannot.
  * 3. Ownership guard: Only the Engineer who created the draft may delete it.
- * 4. Audit trail: Produces VARIATION_ORDER_DELETED AuditLog inside the transaction.
+ * 4. Concurrency & Row Locking:
+ *    - Acquires FOR UPDATE lock on variation_orders inside transaction.
+ *    - Revalidates draft status, ownership, and non-deleted state under lock.
+ * 5. Audit trail: Produces VARIATION_ORDER_DELETED AuditLog inside the transaction.
  */
 
 import { Role, VariationOrderStatus } from '@prisma/client';
@@ -65,8 +68,47 @@ export async function deleteVariationOrder(
   const now = new Date();
 
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`
+        SELECT id, status, "createdById", "deletedAt", "projectId", "orderNumber"
+        FROM variation_orders
+        WHERE id = ${voId}
+        FOR UPDATE
+      `;
+    }
+
+    const lockedVO = await tx.variationOrder.findFirst({
+      where: { id: voId },
+      select: {
+        id: true,
+        status: true,
+        createdById: true,
+        deletedAt: true,
+        projectId: true,
+        orderNumber: true,
+      },
+    });
+
+    if (!lockedVO || lockedVO.deletedAt !== null) {
+      throw new AppError('NOT_FOUND', 'أمر التغيير غير موجود أو تم حذفه');
+    }
+
+    if (lockedVO.status !== VariationOrderStatus.DRAFT) {
+      throw new AppError(
+        'RECORD_NOT_EDITABLE',
+        'لا يمكن حذف أمر التغيير إلا عندما يكون في حالة مسودة (DRAFT)',
+      );
+    }
+
+    if (lockedVO.createdById !== actor.id) {
+      throw new AppError(
+        'FORBIDDEN',
+        'غير مصرح: لا يمكن حذف مسودة أمر التغيير إلا بواسطة المهندس الذي أنشأها',
+      );
+    }
+
     await tx.variationOrder.update({
-      where: { id: existing.id },
+      where: { id: lockedVO.id },
       data: { deletedAt: now },
     });
 
@@ -74,11 +116,11 @@ export async function deleteVariationOrder(
       data: {
         action: 'VARIATION_ORDER_DELETED',
         entityType: 'VARIATION_ORDER',
-        entityId: existing.id,
+        entityId: lockedVO.id,
         actorId: actor.id,
         metadata: {
-          projectId: existing.projectId,
-          orderNumber: existing.orderNumber,
+          projectId: lockedVO.projectId,
+          orderNumber: lockedVO.orderNumber,
         },
       },
     });

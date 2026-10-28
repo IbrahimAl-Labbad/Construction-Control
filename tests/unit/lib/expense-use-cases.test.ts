@@ -4,7 +4,7 @@
  * Unit tests for Expense use cases (business logic, invariants, ownership, permissions).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Role, ProjectStatus, ExpenseStatus, BudgetCategory, Prisma } from '@prisma/client';
+import { Role, ProjectStatus, ExpenseStatus, CustodyStatus, BudgetCategory, Prisma } from '@prisma/client';
 import {
   createExpenseDraft,
   updateExpenseDraft,
@@ -250,6 +250,31 @@ describe('Expense Use Cases', () => {
         updateExpenseDraft(existingDraft.id, updatePayload),
       ).rejects.toThrow(expect.objectContaining({ code: 'IMMUTABLE_RECORD' }));
     });
+
+    it('rejects draft update if expense transitions to SUBMITTED before row lock acquisition', async () => {
+      vi.spyOn(auth, 'requireAuth').mockResolvedValue(mockEngineer);
+      vi.spyOn(prisma.expense, 'findFirst').mockResolvedValue(existingDraft as unknown as ExpenseRecord);
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => {
+        const tx = {
+          $queryRaw: vi.fn().mockResolvedValue([{ id: existingDraft.id }]),
+          expense: {
+            findFirst: vi.fn().mockResolvedValue({
+              ...existingDraft,
+              status: ExpenseStatus.SUBMITTED,
+              project: { id: existingDraft.projectId, status: ProjectStatus.ACTIVE, deletedAt: null },
+            }),
+            update: vi.fn(),
+          },
+          auditLog: { create: vi.fn() },
+        };
+        return cb(tx as unknown as MockTx);
+      });
+
+      await expect(
+        updateExpenseDraft(existingDraft.id, updatePayload),
+      ).rejects.toThrow(expect.objectContaining({ code: 'EXPENSE_NOT_DRAFT' }));
+    });
   });
 
   describe('deleteExpenseDraft', () => {
@@ -403,6 +428,184 @@ describe('Expense Use Cases', () => {
       await expect(submitExpense(existingDraft.id)).rejects.toThrow(
         expect.objectContaining({ code: 'INVALID_PROJECT_STATUS' }),
       );
+    });
+
+    it('rejects custody-linked submission when linked custody is SETTLED or CLOSED (CUSTODY_NOT_ISSUED)', async () => {
+      vi.spyOn(auth, 'requireAuth').mockResolvedValue(mockEngineer);
+      const custodyLinkedDraft = {
+        ...existingDraft,
+        custodyId: 'custody-closed-1',
+      };
+      vi.spyOn(prisma.expense, 'findFirst').mockResolvedValue(custodyLinkedDraft as unknown as ExpenseRecord);
+      vi.spyOn(prisma.budget, 'findFirst').mockResolvedValue({ id: 'budget-1' } as unknown as BudgetRecord);
+      vi.spyOn(prisma.budgetLine, 'findFirst').mockResolvedValue({ id: existingDraft.budgetLineId } as unknown as BudgetLineRecord);
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => {
+        const tx = {
+          $queryRaw: vi.fn().mockImplementation((strings: TemplateStringsArray) => {
+            const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+            if (sql.includes('FROM custodies')) {
+              return [
+                {
+                  id: 'custody-closed-1',
+                  code: 'CUST-099',
+                  status: CustodyStatus.CLOSED,
+                  projectId: existingDraft.projectId,
+                  budgetLineId: existingDraft.budgetLineId,
+                  custodianUserId: mockEngineer.id,
+                  amount: new Prisma.Decimal('5000.00'),
+                  cashReturnedAmount: new Prisma.Decimal('5000.00'),
+                  deletedAt: null,
+                },
+              ];
+            }
+            return [{ id: existingDraft.id }];
+          }),
+          expense: {
+            findFirst: vi.fn().mockResolvedValue(custodyLinkedDraft),
+            aggregate: vi.fn().mockResolvedValue({ _sum: { amount: new Prisma.Decimal('0.00') } }),
+            update: vi.fn(),
+          },
+          budget: { findFirst: vi.fn().mockResolvedValue({ id: 'budget-1' }) },
+          budgetLine: { findFirst: vi.fn().mockResolvedValue({ id: existingDraft.budgetLineId }) },
+          auditLog: { create: vi.fn() },
+        };
+        return cb(tx as unknown as MockTx);
+      });
+
+      await expect(submitExpense(custodyLinkedDraft.id)).rejects.toThrow(
+        expect.objectContaining({ code: 'CUSTODY_NOT_ISSUED' }),
+      );
+    });
+
+    it('rejects custody-linked submission when expense amount exceeds custody remaining advance (CUSTODY_BALANCE_EXCEEDED)', async () => {
+      vi.spyOn(auth, 'requireAuth').mockResolvedValue(mockEngineer);
+      const custodyLinkedDraft = {
+        ...existingDraft,
+        custodyId: 'custody-issued-1',
+        amount: new Prisma.Decimal('2000.00'),
+      };
+      vi.spyOn(prisma.expense, 'findFirst').mockResolvedValue(custodyLinkedDraft as unknown as ExpenseRecord);
+      vi.spyOn(prisma.budget, 'findFirst').mockResolvedValue({ id: 'budget-1' } as unknown as BudgetRecord);
+      vi.spyOn(prisma.budgetLine, 'findFirst').mockResolvedValue({ id: existingDraft.budgetLineId } as unknown as BudgetLineRecord);
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => {
+        const tx = {
+          $queryRaw: vi.fn().mockImplementation((strings: TemplateStringsArray) => {
+            const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+            if (sql.includes('FROM custodies')) {
+              return [
+                {
+                  id: 'custody-issued-1',
+                  code: 'CUST-100',
+                  status: CustodyStatus.PARTIALLY_SETTLED,
+                  projectId: existingDraft.projectId,
+                  budgetLineId: existingDraft.budgetLineId,
+                  custodianUserId: mockEngineer.id,
+                  amount: new Prisma.Decimal('5000.00'),
+                  cashReturnedAmount: new Prisma.Decimal('1000.00'),
+                  deletedAt: null,
+                },
+              ];
+            }
+            return [{ id: existingDraft.id }];
+          }),
+          expense: {
+            findFirst: vi.fn().mockResolvedValue(custodyLinkedDraft),
+            aggregate: vi.fn().mockResolvedValue({
+              _sum: { amount: new Prisma.Decimal('3000.00') }, // Remaining = 5000 - 3000 - 1000 = 1000 < 2000
+            }),
+            update: vi.fn(),
+          },
+          budget: { findFirst: vi.fn().mockResolvedValue({ id: 'budget-1' }) },
+          budgetLine: { findFirst: vi.fn().mockResolvedValue({ id: existingDraft.budgetLineId }) },
+          auditLog: { create: vi.fn() },
+        };
+        return cb(tx as unknown as MockTx);
+      });
+
+      await expect(submitExpense(custodyLinkedDraft.id)).rejects.toThrow(
+        expect.objectContaining({ code: 'CUSTODY_BALANCE_EXCEEDED' }),
+      );
+    });
+
+    it('retries with fresh linkage when budgetLineId or custodyId changes concurrently before lock acquisition', async () => {
+      vi.spyOn(auth, 'requireAuth').mockResolvedValue(mockEngineer);
+      const updatedBudgetLineId = 'cju0123456789abcdef099999';
+      const updatedCustodyId = 'custody-fresh-1';
+
+      const freshExpense = {
+        ...existingDraft,
+        budgetLineId: updatedBudgetLineId,
+        custodyId: updatedCustodyId,
+        amount: new Prisma.Decimal('1500.00'),
+      };
+
+      // Pre-read on Attempt 1 sees old linkage; pre-read on Attempt 2 sees updated linkage
+      let findFirstCalls = 0;
+      vi.spyOn(prisma.expense, 'findFirst').mockImplementation((async () => {
+        findFirstCalls += 1;
+        return (findFirstCalls === 1 ? existingDraft : freshExpense) as unknown as ExpenseRecord;
+      }) as unknown as typeof prisma.expense.findFirst);
+      vi.spyOn(prisma.budget, 'findFirst').mockResolvedValue({ id: 'budget-1' } as unknown as BudgetRecord);
+      vi.spyOn(prisma.budgetLine, 'findFirst').mockResolvedValue({ id: updatedBudgetLineId } as unknown as BudgetLineRecord);
+
+      let transactionAttempts = 0;
+      let submittedAuditMetadata: Record<string, unknown> | null = null;
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => {
+        transactionAttempts += 1;
+        // Under lock inside the transaction, the expense now has the updated linkage
+        const lockedFreshExpense = freshExpense;
+
+        const tx = {
+          $queryRaw: vi.fn().mockImplementation((strings: TemplateStringsArray) => {
+            const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+            if (sql.includes('FROM custodies')) {
+              return [
+                {
+                  id: updatedCustodyId,
+                  code: 'CUST-FRESH',
+                  status: CustodyStatus.ISSUED,
+                  projectId: existingDraft.projectId,
+                  budgetLineId: updatedBudgetLineId,
+                  custodianUserId: mockEngineer.id,
+                  amount: new Prisma.Decimal('5000.00'),
+                  cashReturnedAmount: new Prisma.Decimal('0.00'),
+                  deletedAt: null,
+                },
+              ];
+            }
+            return [{ id: existingDraft.id }];
+          }),
+          expense: {
+            findFirst: vi.fn().mockResolvedValue(lockedFreshExpense),
+            aggregate: vi.fn().mockResolvedValue({ _sum: { amount: new Prisma.Decimal('0.00') } }),
+            update: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+              ...lockedFreshExpense,
+              ...data,
+              submittedBy: mockEngineer,
+            })),
+          },
+          budget: { findFirst: vi.fn().mockResolvedValue({ id: 'budget-1' }) },
+          budgetLine: { findFirst: vi.fn().mockResolvedValue({ id: updatedBudgetLineId }) },
+          auditLog: {
+            create: vi.fn().mockImplementation(({ data }: { data: { metadata: Record<string, unknown> } }) => {
+              submittedAuditMetadata = data.metadata;
+              return {};
+            }),
+          },
+        };
+        return cb(tx as unknown as MockTx);
+      });
+
+      const result = await submitExpense(existingDraft.id);
+      expect(transactionAttempts).toBe(2); // Attempt 1 saw stale linkage -> retried on Attempt 2 with fresh locks
+      expect(result.status).toBe(ExpenseStatus.SUBMITTED);
+      expect(result.budgetLineId).toBe(updatedBudgetLineId);
+      expect(result.custodyId).toBe(updatedCustodyId);
+      expect(submittedAuditMetadata?.['budgetLineId']).toBe(updatedBudgetLineId);
+      expect(submittedAuditMetadata?.['custodyId']).toBe(updatedCustodyId);
     });
   });
 

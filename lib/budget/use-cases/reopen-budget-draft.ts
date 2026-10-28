@@ -61,6 +61,29 @@ export async function reopenBudgetDraft(budgetId: unknown): Promise<BudgetDetail
 
   // 5. Atomic transaction: update status to DRAFT on same record + audit log
   const reopened = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`
+        SELECT id FROM budgets WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
+    if (typeof tx.budget?.findFirst === 'function') {
+      const lockedBudget = await tx.budget.findFirst({
+        where: { id, deletedAt: null },
+      });
+
+      if (!lockedBudget) {
+        throw new AppError('NOT_FOUND', 'الموازنة غير موجودة أو تم حذفها');
+      }
+
+      if (lockedBudget.status !== BudgetStatus.REJECTED) {
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          `لا يمكن إعادة فتح الموازنة وهي في حالة "${lockedBudget.status}"، يجب أن تكون مرفوضة (REJECTED)`,
+        );
+      }
+    }
+
     const budget = await tx.budget.update({
       where: { id },
       data: {

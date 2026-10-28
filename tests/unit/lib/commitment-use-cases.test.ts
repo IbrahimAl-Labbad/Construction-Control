@@ -16,6 +16,7 @@ import * as permissions from '@/lib/permissions';
 import { prisma } from '@/lib/db/prisma';
 import { createCommitmentDraft } from '@/lib/commitments/use-cases/create-commitment-draft';
 import { updateCommitmentDraft } from '@/lib/commitments/use-cases/update-commitment-draft';
+import { submitCommitment } from '@/lib/commitments/use-cases/submit-commitment';
 import { approveCommitment } from '@/lib/commitments/use-cases/approve-commitment';
 import { getCommitment } from '@/lib/commitments/use-cases/get-commitment';
 import { getUserCommitments } from '@/lib/commitments/queries/get-user-commitments';
@@ -273,6 +274,151 @@ describe('Commitment Use Cases (Unit Tests)', () => {
 
       await expect(approveCommitment(commitmentId)).rejects.toThrow(
         expect.objectContaining({ code: 'INVALID_STATE_TRANSITION' }),
+      );
+    });
+
+    it('retries cleanly when budgetLineId changes between preCheck and locked transaction read', async () => {
+      const managerId = 'user_mgr_1';
+      vi.spyOn(permissions, 'requireManager').mockResolvedValue({
+        id: managerId,
+        name: 'المدير',
+        email: 'mgr@test.local',
+        role: Role.MANAGER,
+        isActive: true,
+      });
+
+      const commitmentId = 'clh1b2c3d000008l1g2h3i4j9';
+      const oldLineId = 'clh1b2c3d000008l1g2h3i4j1';
+      const newLineId = 'clh1b2c3d000008l1g2h3i4j2';
+
+      // 1st preCheck returns oldLineId, 2nd preCheck returns newLineId
+      (prisma.commitment.findFirst as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          id: commitmentId,
+          status: CommitmentStatus.SUBMITTED,
+          createdById: 'user_purchasing',
+          submittedById: 'user_purchasing',
+          budgetLineId: oldLineId,
+          amount: new Prisma.Decimal('5000.00'),
+          projectId: 'p_1',
+        })
+        .mockResolvedValueOnce({
+          id: commitmentId,
+          status: CommitmentStatus.SUBMITTED,
+          createdById: 'user_purchasing',
+          submittedById: 'user_purchasing',
+          budgetLineId: newLineId,
+          amount: new Prisma.Decimal('5000.00'),
+          projectId: 'p_1',
+        });
+
+      const lockedCommitmentRecord = {
+        id: commitmentId,
+        status: CommitmentStatus.SUBMITTED,
+        createdById: 'user_purchasing',
+        submittedById: 'user_purchasing',
+        budgetLineId: newLineId,
+        amount: new Prisma.Decimal('5000.00'),
+        projectId: 'p_1',
+        deletedAt: null,
+        project: { id: 'p_1', status: ProjectStatus.ACTIVE, deletedAt: null },
+      };
+
+      const updatedMock = {
+        ...lockedCommitmentRecord,
+        status: CommitmentStatus.APPROVED,
+        approvedById: managerId,
+        approvedAt: new Date(),
+        vendorName: 'مورد حديد',
+        referenceNumber: 'PO-01',
+        description: 'دفعة حديد',
+        commitmentDate: new Date(),
+        rejectionReason: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: { id: 'user_purchasing', name: 'مسؤول المشتريات', email: 'pur@test.local' },
+        submittedBy: { id: 'user_purchasing', name: 'مسؤول المشتريات', email: 'pur@test.local' },
+        approvedBy: { id: managerId, name: 'المدير', email: 'mgr@test.local' },
+        rejectedBy: null,
+        budgetLine: {
+          id: newLineId,
+          category: 'MATERIALS',
+          description: 'حديد',
+          amount: new Prisma.Decimal('50000.00'),
+        },
+        project: { id: 'p_1', name: 'مشروع 1', code: 'PRJ-01' },
+      };
+
+      let txCalls = 0;
+      (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(async (callback) => {
+        txCalls += 1;
+        const tx = {
+          $queryRaw: vi.fn().mockResolvedValue([
+            {
+              id: txCalls === 1 ? oldLineId : newLineId,
+              amount: new Prisma.Decimal('50000.00'),
+              budgetId: 'b_1',
+            },
+          ]),
+          commitment: {
+            findFirst: vi.fn().mockResolvedValue(lockedCommitmentRecord),
+            aggregate: vi.fn().mockResolvedValue({ _sum: { amount: new Prisma.Decimal('0.00') } }),
+            update: vi.fn().mockResolvedValue(updatedMock),
+          },
+          budget: { findFirst: vi.fn().mockResolvedValue({ id: 'b_1' }) },
+          budgetLine: { findFirst: vi.fn().mockResolvedValue({ id: newLineId }) },
+          expense: {
+            aggregate: vi.fn().mockResolvedValue({ _sum: { amount: new Prisma.Decimal('0.00') } }),
+          },
+          custody: { findMany: vi.fn().mockResolvedValue([]) },
+          payrollEntry: {
+            aggregate: vi.fn().mockResolvedValue({ _sum: { amount: new Prisma.Decimal('0.00') } }),
+          },
+          auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit_ok' }) },
+        };
+        return callback(tx);
+      });
+
+      const result = await approveCommitment(commitmentId);
+      expect(txCalls).toBe(2);
+      expect(result.status).toBe(CommitmentStatus.APPROVED);
+      expect(result.budgetLineId).toBe(newLineId);
+    });
+  });
+
+  describe('submitCommitment - Budget Line Invariant (Slice 21B)', () => {
+    it('rejects submitting a commitment whose budgetLineId does not belong to the project approved budget', async () => {
+      vi.spyOn(permissions, 'requireRole').mockResolvedValue({
+        id: 'user_purchasing',
+        name: 'مسؤول المشتريات',
+        email: 'purchasing@test.local',
+        role: Role.PURCHASING,
+        isActive: true,
+      });
+
+      const commitmentId = 'clh1b2c3d000008l1g2h3i4j9';
+      (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(async (callback) => {
+        const tx = {
+          $queryRaw: vi.fn().mockResolvedValue([{ id: commitmentId }]),
+          commitment: {
+            findFirst: vi.fn().mockResolvedValue({
+              id: commitmentId,
+              projectId: 'p_1',
+              budgetLineId: 'stale_line_from_old_budget',
+              createdById: 'user_purchasing',
+              status: CommitmentStatus.DRAFT,
+              deletedAt: null,
+              project: { id: 'p_1', status: ProjectStatus.ACTIVE, deletedAt: null },
+            }),
+          },
+          budget: { findFirst: vi.fn().mockResolvedValue({ id: 'approved_budget_2' }) },
+          budgetLine: { findFirst: vi.fn().mockResolvedValue(null) }, // Does not belong to approved_budget_2
+        };
+        return callback(tx);
+      });
+
+      await expect(submitCommitment(commitmentId)).rejects.toThrow(
+        expect.objectContaining({ code: 'INVALID_BUDGET_LINE' }),
       );
     });
   });

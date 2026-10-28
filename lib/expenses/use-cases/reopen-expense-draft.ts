@@ -84,8 +84,48 @@ export async function reopenExpenseDraft(expenseId: unknown): Promise<ExpenseSum
   // 5. Assert state machine transition (REJECTED -> DRAFT)
   assertCanTransitionExpenseStatus(existing.status, ExpenseStatus.DRAFT);
 
-  // 6. Atomic transaction: clear rejection fields, set status DRAFT, write audit log
+  // 6. Atomic transaction: lock row, revalidate REJECTED status, clear rejection fields, set status DRAFT, write audit log
   const reopened = await prisma.$transaction(async (tx) => {
+    if (tx.$queryRaw) {
+      await tx.$queryRaw`
+        SELECT id FROM expenses
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+    }
+
+    const lockedExpense = tx.expense?.findFirst
+      ? await tx.expense.findFirst({
+          where: { id, deletedAt: null },
+          include: {
+            project: { select: { id: true, status: true, deletedAt: true } },
+          },
+        })
+      : existing;
+
+    if (!lockedExpense || lockedExpense.deletedAt !== null) {
+      throw new AppError('NOT_FOUND', 'المصروف غير موجود');
+    }
+
+    if (lockedExpense.submittedById !== actor.id) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك إعادة فتح مصروف قام بإنشائه مستخدم آخر',
+      );
+    }
+
+    if (
+      lockedExpense.project &&
+      (lockedExpense.project.status !== ProjectStatus.ACTIVE || lockedExpense.project.deletedAt !== null)
+    ) {
+      throw new AppError(
+        'INVALID_PROJECT_STATUS',
+        'لا يمكن إعادة فتح المصروف لأن المشروع غير نشط حالياً',
+      );
+    }
+
+    assertCanTransitionExpenseStatus(lockedExpense.status, ExpenseStatus.DRAFT);
+
     const updated = await tx.expense.update({
       where: { id },
       data: {
@@ -113,8 +153,8 @@ export async function reopenExpenseDraft(expenseId: unknown): Promise<ExpenseSum
           projectId: updated.projectId,
           budgetLineId: updated.budgetLineId,
           amount: updated.amount.toFixed(2),
-          previousRejectionReason: existing.rejectionReason,
-          previousRejectedById: existing.rejectedById,
+          previousRejectionReason: lockedExpense.rejectionReason,
+          previousRejectedById: lockedExpense.rejectedById,
         },
       },
     });

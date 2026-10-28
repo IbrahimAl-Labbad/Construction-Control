@@ -137,7 +137,15 @@ export async function approveBilling(billingId: unknown): Promise<SubcontractorB
       throw new AppError('NOT_FOUND', 'الالتزام غير موجود');
     }
 
-    // 6.3 Re-fetch billing inside tx (Lock 3 via re-validation)
+    // 6.3 Lock target billing row (Lock 3: SELECT ... FOR UPDATE) and re-fetch inside tx
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM subcontractor_billings
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+    }
+
     const billingToApprove = await tx.subcontractorBilling.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -153,10 +161,42 @@ export async function approveBilling(billingId: unknown): Promise<SubcontractorB
       throw new AppError('RECORD_DELETED', 'لا يمكن اعتماد مستخلص محذوف');
     }
 
+    if (
+      billingToApprove.createdById === actor.id ||
+      billingToApprove.submittedById === actor.id
+    ) {
+      throw new AppError(
+        'FORBIDDEN_SELF_APPROVAL',
+        'لا يمكن للمعتمد اعتماد مستخلص مالي قام بإنشائه أو تقديمه بنفسه (مبدأ فصل المهام)',
+      );
+    }
+
     if (billingToApprove.status !== SubcontractorBillingStatus.SUBMITTED) {
       throw new AppError(
         'INVALID_STATE_TRANSITION',
         `لا يمكن اعتماد المستخلص وهو في حالة "${billingToApprove.status}"، يجب أن يكون قيد الاعتماد (SUBMITTED)`,
+      );
+    }
+
+    if (
+      billingToApprove.budgetLineId !== preCheck.budgetLineId ||
+      billingToApprove.commitmentId !== preCheck.commitmentId
+    ) {
+      throw new AppError(
+        'INVALID_COMMITMENT_LINKAGE',
+        'تغير ارتباط المستخلص أثناء الاعتماد؛ يرجى إعادة المحاولة',
+      );
+    }
+
+    if (
+      billingToApprove.subcontractorName &&
+      lockedCommitment.vendorName &&
+      billingToApprove.subcontractorName.trim().toLowerCase() !==
+        lockedCommitment.vendorName.trim().toLowerCase()
+    ) {
+      throw new AppError(
+        'SUBCONTRACTOR_NAME_MISMATCH',
+        `اسم مقاول الباطن "${billingToApprove.subcontractorName}" لا يطابق اسم المورد في الالتزام "${lockedCommitment.vendorName}"`,
       );
     }
 

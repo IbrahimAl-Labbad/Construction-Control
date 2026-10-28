@@ -507,5 +507,43 @@ describe('Custody Use Cases (Unit Tests)', () => {
       const result = await closeCustody(CUID_CUSTODY);
       expect(result.status).toBe(CustodyStatus.CLOSED);
     });
+
+    it('rejects closing a SETTLED custody when a SUBMITTED child expense is still pending (CUSTODY_HAS_PENDING_EXPENSES)', async () => {
+      vi.spyOn(permissions, 'requireManager').mockResolvedValue(mockManager);
+
+      const settledCustody = {
+        id: CUID_CUSTODY,
+        code: 'CUST-009',
+        projectId: mockProject.id,
+        budgetLineId: mockLine.id,
+        amount: new Prisma.Decimal('5000.00'),
+        cashReturnedAmount: new Prisma.Decimal('1000.00'),
+        status: CustodyStatus.SETTLED,
+        deletedAt: null,
+      };
+
+      vi.spyOn(prisma.custody, 'findFirst').mockResolvedValue(settledCustody as unknown as Awaited<ReturnType<typeof prisma.custody.findFirst>>);
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => {
+        const tx = {
+          $queryRaw: vi.fn().mockResolvedValue([settledCustody]),
+          expense: {
+            aggregate: vi.fn().mockResolvedValue({
+              _sum: { amount: new Prisma.Decimal('4000.00') },
+            }),
+            count: vi.fn().mockResolvedValue(1), // 1 pending SUBMITTED child expense
+          },
+          custody: {
+            update: vi.fn(),
+          },
+          auditLog: { create: vi.fn() },
+        };
+        return cb(tx as unknown as MockTx);
+      });
+
+      await expect(closeCustody(CUID_CUSTODY)).rejects.toThrow(
+        expect.objectContaining({ code: 'CUSTODY_HAS_PENDING_EXPENSES' }),
+      );
+    });
   });
 });

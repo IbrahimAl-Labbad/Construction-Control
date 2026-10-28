@@ -27,7 +27,7 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus, BudgetCategory, CustodyStatus, CommitmentStatus, AssignmentStatus, Prisma } from '@prisma/client';
+import { Role, ProjectStatus, BudgetCategory, CustodyStatus, ExpenseStatus, CommitmentStatus, AssignmentStatus, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -35,6 +35,8 @@ import {
   submitCustody,
   approveCustody,
   issueCustody,
+  recordCashReturn,
+  closeCustody,
   getCustody,
 } from '@/lib/custodies';
 import { createExpenseDraft, submitExpense, approveExpense } from '@/lib/expenses';
@@ -432,5 +434,181 @@ describe('Custody Concurrency & Race Conditions (Live PostgreSQL)', () => {
       },
     });
     expect(activeCount).toBe(1);
+  });
+
+  it('Race B (Slice 21A): submitExpense vs custody settlement/closeCustody never leaves a SUBMITTED expense attached to a CLOSED custody', async () => {
+    const { project, budgetLineId } = await setupActiveProjectWithBudget('20000.00');
+
+    // 1. Setup an ISSUED custody of 5,000.00 SAR
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testEngineer);
+    const custodyDraft = await createCustodyDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodianUserId: testEngineer.id,
+      amount: '5000.00',
+      purpose: 'عهدة اختبار سباق التقديم والإغلاق',
+    });
+    cleanupCustodyIds.push(custodyDraft.id);
+
+    await submitCustody(custodyDraft.id);
+
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    await approveCustody(custodyDraft.id);
+
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testAccountant);
+    vi.spyOn(permissions, 'requireAccountant').mockResolvedValue(testAccountant);
+    await issueCustody(custodyDraft.id);
+
+    // 2. Engineer creates two DRAFT expenses attached to this custody while it is ISSUED
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testEngineer);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testEngineer);
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testEngineer);
+
+    const draftSubmitsFirst = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodyId: custodyDraft.id,
+      amount: '1000.00',
+      expenseDate: new Date().toISOString().slice(0, 10),
+      description: 'مصروف يقدم قبل الإغلاق',
+    });
+    cleanupExpenseIds.push(draftSubmitsFirst.id);
+
+    const draftSubmitsAfterClose = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodyId: custodyDraft.id,
+      amount: '1000.00',
+      expenseDate: new Date().toISOString().slice(0, 10),
+      description: 'مصروف يحاول التقديم أثناء/بعد التسوية والإغلاق',
+    });
+    cleanupExpenseIds.push(draftSubmitsAfterClose.id);
+
+    // Sub-case B1: Expense submission commits first while custody is ISSUED, then cash return settles the custody,
+    // and Manager attempts closeCustody -> closeCustody must refuse with CUSTODY_HAS_PENDING_EXPENSES.
+    await submitExpense(draftSubmitsFirst.id);
+
+    vi.spyOn(permissions, 'requireAccountant').mockResolvedValue(testAccountant);
+    await recordCashReturn({ id: custodyDraft.id, amount: '5000.00' });
+
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    await expect(closeCustody(custodyDraft.id)).rejects.toThrow(
+      expect.objectContaining({ code: 'CUSTODY_HAS_PENDING_EXPENSES' }),
+    );
+
+    // Sub-case B2: Once no SUBMITTED expense remains (e.g., rejected) and custody is SETTLED,
+    // racing closeCustody against submitExpense of another draft must serialize under the custody lock:
+    // closeCustody succeeds and submitExpense rejects with CUSTODY_NOT_ISSUED.
+    await prisma.expense.update({
+      where: { id: draftSubmitsFirst.id },
+      data: { status: ExpenseStatus.REJECTED, rejectedById: testManager.id, rejectedAt: new Date(), rejectionReason: 'رفض لإغلاق العهدة' },
+    });
+
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testEngineer);
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+
+    const [closeResult, lateSubmitResult] = await Promise.allSettled([
+      closeCustody(custodyDraft.id),
+      submitExpense(draftSubmitsAfterClose.id),
+    ]);
+
+    expect(closeResult.status).toBe('fulfilled');
+    expect(lateSubmitResult.status).toBe('rejected');
+    expect((lateSubmitResult as PromiseRejectedResult).reason.code).toBe('CUSTODY_NOT_ISSUED');
+
+    // Invariant verification: Custody is CLOSED and has ZERO SUBMITTED child expenses
+    const finalCustody = await prisma.custody.findUniqueOrThrow({ where: { id: custodyDraft.id } });
+    expect(finalCustody.status).toBe(CustodyStatus.CLOSED);
+
+    const submittedOnClosedCount = await prisma.expense.count({
+      where: { custodyId: custodyDraft.id, status: ExpenseStatus.SUBMITTED, deletedAt: null },
+    });
+    expect(submittedOnClosedCount).toBe(0);
+  });
+
+  it('Race C (Slice 21A): submitExpense is advisory and non-reserving while approveExpense enforces authoritative custody balance under lock', async () => {
+    const { project, budgetLineId } = await setupActiveProjectWithBudget('20000.00');
+
+    // 1. Setup an ISSUED custody of 5,000.00 SAR
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testEngineer);
+    const custodyDraft = await createCustodyDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodianUserId: testEngineer.id,
+      amount: '5000.00',
+      purpose: 'عهدة اختبار التقديم الاستشاري غير الحاجز',
+    });
+    cleanupCustodyIds.push(custodyDraft.id);
+
+    await submitCustody(custodyDraft.id);
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    await approveCustody(custodyDraft.id);
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testAccountant);
+    vi.spyOn(permissions, 'requireAccountant').mockResolvedValue(testAccountant);
+    await issueCustody(custodyDraft.id);
+
+    // 2. Engineer creates two drafts of 4,000.00 SAR each and one draft of 6,000.00 SAR (> 5,000.00 SAR)
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testEngineer);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testEngineer);
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testEngineer);
+
+    const draftA = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodyId: custodyDraft.id,
+      amount: '4000.00',
+      expenseDate: new Date().toISOString().slice(0, 10),
+      description: 'مصروف استشاري أول 4000',
+    });
+    cleanupExpenseIds.push(draftA.id);
+
+    const draftB = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodyId: custodyDraft.id,
+      amount: '4000.00',
+      expenseDate: new Date().toISOString().slice(0, 10),
+      description: 'مصروف استشاري ثان 4000',
+    });
+    cleanupExpenseIds.push(draftB.id);
+
+    const draftOver = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId,
+      custodyId: custodyDraft.id,
+      amount: '6000.00',
+      expenseDate: new Date().toISOString().slice(0, 10),
+      description: 'مصروف يتجاوز الرصيد الكلي 6000',
+    });
+    cleanupExpenseIds.push(draftOver.id);
+
+    // 3. Concurrently submit draftA (4,000) and draftB (4,000): both succeed because submission is non-reserving!
+    // Meanwhile draftOver (6,000 > 5,000 remaining) is rejected by the advisory check.
+    const [subA, subB, subOver] = await Promise.allSettled([
+      submitExpense(draftA.id),
+      submitExpense(draftB.id),
+      submitExpense(draftOver.id),
+    ]);
+
+    expect(subA.status).toBe('fulfilled');
+    expect(subB.status).toBe('fulfilled');
+    expect(subOver.status).toBe('rejected');
+    expect((subOver as PromiseRejectedResult).reason.code).toBe('CUSTODY_BALANCE_EXCEEDED');
+
+    // 4. Authoritative approval gate: concurrently approving draftA and draftB allows only one (4,000 <= 5,000)
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testManager);
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+
+    const [appA, appB] = await Promise.allSettled([
+      approveExpense(draftA.id),
+      approveExpense(draftB.id),
+    ]);
+
+    const approvedList = [appA, appB].filter((r) => r.status === 'fulfilled');
+    const rejectedList = [appA, appB].filter((r) => r.status === 'rejected');
+
+    expect(approvedList).toHaveLength(1);
+    expect(rejectedList).toHaveLength(1);
+    expect((rejectedList[0] as PromiseRejectedResult).reason.code).toBe('CUSTODY_BALANCE_EXCEEDED');
   });
 });

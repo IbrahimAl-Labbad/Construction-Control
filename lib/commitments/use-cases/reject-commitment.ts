@@ -52,12 +52,26 @@ export async function rejectCommitment(
   let rejected;
   try {
     rejected = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === 'function') {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM commitments WHERE id = ${id} FOR UPDATE
+        `;
+      }
+
       const existing = await tx.commitment.findFirst({
         where: { id, deletedAt: null },
       });
 
       if (!existing) {
         throw new AppError('NOT_FOUND', 'الالتزام غير موجود');
+      }
+
+      // Assert separation of duties
+      if (existing.createdById === actor.id || existing.submittedById === actor.id) {
+        throw new AppError(
+          'FORBIDDEN_SELF_APPROVAL',
+          'لا يمكن للمعتمد رفض التزام مالي قام بإنشائه أو تقديمه بنفسه (مبدأ فصل المهام)',
+        );
       }
 
       // Assert state machine transition (SUBMITTED -> REJECTED)

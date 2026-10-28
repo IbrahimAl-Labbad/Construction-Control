@@ -16,7 +16,13 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { Role, ProjectStatus, BudgetCategory, CommitmentStatus, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
-import { approveCommitment } from '@/lib/commitments';
+import {
+  createCommitmentDraft,
+  updateCommitmentDraft,
+  submitCommitment,
+  approveCommitment,
+  rejectCommitment,
+} from '@/lib/commitments';
 import { createProject, changeProjectStatus } from '@/lib/projects';
 import { createBudgetDraft, submitBudget, approveBudget } from '@/lib/budget';
 import * as permissions from '@/lib/permissions';
@@ -203,5 +209,225 @@ describe('Commitment Concurrency & Overcommit Prevention (Live PostgreSQL)', () 
     const nonApproved = dbCommitments.filter((c) => c.status !== CommitmentStatus.APPROVED);
     expect(nonApproved.length).toBe(1);
     expect(nonApproved[0]?.status).toBe(CommitmentStatus.SUBMITTED); // Remains submitted, not approved!
+  });
+
+  it('serializes concurrent updateCommitmentDraft and submitCommitment without silent overwrite or stale state', async () => {
+    const project = await createProject({
+      code: `CONC-US-${Math.floor(Math.random() * 89999 + 10000)}`,
+      name: 'مشروع اختبار تزامن التعديل والتقديم للالتزامات',
+      managerId: testManager.id,
+    });
+    cleanupProjectIds.push(project.id);
+
+    const budgetDraft = await createBudgetDraft({
+      projectId: project.id,
+      lines: [
+        {
+          category: BudgetCategory.MATERIALS,
+          description: 'بند مواد أول',
+          amount: '50000.00',
+        },
+        {
+          category: BudgetCategory.EQUIPMENT,
+          description: 'بند معدات ثاني',
+          amount: '50000.00',
+        },
+      ],
+    });
+
+    await submitBudget(budgetDraft.id);
+    await approveBudget(budgetDraft.id);
+    await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    const lines = await prisma.budgetLine.findMany({
+      where: { budgetId: budgetDraft.id },
+      orderBy: { category: 'asc' },
+    });
+    const line1 = lines[0]!;
+    const line2 = lines[1]!;
+
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testPurchasing);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testPurchasing);
+
+    const draft = await createCommitmentDraft({
+      projectId: project.id,
+      budgetLineId: line1.id,
+      vendorName: 'شركة التوريدات الأولى',
+      referenceNumber: 'PO-RACE-US-1',
+      amount: '10000.00',
+      commitmentDate: new Date(),
+      description: 'مسودة التزام قبل التعديل المتزامن',
+    });
+    cleanupCommitmentIds.push(draft.id);
+
+    // Dispatch concurrent updateCommitmentDraft (switching to line2 and 25,000.00) and submitCommitment
+    const [updateRes, submitRes] = await Promise.allSettled([
+      updateCommitmentDraft(draft.id, {
+        budgetLineId: line2.id,
+        vendorName: 'شركة التوريدات المعدلة',
+        referenceNumber: 'PO-RACE-US-2',
+        amount: '25000.00',
+        commitmentDate: new Date(),
+        description: 'مسودة التزام بعد التعديل المتزامن',
+      }),
+      submitCommitment(draft.id),
+    ]);
+
+    const finalRecord = await prisma.commitment.findUniqueOrThrow({
+      where: { id: draft.id },
+    });
+    const submitAudit = await prisma.auditLog.findFirst({
+      where: { entityType: 'COMMITMENT', entityId: draft.id, action: 'COMMITMENT_SUBMITTED' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Either:
+    // Case 1: updateCommitmentDraft acquired lock first -> updated to 25000/line2, then submitCommitment succeeded and logged 25000/line2.
+    // Case 2: submitCommitment acquired lock first -> transitioned to SUBMITTED with 10000/line1, and updateCommitmentDraft failed with COMMITMENT_NOT_DRAFT.
+    expect(submitRes.status).toBe('fulfilled');
+    expect(finalRecord.status).toBe(CommitmentStatus.SUBMITTED);
+    expect(submitAudit).toBeDefined();
+
+    const auditMeta = submitAudit?.metadata as Record<string, unknown>;
+    if (updateRes.status === 'fulfilled') {
+      expect(finalRecord.amount.toFixed(2)).toBe('25000.00');
+      expect(finalRecord.budgetLineId).toBe(line2.id);
+      expect(auditMeta.amount).toBe('25000.00');
+      expect(auditMeta.budgetLineId).toBe(line2.id);
+    } else {
+      expect((updateRes.reason as { code?: string }).code).toBe('COMMITMENT_NOT_DRAFT');
+      expect(finalRecord.amount.toFixed(2)).toBe('10000.00');
+      expect(finalRecord.budgetLineId).toBe(line1.id);
+      expect(auditMeta.amount).toBe('10000.00');
+      expect(auditMeta.budgetLineId).toBe(line1.id);
+    }
+  });
+
+  it('prevents duplicate approvals when two simultaneous approveCommitment calls target the same commitment', async () => {
+    const project = await createProject({
+      code: `CONC-DUP-${Math.floor(Math.random() * 89999 + 10000)}`,
+      name: 'مشروع منع الاعتماد المزدوج لنفس الالتزام',
+      managerId: testManager.id,
+    });
+    cleanupProjectIds.push(project.id);
+
+    const budgetDraft = await createBudgetDraft({
+      projectId: project.id,
+      lines: [
+        {
+          category: BudgetCategory.MATERIALS,
+          description: 'بند حديد تسليح',
+          amount: '100000.00',
+        },
+      ],
+    });
+
+    await submitBudget(budgetDraft.id);
+    await approveBudget(budgetDraft.id);
+    await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    const budgetLine = await prisma.budgetLine.findFirstOrThrow({
+      where: { budgetId: budgetDraft.id },
+    });
+
+    const comm = await prisma.commitment.create({
+      data: {
+        projectId: project.id,
+        budgetLineId: budgetLine.id,
+        amount: new Prisma.Decimal('15000.00'),
+        currency: 'SAR',
+        vendorName: 'مؤسسة التوريد الموحد',
+        referenceNumber: 'PO-DUP-01',
+        description: 'التزام لاختبار الاعتماد المزدوج',
+        commitmentDate: new Date(),
+        status: CommitmentStatus.SUBMITTED,
+        createdById: testPurchasing.id,
+        submittedById: testPurchasing.id,
+        submittedAt: new Date(),
+      },
+    });
+    cleanupCommitmentIds.push(comm.id);
+
+    const [res1, res2] = await Promise.allSettled([
+      approveCommitment(comm.id),
+      approveCommitment(comm.id),
+    ]);
+
+    const fulfilled = [res1, res2].filter((r) => r.status === 'fulfilled');
+    const rejected = [res1, res2].filter((r) => r.status === 'rejected');
+
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.code).toBe('INVALID_STATE_TRANSITION');
+
+    const approveLogs = await prisma.auditLog.findMany({
+      where: { entityType: 'COMMITMENT', entityId: comm.id, action: 'COMMITMENT_APPROVED' },
+    });
+    expect(approveLogs.length).toBe(1);
+  });
+
+  it('serializes concurrent approveCommitment and rejectCommitment on the same commitment', async () => {
+    const project = await createProject({
+      code: `CONC-AR-${Math.floor(Math.random() * 89999 + 10000)}`,
+      name: 'مشروع تزامن الاعتماد والرفض للالتزام',
+      managerId: testManager.id,
+    });
+    cleanupProjectIds.push(project.id);
+
+    const budgetDraft = await createBudgetDraft({
+      projectId: project.id,
+      lines: [
+        {
+          category: BudgetCategory.MATERIALS,
+          description: 'بند مواد كهربائية',
+          amount: '100000.00',
+        },
+      ],
+    });
+
+    await submitBudget(budgetDraft.id);
+    await approveBudget(budgetDraft.id);
+    await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    const budgetLine = await prisma.budgetLine.findFirstOrThrow({
+      where: { budgetId: budgetDraft.id },
+    });
+
+    const comm = await prisma.commitment.create({
+      data: {
+        projectId: project.id,
+        budgetLineId: budgetLine.id,
+        amount: new Prisma.Decimal('12000.00'),
+        currency: 'SAR',
+        vendorName: 'شركة الكابلات الوطنية',
+        referenceNumber: 'PO-AR-01',
+        description: 'التزام لاختبار سباق الاعتماد والرفض',
+        commitmentDate: new Date(),
+        status: CommitmentStatus.SUBMITTED,
+        createdById: testPurchasing.id,
+        submittedById: testPurchasing.id,
+        submittedAt: new Date(),
+      },
+    });
+    cleanupCommitmentIds.push(comm.id);
+
+    const [approveRes, rejectRes] = await Promise.allSettled([
+      approveCommitment(comm.id),
+      rejectCommitment(comm.id, { rejectionReason: 'رفض متزامن مع الاعتماد لاختبار القفل' }),
+    ]);
+
+    const fulfilled = [approveRes, rejectRes].filter((r) => r.status === 'fulfilled');
+    const rejected = [approveRes, rejectRes].filter((r) => r.status === 'rejected');
+
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.code).toBe('INVALID_STATE_TRANSITION');
+
+    const finalComm = await prisma.commitment.findUniqueOrThrow({ where: { id: comm.id } });
+    if (approveRes.status === 'fulfilled') {
+      expect(finalComm.status).toBe(CommitmentStatus.APPROVED);
+    } else {
+      expect(finalComm.status).toBe(CommitmentStatus.REJECTED);
+    }
   });
 });

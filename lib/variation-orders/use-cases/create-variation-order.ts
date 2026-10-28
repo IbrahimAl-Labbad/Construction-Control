@@ -175,6 +175,13 @@ export async function createVariationOrder(
   const correlationId = getCorrelationId();
 
   const created = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      // Serialize sequential order number generation across concurrent requests for this project
+      await tx.$queryRaw`
+        SELECT id FROM projects WHERE id = ${input.projectId} FOR UPDATE
+      `;
+    }
+
     // Count existing VOs on this project
     const count = await tx.variationOrder.count({
       where: { projectId: input.projectId },

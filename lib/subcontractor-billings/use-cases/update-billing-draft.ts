@@ -63,6 +63,13 @@ export async function updateBillingDraft(
 
   // 3. Atomic update transaction
   const updated = await prisma.$transaction(async (tx) => {
+    // 3.0 Acquire row-level lock on billing to serialize against concurrent submit/delete/cancel
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM subcontractor_billings WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     // 3.1 Fetch existing billing
     const existing = await tx.subcontractorBilling.findFirst({
       where: { id, deletedAt: null },

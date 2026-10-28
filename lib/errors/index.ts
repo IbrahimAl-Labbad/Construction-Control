@@ -61,6 +61,8 @@ export type ErrorCode =
   | 'CASH_RETURN_EXCEEDS_BALANCE'
   | 'CANNOT_CANCEL_ISSUED_CUSTODY'
   | 'CUSTODY_NOT_DRAFT'
+  | 'CUSTODY_NOT_FULLY_SETTLED'
+  | 'CUSTODY_HAS_PENDING_EXPENSES'
   | 'INVALID_EXPENSE_LINKAGE'
   // Subcontractor Billing specific errors (Vertical Slice 7)
   | 'COMMITMENT_NOT_APPROVED'
@@ -117,6 +119,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   CASH_RETURN_EXCEEDS_BALANCE: 422,
   CANNOT_CANCEL_ISSUED_CUSTODY: 422,
   CUSTODY_NOT_DRAFT: 422,
+  CUSTODY_NOT_FULLY_SETTLED: 422,
+  CUSTODY_HAS_PENDING_EXPENSES: 409,
   INVALID_EXPENSE_LINKAGE: 422,
   // Subcontractor Billing (Vertical Slice 7)
   COMMITMENT_NOT_APPROVED: 422,
@@ -271,4 +275,3 @@ export {
   type ActionFailure,
   type HandleActionErrorOptions,
 } from './action-error-handler';
-

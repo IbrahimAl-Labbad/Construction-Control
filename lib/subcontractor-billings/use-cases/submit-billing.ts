@@ -11,7 +11,7 @@
  * 5. Atomicity: status mutation + SUBCONTRACTOR_BILLING_SUBMITTED AuditLog in SAME transaction.
  */
 
-import { SubcontractorBillingStatus } from '@prisma/client';
+import { BudgetStatus, CommitmentStatus, ProjectStatus, SubcontractorBillingStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
@@ -51,6 +51,13 @@ export async function submitBilling(billingId: unknown): Promise<SubcontractorBi
   // 3. Atomic submission transaction
   const now = new Date();
   const submitted = await prisma.$transaction(async (tx) => {
+    // 3.0 Acquire row-level lock on billing to serialize against concurrent draft update/delete/cancel
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM subcontractor_billings WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     // 3.1 Fetch billing
     const existing = await tx.subcontractorBilling.findFirst({
       where: { id, deletedAt: null },
@@ -59,7 +66,9 @@ export async function submitBilling(billingId: unknown): Promise<SubcontractorBi
         status: true,
         createdById: true,
         projectId: true,
+        budgetLineId: true,
         commitmentId: true,
+        subcontractorName: true,
         grossAmount: true,
       },
     });
@@ -75,6 +84,91 @@ export async function submitBilling(billingId: unknown): Promise<SubcontractorBi
 
     // 3.3 Assert state machine: DRAFT → SUBMITTED
     assertCanTransitionBillingStatus(existing.status, SubcontractorBillingStatus.SUBMITTED);
+
+    // 3.3b Revalidate project, budget, budgetLine, and parent commitment invariants on fresh locked state
+    if (typeof tx.project?.findFirst === 'function') {
+      const project = await tx.project.findFirst({
+        where: { id: existing.projectId, deletedAt: null },
+        select: { id: true, status: true },
+      });
+      if (!project || project.status !== ProjectStatus.ACTIVE) {
+        throw new AppError('INVALID_PROJECT_STATUS', 'المشروع غير نشط أو تم حذفه');
+      }
+    }
+
+    let approvedBudgetId: string | undefined;
+    if (typeof tx.budget?.findFirst === 'function') {
+      const approvedBudget = await tx.budget.findFirst({
+        where: {
+          projectId: existing.projectId,
+          status: BudgetStatus.APPROVED,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!approvedBudget) {
+        throw new AppError('BUDGET_NOT_APPROVED', 'المشروع لا يمتلك موازنة معتمدة نشطة');
+      }
+      approvedBudgetId = approvedBudget.id;
+    }
+
+    if (
+      approvedBudgetId &&
+      existing.budgetLineId &&
+      typeof tx.budgetLine?.findFirst === 'function'
+    ) {
+      const targetBudgetLine = await tx.budgetLine.findFirst({
+        where: {
+          id: existing.budgetLineId,
+          budgetId: approvedBudgetId,
+        },
+        select: { id: true },
+      });
+      if (!targetBudgetLine) {
+        throw new AppError(
+          'INVALID_BUDGET_LINE',
+          'بند الموازنة لا ينتمي للموازنة المعتمدة لنفس المشروع',
+        );
+      }
+    }
+
+    if (typeof tx.commitment?.findFirst === 'function') {
+      const commitment = await tx.commitment.findFirst({
+        where: { id: existing.commitmentId, deletedAt: null },
+        select: {
+          id: true,
+          status: true,
+          projectId: true,
+          budgetLineId: true,
+          vendorName: true,
+        },
+      });
+      if (!commitment || commitment.status !== CommitmentStatus.APPROVED) {
+        throw new AppError(
+          'COMMITMENT_NOT_APPROVED',
+          'يجب أن يكون الالتزام المرتبط بالمستخلص معتمداً (APPROVED)',
+        );
+      }
+      if (
+        commitment.projectId !== existing.projectId ||
+        (existing.budgetLineId && commitment.budgetLineId !== existing.budgetLineId)
+      ) {
+        throw new AppError(
+          'INVALID_COMMITMENT_LINKAGE',
+          'الالتزام المحدد لا يتبع نفس المشروع وبند الموازنة المحدد للمستخلص',
+        );
+      }
+      if (
+        existing.subcontractorName &&
+        commitment.vendorName.trim().toLowerCase() !==
+          existing.subcontractorName.trim().toLowerCase()
+      ) {
+        throw new AppError(
+          'SUBCONTRACTOR_NAME_MISMATCH',
+          `اسم مقاول الباطن "${existing.subcontractorName}" لا يطابق اسم المورد في الالتزام "${commitment.vendorName}"`,
+        );
+      }
+    }
 
     // 3.4 Update status to SUBMITTED
     const updatedBilling = await tx.subcontractorBilling.update({

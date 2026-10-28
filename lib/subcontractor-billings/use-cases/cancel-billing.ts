@@ -65,6 +65,12 @@ export async function cancelBilling(
   // 3. Execute atomic cancellation transaction
   const now = new Date();
   const cancelled = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM subcontractor_billings WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     const existing = await tx.subcontractorBilling.findFirst({
       where: { id, deletedAt: null },
       select: {

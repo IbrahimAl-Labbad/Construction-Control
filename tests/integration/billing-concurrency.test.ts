@@ -37,8 +37,10 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import {
   createBillingDraft,
+  updateBillingDraft,
   submitBilling,
   approveBilling,
+  rejectBilling,
   getCommitmentBillings,
 } from '@/lib/subcontractor-billings';
 import { createCommitmentDraft, submitCommitment, approveCommitment } from '@/lib/commitments';
@@ -314,5 +316,154 @@ describe('Billing Concurrency Integration (Live PostgreSQL)', () => {
     expect(summary.cumulativeCertified).toBe('300000.00');
     expect(summary.remainingCommitmentBalance).toBe('100000.00');
     expect(summary.approvedBillingCount).toBe(1);
+  });
+
+  it('serializes concurrent updateBillingDraft and submitBilling and prevents duplicate approvals on the same billing', async () => {
+    const project = await createProject({
+      code: `CONC-BS-${Math.floor(Math.random() * 89999 + 10000)}`,
+      name: 'مشروع اختبار تزامن التعديل والتقديم والاعتماد للمستخلصات',
+      managerId: testManager.id,
+    });
+    cleanupProjectIds.push(project.id);
+
+    const budgetDraft = await createBudgetDraft({
+      projectId: project.id,
+      lines: [
+        {
+          category: BudgetCategory.SUBCONTRACTOR,
+          description: 'بند أعمال مقاولات',
+          amount: '500000.00',
+        },
+      ],
+    });
+
+    await submitBudget(budgetDraft.id);
+    await approveBudget(budgetDraft.id);
+    await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    const budgetLine = await prisma.budgetLine.findFirstOrThrow({
+      where: { budgetId: budgetDraft.id },
+    });
+
+    vi.spyOn(permissions, 'requireRole').mockResolvedValue(testPurchasing);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testPurchasing);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testPurchasing);
+
+    const commitmentDraft = await createCommitmentDraft({
+      projectId: project.id,
+      budgetLineId: budgetLine.id,
+      vendorName: 'شركة المقاولات المتحدة',
+      amount: '200000.00',
+      commitmentDate: new Date(),
+      description: 'عقد مقاولة باطن',
+      referenceNumber: 'PO-BS-200K',
+    });
+    cleanupCommitmentIds.push(commitmentDraft.id);
+    await submitCommitment(commitmentDraft.id);
+
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testManager);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testManager);
+    const commitment = await approveCommitment(commitmentDraft.id);
+
+    // 1. Accountant creates DRAFT billing (50,000.00 SAR)
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testAccountant);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testAccountant);
+
+    const draft = await createBillingDraft({
+      projectId: project.id,
+      budgetLineId: budgetLine.id,
+      commitmentId: commitment.id,
+      subcontractorName: commitment.vendorName,
+      billingPeriod: '2026-04',
+      claimDate: new Date('2026-04-30'),
+      grossAmount: '50000.00',
+      description: 'مستخلص قبل التعديل المتزامن',
+    });
+    cleanupBillingIds.push(draft.id);
+
+    // 2. Concurrent updateBillingDraft (80,000.00 SAR) vs submitBilling
+    const [updateRes, submitRes] = await Promise.allSettled([
+      updateBillingDraft(draft.id, {
+        subcontractorName: commitment.vendorName,
+        billingPeriod: '2026-04',
+        claimDate: new Date('2026-04-30'),
+        grossAmount: '80000.00',
+        description: 'مستخلص بعد التعديل المتزامن',
+      }),
+      submitBilling(draft.id),
+    ]);
+
+    expect(submitRes.status).toBe('fulfilled');
+    const afterSubmit = await prisma.subcontractorBilling.findUniqueOrThrow({
+      where: { id: draft.id },
+    });
+    expect(afterSubmit.status).toBe(SubcontractorBillingStatus.SUBMITTED);
+
+    if (updateRes.status === 'fulfilled') {
+      expect(afterSubmit.grossAmount.toFixed(2)).toBe('80000.00');
+    } else {
+      expect((updateRes.reason as { code?: string }).code).toBe('RECORD_NOT_EDITABLE');
+      expect(afterSubmit.grossAmount.toFixed(2)).toBe('50000.00');
+    }
+
+    // 3. Two simultaneous approveBilling calls on the same submitted billing
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testManager);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testManager);
+
+    const [app1, app2] = await Promise.allSettled([
+      approveBilling(draft.id),
+      approveBilling(draft.id),
+    ]);
+
+    const fulfilled = [app1, app2].filter((r) => r.status === 'fulfilled');
+    const rejected = [app1, app2].filter((r) => r.status === 'rejected');
+
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.code).toBe('INVALID_STATE_TRANSITION');
+
+    const approveLogs = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'SUBCONTRACTOR_BILLING',
+        entityId: draft.id,
+        action: 'SUBCONTRACTOR_BILLING_APPROVED',
+      },
+    });
+    expect(approveLogs.length).toBe(1);
+
+    // 4. Create a second submitted billing and race approveBilling vs rejectBilling
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testAccountant);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testAccountant);
+
+    const draft2 = await createBillingDraft({
+      projectId: project.id,
+      budgetLineId: budgetLine.id,
+      commitmentId: commitment.id,
+      subcontractorName: commitment.vendorName,
+      billingPeriod: '2026-05',
+      claimDate: new Date('2026-05-31'),
+      grossAmount: '40000.00',
+      description: 'مستخلص سباق الاعتماد والرفض',
+    });
+    cleanupBillingIds.push(draft2.id);
+    await submitBilling(draft2.id);
+
+    vi.spyOn(permissions, 'requireManager').mockResolvedValue(testManager);
+    vi.spyOn(permissions, 'requireAuth').mockResolvedValue(testManager);
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testManager);
+
+    const [appRace, rejRace] = await Promise.allSettled([
+      approveBilling(draft2.id),
+      rejectBilling(draft2.id, { rejectionReason: 'رفض متزامن مع الاعتماد لاختبار القفل' }),
+    ]);
+
+    const raceFulfilled = [appRace, rejRace].filter((r) => r.status === 'fulfilled');
+    const raceRejected = [appRace, rejRace].filter((r) => r.status === 'rejected');
+
+    expect(raceFulfilled.length).toBe(1);
+    expect(raceRejected.length).toBe(1);
+    expect((raceRejected[0] as PromiseRejectedResult).reason.code).toBe('INVALID_STATE_TRANSITION');
   });
 });

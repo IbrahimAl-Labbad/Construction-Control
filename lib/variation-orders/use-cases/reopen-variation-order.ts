@@ -7,8 +7,11 @@
  * 1. Authorization: Role.ENGINEER only.
  * 2. Ownership guard: Only the Engineer who created the variation order can reopen it.
  * 3. State machine transition: REJECTED -> DRAFT.
- * 4. Audit trail: Appends VARIATION_ORDER_REOPENED in transaction.
- * 5. Structured observability logging.
+ * 4. Concurrency & Row Locking:
+ *    - Acquires FOR UPDATE row lock on variation_orders.
+ *    - Revalidates status === REJECTED, ownership, and non-deleted state inside transaction.
+ * 5. Audit trail: Appends VARIATION_ORDER_REOPENED in transaction.
+ * 6. Structured observability logging.
  */
 
 import { Role, VariationOrderStatus } from '@prisma/client';
@@ -70,8 +73,46 @@ export async function reopenVariationOrder(
   const correlationId = getCorrelationId();
 
   const reopened = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`
+        SELECT id, status, "createdById", "deletedAt", "projectId", "orderNumber", "rejectionReason"
+        FROM variation_orders
+        WHERE id = ${input.id}
+        FOR UPDATE
+      `;
+    }
+
+    const lockedVO = await tx.variationOrder.findFirst({
+      where: { id: input.id },
+      select: {
+        id: true,
+        status: true,
+        createdById: true,
+        deletedAt: true,
+        projectId: true,
+        orderNumber: true,
+        rejectionReason: true,
+      },
+    });
+
+    if (!lockedVO || lockedVO.deletedAt !== null) {
+      throw new AppError('NOT_FOUND', 'أمر التغيير غير موجود أو تم حذفه');
+    }
+
+    if (lockedVO.createdById !== actor.id) {
+      throw new AppError(
+        'FORBIDDEN',
+        'غير مصرح: لا يمكن إعادة فتح أمر التغيير إلا بواسطة المهندس الذي أنشأه',
+      );
+    }
+
+    assertCanTransitionVariationOrderStatus(
+      lockedVO.status,
+      VariationOrderStatus.DRAFT,
+    );
+
     const vo = await tx.variationOrder.update({
-      where: { id: existing.id },
+      where: { id: lockedVO.id },
       data: {
         status: VariationOrderStatus.DRAFT,
         // Preserve prior rejection reason in history/audit, but clear rejection tracking on active draft
@@ -91,7 +132,7 @@ export async function reopenVariationOrder(
         metadata: {
           projectId: vo.projectId,
           orderNumber: vo.orderNumber,
-          previousRejectionReason: existing.rejectionReason,
+          previousRejectionReason: lockedVO.rejectionReason,
         },
       },
     });

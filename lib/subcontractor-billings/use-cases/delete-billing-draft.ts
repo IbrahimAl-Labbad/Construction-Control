@@ -36,6 +36,12 @@ export async function deleteBillingDraft(billingId: unknown): Promise<void> {
 
   // 3. Atomic deletion transaction
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM subcontractor_billings WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     // 3.1 Fetch billing
     const existing = await tx.subcontractorBilling.findFirst({
       where: { id, deletedAt: null },

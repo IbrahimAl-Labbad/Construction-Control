@@ -51,9 +51,16 @@ export async function updateCommitmentDraft(
   }
   const data = dataValidation.data;
 
-  // 3. Execute atomic update transaction with invariant revalidation
+  // 3. Execute atomic update transaction with row-level lock and invariant revalidation
   const updated = await prisma.$transaction(async (tx) => {
-    // 3.1 Fetch current commitment
+    // 3.0 Acquire row-level lock on commitment to serialize against concurrent submit/delete/update
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM commitments WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
+    // 3.1 Fetch current commitment inside locked transaction
     const existing = await tx.commitment.findFirst({
       where: { id, deletedAt: null },
       include: {

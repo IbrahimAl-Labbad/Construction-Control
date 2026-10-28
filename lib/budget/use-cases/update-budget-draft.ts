@@ -88,6 +88,29 @@ export async function updateBudgetDraft(
 
   // 7. Atomic transaction: replace lines + update budget + audit log
   const updated = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`
+        SELECT id FROM budgets WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
+    if (typeof tx.budget?.findFirst === 'function') {
+      const lockedBudget = await tx.budget.findFirst({
+        where: { id, deletedAt: null },
+      });
+
+      if (!lockedBudget) {
+        throw new AppError('NOT_FOUND', 'الموازنة غير موجودة أو تم حذفها');
+      }
+
+      if (lockedBudget.status !== BudgetStatus.DRAFT) {
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          'لا يمكن تعديل الموازنة إلا وهي في حالة مسودة (DRAFT)',
+        );
+      }
+    }
+
     // Delete existing lines (BudgetLine has no deletedAt in v1 simplification)
     await tx.budgetLine.deleteMany({
       where: { budgetId: id },

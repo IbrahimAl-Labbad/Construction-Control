@@ -34,9 +34,16 @@ export async function submitCommitment(commitmentId: unknown): Promise<Commitmen
   }
   const id = idValidation.data;
 
-  // 3. Execute atomic submit transaction
+  // 3. Execute atomic submit transaction with row-level lock and fresh invariant validation
   const now = new Date();
   const submitted = await prisma.$transaction(async (tx) => {
+    // 3.0 Acquire row-level lock on commitment to serialize against concurrent draft updates/deletes
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM commitments WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     const existing = await tx.commitment.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -73,6 +80,24 @@ export async function submitCommitment(commitmentId: unknown): Promise<Commitmen
 
     if (!approvedBudget) {
       throw new AppError('BUDGET_NOT_APPROVED', 'المشروع لا يمتلك موازنة معتمدة نشطة');
+    }
+
+    // Verify budgetLine belongs to the approved budget of the same project
+    if (typeof tx.budgetLine?.findFirst === 'function') {
+      const targetBudgetLine = await tx.budgetLine.findFirst({
+        where: {
+          id: existing.budgetLineId,
+          budgetId: approvedBudget.id,
+        },
+        select: { id: true },
+      });
+
+      if (!targetBudgetLine) {
+        throw new AppError(
+          'INVALID_BUDGET_LINE',
+          'بند الموازنة المحدد غير صالح أو لا يتبع للموازنة المعتمدة لنفس المشروع',
+        );
+      }
     }
 
     // Update status to SUBMITTED

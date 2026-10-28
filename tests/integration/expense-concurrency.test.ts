@@ -13,13 +13,14 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus, BudgetCategory, ExpenseStatus, Prisma } from '@prisma/client';
+import { Role, ProjectStatus, BudgetCategory, ExpenseStatus, AssignmentStatus, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
-import { approveExpense } from '@/lib/expenses';
+import { createExpenseDraft, updateExpenseDraft, submitExpense, approveExpense } from '@/lib/expenses';
 import { createProject, changeProjectStatus } from '@/lib/projects';
 import { createBudgetDraft, submitBudget, approveBudget } from '@/lib/budget';
 import * as permissions from '@/lib/permissions';
+import * as auth from '@/lib/auth';
 import type { AuthenticatedUser } from '@/lib/auth/types';
 
 describe('Expense Concurrency & Overspend Prevention (Live PostgreSQL)', () => {
@@ -87,6 +88,7 @@ describe('Expense Concurrency & Overspend Prevention (Live PostgreSQL)', () => {
     cleanupExpenseIds.length = 0;
 
     for (const pId of cleanupProjectIds) {
+      await prisma.projectAssignment.deleteMany({ where: { projectId: pId } });
       await prisma.expense.deleteMany({ where: { projectId: pId } });
       const budgets = await prisma.budget.findMany({ where: { projectId: pId } });
       for (const b of budgets) {
@@ -197,5 +199,101 @@ describe('Expense Concurrency & Overspend Prevention (Live PostgreSQL)', () => {
     const nonApproved = dbExpenses.filter((e) => e.status !== ExpenseStatus.APPROVED);
     expect(nonApproved.length).toBe(1);
     expect(nonApproved[0]?.status).toBe(ExpenseStatus.SUBMITTED); // Remains submitted, not approved!
+  });
+
+  it('Race A (Slice 21A): concurrent updateExpenseDraft and submitExpense on the same expense serialize safely without stale linkage or post-submit mutation', async () => {
+    // 1. Setup Active Project with TWO Approved Budget Lines
+    const project = await createProject({
+      code: `CONC-21A-${Math.floor(Math.random() * 89999 + 10000)}`,
+      name: 'مشروع اختبار سباق تحديث وتقديم المسودة',
+      managerId: testManager.id,
+    });
+    cleanupProjectIds.push(project.id);
+
+    const budgetDraft = await createBudgetDraft({
+      projectId: project.id,
+      lines: [
+        {
+          category: BudgetCategory.SITE_OPERATIONS,
+          description: 'بند التشغيل الأول',
+          amount: '25000.00',
+        },
+        {
+          category: BudgetCategory.MATERIALS,
+          description: 'بند المواد الثاني',
+          amount: '25000.00',
+        },
+      ],
+    });
+
+    await submitBudget(budgetDraft.id);
+    const approvedBudget = await approveBudget(budgetDraft.id);
+    await changeProjectStatus(project.id, { newStatus: ProjectStatus.ACTIVE });
+
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        engineerId: testEngineer.id,
+        assignedById: testManager.id,
+        status: AssignmentStatus.ACTIVE,
+      },
+    });
+
+    const line1 = approvedBudget.lines[0]!;
+    const line2 = approvedBudget.lines[1]!;
+
+    // 2. Engineer creates a DRAFT expense on line1 for 2,000.00 SAR
+    vi.spyOn(auth, 'requireAuth').mockResolvedValue(testEngineer);
+
+    const draft = await createExpenseDraft({
+      projectId: project.id,
+      budgetLineId: line1.id,
+      amount: '2000.00',
+      expenseDate: '2026-04-01',
+      description: 'مسودة مصروف أولية على البند الأول',
+    });
+    cleanupExpenseIds.push(draft.id);
+
+    // 3. Concurrently dispatch updateExpenseDraft (switching to line2 and 4,500.00 SAR) and submitExpense
+    const [updateRes, submitRes] = await Promise.allSettled([
+      updateExpenseDraft(draft.id, {
+        budgetLineId: line2.id,
+        amount: '4500.00',
+        expenseDate: '2026-04-02',
+        description: 'مسودة مصروف محدثة على البند الثاني',
+      }),
+      submitExpense(draft.id),
+    ]);
+
+    // 4. Verify serialized outcome:
+    // Case 1: updateExpenseDraft committed first -> submitExpense re-read under lock, retried linkage, and submitted the updated values (4,500.00 SAR on line2).
+    // Case 2: submitExpense committed first -> updateExpenseDraft observed SUBMITTED under lock and rejected with EXPENSE_NOT_DRAFT; DB retains 2,000.00 SAR on line1.
+    expect(submitRes.status).toBe('fulfilled');
+
+    const finalExpense = await prisma.expense.findUniqueOrThrow({
+      where: { id: draft.id },
+    });
+    expect(finalExpense.status).toBe(ExpenseStatus.SUBMITTED);
+
+    const submitAuditLog = await prisma.auditLog.findFirstOrThrow({
+      where: { entityType: 'EXPENSE', entityId: draft.id, action: 'EXPENSE_SUBMITTED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const auditMeta = submitAuditLog.metadata as Record<string, unknown>;
+
+    if (updateRes.status === 'fulfilled') {
+      expect(finalExpense.budgetLineId).toBe(line2.id);
+      expect(finalExpense.amount.toFixed(2)).toBe('4500.00');
+      expect(finalExpense.description).toBe('مسودة مصروف محدثة على البند الثاني');
+      // Audit log recorded by submitExpense must match the fresh locked values, not stale pre-read values
+      expect(auditMeta['budgetLineId']).toBe(line2.id);
+      expect(auditMeta['amount']).toBe('4500.00');
+    } else {
+      expect(updateRes.reason.code).toBe('EXPENSE_NOT_DRAFT');
+      expect(finalExpense.budgetLineId).toBe(line1.id);
+      expect(finalExpense.amount.toFixed(2)).toBe('2000.00');
+      expect(auditMeta['budgetLineId']).toBe(line1.id);
+      expect(auditMeta['amount']).toBe('2000.00');
+    }
   });
 });

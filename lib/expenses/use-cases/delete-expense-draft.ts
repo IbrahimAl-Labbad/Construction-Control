@@ -66,9 +66,43 @@ export async function deleteExpenseDraft(expenseId: unknown): Promise<{ success:
     );
   }
 
-  // 6. Atomic transaction: soft delete + audit log
+  // 6. Atomic transaction: lock row + revalidate DRAFT status + soft delete + audit log
   const now = new Date();
   await prisma.$transaction(async (tx) => {
+    if (tx.$queryRaw) {
+      await tx.$queryRaw`
+        SELECT id FROM expenses
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+    }
+
+    const lockedExpense = tx.expense?.findFirst
+      ? await tx.expense.findFirst({ where: { id, deletedAt: null } })
+      : existing;
+
+    if (!lockedExpense || lockedExpense.deletedAt !== null) {
+      throw new AppError('NOT_FOUND', 'المصروف غير موجود');
+    }
+
+    if (lockedExpense.submittedById !== actor.id) {
+      throw new AppError(
+        'FORBIDDEN',
+        'لا يمكنك حذف مسودة مصروف قام بإنشائها مستخدم آخر',
+      );
+    }
+
+    if (lockedExpense.status === ExpenseStatus.APPROVED) {
+      throw new AppError('IMMUTABLE_RECORD', 'لا يمكن حذف مصروف معتمد');
+    }
+
+    if (lockedExpense.status !== ExpenseStatus.DRAFT) {
+      throw new AppError(
+        'EXPENSE_NOT_DRAFT',
+        'لا يمكن حذف المصروف إلا وهو في حالة مسودة (DRAFT)',
+      );
+    }
+
     await tx.expense.update({
       where: { id },
       data: { deletedAt: now },
@@ -81,9 +115,9 @@ export async function deleteExpenseDraft(expenseId: unknown): Promise<{ success:
         entityType: 'EXPENSE',
         entityId: id,
         metadata: {
-          projectId: existing.projectId,
-          budgetLineId: existing.budgetLineId,
-          amount: existing.amount.toFixed(2),
+          projectId: lockedExpense.projectId,
+          budgetLineId: lockedExpense.budgetLineId,
+          amount: lockedExpense.amount.toFixed(2),
           deletedAt: now.toISOString(),
         },
       },

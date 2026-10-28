@@ -65,11 +65,29 @@ export async function rejectExpense(
   // 5. Assert state machine transition (SUBMITTED -> REJECTED)
   assertCanTransitionExpenseStatus(existing.status, ExpenseStatus.REJECTED);
 
-  // 6. Atomic transaction: update rejection metadata + audit log (Gate 30)
+  // 6. Atomic transaction: lock row, revalidate SUBMITTED status, update rejection metadata + audit log (Gate 30)
   const now = new Date();
   let rejected;
   try {
     rejected = await prisma.$transaction(async (tx) => {
+      if (tx.$queryRaw) {
+        await tx.$queryRaw`
+          SELECT id FROM expenses
+          WHERE id = ${id}
+          FOR UPDATE
+        `;
+      }
+
+      const lockedExpense = tx.expense?.findFirst
+        ? await tx.expense.findFirst({ where: { id, deletedAt: null } })
+        : existing;
+
+      if (!lockedExpense || lockedExpense.deletedAt !== null) {
+        throw new AppError('NOT_FOUND', 'المصروف غير موجود');
+      }
+
+      assertCanTransitionExpenseStatus(lockedExpense.status, ExpenseStatus.REJECTED);
+
       const updated = await tx.expense.update({
         where: { id },
         data: {

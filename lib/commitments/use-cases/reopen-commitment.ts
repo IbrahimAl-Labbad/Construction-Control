@@ -36,6 +36,12 @@ export async function reopenCommitment(commitmentId: unknown): Promise<Commitmen
   // 3. Execute atomic reopen transaction
   const now = new Date();
   const reopened = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM commitments WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     const existing = await tx.commitment.findFirst({
       where: { id, deletedAt: null },
     });

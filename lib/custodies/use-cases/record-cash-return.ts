@@ -25,6 +25,7 @@ import {
   type RecordCashReturnInput,
 } from '@/lib/validation/schemas/custody';
 
+import { calculateCustodyBalances } from '../calculations';
 import { toCustodySummaryDTO } from '../mappers';
 import type { CustodySummaryDTO } from '../types';
 
@@ -64,30 +65,78 @@ export async function recordCashReturn(input: RecordCashReturnInput): Promise<Cu
   const now = new Date();
   const updated = await prisma.$transaction(async (tx) => {
     // 4.1 Lock parent BudgetLine
-    await tx.$queryRaw`
-      SELECT id, amount FROM budget_lines
-      WHERE id = ${preCheck.budgetLineId}
-      FOR UPDATE
-    `;
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`
+        SELECT id, amount FROM budget_lines
+        WHERE id = ${preCheck.budgetLineId}
+        FOR UPDATE
+      `;
+    }
 
     // 4.2 Lock Custody
-    const lockedCustodies = await tx.$queryRaw<
-      Array<{
-        id: string;
-        code: string;
-        amount: Prisma.Decimal;
-        cashReturnedAmount: Prisma.Decimal;
-        status: CustodyStatus;
-      }>
-    >`
-      SELECT id, code, amount, "cashReturnedAmount", status FROM custodies
-      WHERE id = ${id}
-      FOR UPDATE
-    `;
+    let lockedCustody: {
+      id: string;
+      code: string;
+      amount: Prisma.Decimal;
+      cashReturnedAmount: Prisma.Decimal;
+      status: CustodyStatus;
+      deletedAt?: Date | null;
+      budgetLineId?: string;
+    } | undefined;
 
-    const lockedCustody = lockedCustodies[0];
+    if (typeof tx.$queryRaw === 'function') {
+      const lockedCustodies = await tx.$queryRaw<
+        Array<{
+          id: string;
+          code: string;
+          amount: Prisma.Decimal;
+          cashReturnedAmount: Prisma.Decimal;
+          status: CustodyStatus;
+          deletedAt?: Date | null;
+          budgetLineId?: string;
+        }>
+      >`
+        SELECT id, code, amount, "cashReturnedAmount", status, "deletedAt", "budgetLineId" FROM custodies
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+      lockedCustody = lockedCustodies[0];
+    } else {
+      const dbCustody = await tx.custody.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          code: true,
+          amount: true,
+          cashReturnedAmount: true,
+          status: true,
+          deletedAt: true,
+          budgetLineId: true,
+        },
+      });
+      lockedCustody = dbCustody ?? undefined;
+    }
+
     if (!lockedCustody) {
       throw new AppError('NOT_FOUND', 'العهدة غير موجودة');
+    }
+
+    if (lockedCustody.deletedAt) {
+      throw new AppError('RECORD_DELETED', 'لا يمكن تسجيل استرجاع نقدي لعهدة محذوفة');
+    }
+
+    if (lockedCustody.budgetLineId && lockedCustody.budgetLineId !== preCheck.budgetLineId) {
+      throw new AppError('CONFLICT', 'تغير ارتباط بند الموازنة للعهدة؛ يرجى إعادة المحاولة');
+    }
+
+    if (
+      lockedCustody.status !== CustodyStatus.ISSUED &&
+      lockedCustody.status !== CustodyStatus.PARTIALLY_SETTLED
+    ) {
+      throw new AppError(
+        'INVALID_STATE_TRANSITION',
+        `لا يمكن تسجيل استرجاع نقدي لعهدة بحالة "${lockedCustody.status}". يجب أن تكون منصرفة (ISSUED أو PARTIALLY_SETTLED)`,
+      );
     }
 
     // Invariant 6: exactly one cash return in v1
@@ -110,7 +159,11 @@ export async function recordCashReturn(input: RecordCashReturnInput): Promise<Cu
     const currentSettled = settledAgg._sum.amount ?? new Prisma.Decimal('0.00');
 
     // Remaining cash advance in field
-    const remainingBalance = lockedCustody.amount.sub(currentSettled);
+    const { remainingBalance } = calculateCustodyBalances({
+      amount: lockedCustody.amount,
+      settledExpenses: currentSettled,
+      cashReturned: lockedCustody.cashReturnedAmount,
+    });
 
     // Assert returnAmount <= remainingBalance
     if (returnAmount.greaterThan(remainingBalance)) {
@@ -121,7 +174,11 @@ export async function recordCashReturn(input: RecordCashReturnInput): Promise<Cu
     }
 
     const newCashReturned = returnAmount;
-    const finalRemaining = remainingBalance.sub(returnAmount);
+    const { remainingBalance: finalRemaining } = calculateCustodyBalances({
+      amount: lockedCustody.amount,
+      settledExpenses: currentSettled,
+      cashReturned: newCashReturned,
+    });
     const isFullySettled = finalRemaining.equals(0);
 
     const newStatus = isFullySettled ? CustodyStatus.SETTLED : lockedCustody.status;

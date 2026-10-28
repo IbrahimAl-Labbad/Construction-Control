@@ -72,6 +72,38 @@ export async function rejectBudget(
 
   // 6. Atomic transaction: update status, record rejection reason, write audit log
   const rejected = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      // Lock Level 1: Lock all budget_lines of this budget ordered by id
+      await tx.$queryRaw`
+        SELECT id FROM budget_lines
+        WHERE "budgetId" = ${id}
+        ORDER BY id
+        FOR UPDATE
+      `;
+
+      // Lock Level 2: Lock the budget record
+      await tx.$queryRaw`
+        SELECT id FROM budgets WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
+    if (typeof tx.budget?.findFirst === 'function') {
+      const lockedBudget = await tx.budget.findFirst({
+        where: { id, deletedAt: null },
+      });
+
+      if (!lockedBudget) {
+        throw new AppError('NOT_FOUND', 'الموازنة غير موجودة أو تم حذفها');
+      }
+
+      if (lockedBudget.status !== BudgetStatus.SUBMITTED) {
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          `لا يمكن رفض الموازنة وهي في حالة "${lockedBudget.status}"، يجب أن تكون قيد الاعتماد (SUBMITTED)`,
+        );
+      }
+    }
+
     const budget = await tx.budget.update({
       where: { id },
       data: {

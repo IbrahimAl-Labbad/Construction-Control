@@ -36,6 +36,12 @@ export async function deleteCommitmentDraft(commitmentId: unknown): Promise<Comm
   // 3. Execute atomic transaction to soft-delete the draft
   const now = new Date();
   const deleted = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM commitments WHERE id = ${id} FOR UPDATE
+      `;
+    }
+
     const existing = await tx.commitment.findFirst({
       where: { id, deletedAt: null },
     });
