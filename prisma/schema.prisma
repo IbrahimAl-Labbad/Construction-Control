@@ -137,6 +137,31 @@ enum VariationOrderStatus {
   REJECTED    // Rejected by Manager, can be reopened to DRAFT
 }
 
+/// Polymorphic owner entity types for evidence attachments (Attachment Infrastructure — Wave 0).
+/// NOTE: Only currently existing domain models (EXPENSE, PROGRESS_REPORT, SUBCONTRACTOR_BILLING,
+/// VARIATION_ORDER) have active authorization resolvers in Wave 0. Future CR owner types
+/// remain fail-closed until their respective slices are implemented.
+enum AttachmentOwnerType {
+  EXPENSE
+  PROGRESS_REPORT
+  SUBCONTRACTOR_BILLING
+  VARIATION_ORDER
+  CUSTODY_ADVANCE
+  MATERIAL_RECEIVING_NOTE
+}
+
+/// Classification category for evidence attachments (Attachment Infrastructure — Wave 0).
+enum AttachmentCategory {
+  EXECUTION_EVIDENCE
+  PROGRESS_PHOTO
+  RECEIPT
+  DELIVERY_NOTE
+  INVOICE
+  SUPPORTING_DOCUMENT
+  AUDIT_EVIDENCE
+}
+
+
 
 
 // =============================================================================
@@ -264,6 +289,11 @@ model User {
   approvedVariationOrders  VariationOrder[] @relation("VariationOrderApprover")
   rejectedVariationOrders  VariationOrder[] @relation("VariationOrderRejecter")
 
+  // Evidence Attachments (Attachment Infrastructure — Wave 0)
+  uploadedAttachments Attachment[] @relation("AttachmentUploader")
+  voidedAttachments   Attachment[] @relation("AttachmentVoider")
+
+
 
 
   // Audit trail
@@ -359,6 +389,10 @@ model Project {
 
   /// Variation Orders for this project (Vertical Slice 20)
   variationOrders       VariationOrder[]
+
+  /// Evidence Attachments for this project (Attachment Infrastructure — Wave 0)
+  attachments           Attachment[]
+
 
 
 
@@ -1188,6 +1222,76 @@ model VariationOrderLine {
   @@index([variationOrderId])
   @@map("variation_order_lines")
 }
+
+// =============================================================================
+// ATTACHMENT INFRASTRUCTURE DOMAIN MODELS (Wave 0)
+// =============================================================================
+
+/// Evidence attachment linked to a project and a business record (Attachment Infrastructure — Wave 0).
+/// An Attachment is evidence only and never a financial source.
+///
+/// IMPORTANT ARCHITECTURAL NOTE:
+/// `ownerType` + `ownerId` is a polymorphic reference and does NOT have database-enforced
+/// foreign-key referential integrity in PostgreSQL. Application use cases must verify
+/// parent record existence, project membership (`parent.projectId === projectId`),
+/// object-level authorization, and lifecycle mutability inside a database transaction
+/// before creating, replacing, voiding, or serving an attachment.
+model Attachment {
+  id                  String              @id @default(cuid())
+
+  /// Project association for coarse and object-level access control (DB-enforced FK)
+  projectId           String
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  /// Polymorphic parent record reference (application-enforced integrity, NOT DB-enforced FK)
+  ownerType           AttachmentOwnerType
+  ownerId             String
+
+  /// Evidence classification category
+  category            AttachmentCategory  @default(SUPPORTING_DOCUMENT)
+
+  /// Normalized display file name (never used as storage path)
+  originalFileName    String              @db.VarChar(255)
+
+  /// Server-generated opaque storage key (never derived from user input)
+  storageKey          String              @unique @db.VarChar(255)
+
+  /// Magic-byte verified MIME type ('image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf')
+  mimeType            String              @db.VarChar(100)
+
+  /// Exact byte size (1 <= sizeBytes <= 10_485_760)
+  sizeBytes           Int
+
+  /// Server-calculated SHA-256 hex digest (64 lowercase hex characters)
+  checksumSha256      String              @db.VarChar(64)
+
+  /// Authenticated uploader identity (DB-enforced FK)
+  uploadedById        String
+  uploadedBy          User                @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  /// Supersession linkage: points to the prior Attachment record that this upload replaced
+  supersedesId        String?             @unique
+  supersedes          Attachment?         @relation("AttachmentSupersession", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy        Attachment?         @relation("AttachmentSupersession")
+
+  /// Void tracking: populated when voided on a DRAFT/reopened parent or superseded by replacement
+  voidedAt            DateTime?           @db.Timestamptz
+  voidedById          String?
+  voidedBy            User?               @relation("AttachmentVoider", fields: [voidedById], references: [id], onDelete: Restrict)
+  voidReason          String?             @db.Text
+
+  /// Audit timestamps
+  createdAt           DateTime            @default(now()) @db.Timestamptz
+  updatedAt           DateTime            @updatedAt @db.Timestamptz
+
+  @@index([projectId, ownerType, ownerId])
+  @@index([ownerType, ownerId, voidedAt])
+  @@index([projectId, createdAt])
+  @@index([uploadedById])
+  @@index([voidedAt])
+  @@map("attachments")
+}
+
 
 
 

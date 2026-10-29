@@ -65,6 +65,10 @@ test-results/
 # Vercel
 .vercel
 
+# Private local development attachment storage (never commit uploaded binaries)
+.storage/
+
+
 # Package manager locks (keep one — we use npm)
 yarn.lock
 pnpm-lock.yaml

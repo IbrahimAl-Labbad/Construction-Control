@@ -146,3 +146,4 @@ export { z };
 // ---------------------------------------------------------------------------
 
 export * from './schemas/payroll';
+export * from './schemas/attachment';

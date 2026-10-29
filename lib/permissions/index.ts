@@ -33,4 +33,6 @@ export {
   canViewProjectLaborAggregate,
   canManageMilestones,
   canViewProjectMilestones,
+  canUploadAttachmentOnDraft,
+  canVoidOrReplaceAttachment,
 } from './policies';

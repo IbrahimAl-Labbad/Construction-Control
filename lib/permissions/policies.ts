@@ -678,6 +678,38 @@ export const canViewProjectMilestones = (
 };
 
 // ---------------------------------------------------------------------------
+// Attachment Infrastructure Policies (Wave 0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the user is eligible to upload an attachment on a draft record they own.
+ * Fine-grained parent-record ownership and status checks are enforced in
+ * `lib/attachments/owner-access.ts`.
+ */
+export const canUploadAttachmentOnDraft = (
+  user: AuthenticatedUser,
+  resource: { authorUserId: string; parentStatus: string },
+): boolean => {
+  if (!user.isActive) return false;
+  if (resource.parentStatus !== 'DRAFT') return false;
+  return user.id === resource.authorUserId;
+};
+
+/**
+ * Whether the user can void or replace an existing attachment on a draft parent record.
+ */
+export const canVoidOrReplaceAttachment = (
+  user: AuthenticatedUser,
+  resource: { uploadedById: string; parentStatus: string; isVoided: boolean },
+): boolean => {
+  if (!user.isActive) return false;
+  if (resource.isVoided) return false;
+  if (resource.parentStatus !== 'DRAFT') return false;
+  return user.id === resource.uploadedById;
+};
+
+
+// ---------------------------------------------------------------------------
 // Policies namespace export
 // ---------------------------------------------------------------------------
 
@@ -789,5 +821,9 @@ export const policies = {
   canRejectVariationOrder,
   canReopenVariationOrder,
   canViewVariationOrders,
+
+  // Attachment Infrastructure (Wave 0)
+  canUploadAttachmentOnDraft,
+  canVoidOrReplaceAttachment,
 } as const;
 

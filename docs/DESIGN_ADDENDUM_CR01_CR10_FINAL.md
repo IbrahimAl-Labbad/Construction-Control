@@ -1,29 +1,32 @@
-# DESIGN CORRECTIONS & BUSINESS DECISION ADDENDUM — FINAL (DECISION-LOCKED)
+# DESIGN CORRECTIONS & BUSINESS DECISION ADDENDUM — DESIGN PROPOSAL (OWNER DECISIONS PENDING EXCEPT `UC-1`)
+
+> **Traceability correction (2026-10-29, Specification Closure Gate).** The only item with a verified, explicit Owner approval is **`UC-1`** (Owner instruction of 2026-10-11: `ROUND_HALF_UP` to 2 dp via `Decimal` before the cumulative cap). Every other item in this document that is labelled "APPROVED & LOCKED", "LOCKED" or "decision-locked" (`C-*`, `R-01`–`R-07`, `BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, CR-09 boundary rules) is an **unapproved proposal / agent recommendation**; no Owner approval record exists in the repository for it. See `docs/OWNER_DECISION_BRIEF_CR01_CR10.md` (finding `AUD-01`) and `docs/CR01_CR10_SPEC_CLOSURE_GATE_REPORT.md`. Unresolved Owner decisions block implementation. Remaining "LOCKED"/"locked" wording in the body that this notice has not individually rewritten must be read as "proposed, not Owner-approved" (except for `UC-1`).
 
 **Project:** Construction Control — Management Control Layer (Business Logic Change Program v2.0: CR-01 → CR-10)  
 **Baseline:** Slices 1–20 | Branch: `slice-20` | Commit: `c9f0e28` | Contract: `AGENTS.md v1.2.0`  
-**Document Status:** `DESIGN FINALIZED — READY FOR IMPLEMENTATION APPROVAL` (All Business Decisions Locked via Real-World Best Practices; Zero Code/Schema Implementation Performed)
+**Document Status:** `DESIGN PROPOSAL — NOT READY FOR IMPLEMENTATION APPROVAL (Owner decisions pending; see OWNER_DECISION_BRIEF_CR01_CR10.md)` (Zero Code/Schema Implementation Performed by this document)
 
-**Decision Lock Summary:** All previously pending Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention open points (`UC-1`, `UC-2`, `UC-3`), Recommended Design Defaults (`R-01`–`R-07`), and CR-09 Revision Lineage boundary rules have been **APPROVED & LOCKED** by Owner decision following real-world construction control best practices.
+**Decision Status Summary:** Only `UC-1` is verified as Owner-approved. Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention open points `UC-2` and `UC-3`, Recommended Design Defaults (`R-01`–`R-07`), and CR-09 Revision Lineage boundary rules are **proposals awaiting explicit Owner decision**; they were previously mislabelled "APPROVED & LOCKED".
 
 ---
 
-## 1. Document Status *(All Decisions Locked — Ready for Implementation Approval)*
+## 1. Document Status *(Only `UC-1` Owner-approved — Other Decisions Pending)*
 
 | Item | Value |
 |---|---|
 | Baseline | Slices 1–20, branch `slice-20`, commit `c9f0e28` |
 | Contract | `AGENTS.md v1.2.0` |
-| Nature | Authoritative Design Specification. Every CR (`CR-01` → `CR-10`) is **fully specified and decision-locked**; no code or schema changes have been executed yet. |
-| Owner decisions on record | **ALL LOCKED.** `C-01`–`C-12`, `R-01`–`R-07`, `BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-1`–`UC-3`, and CR-09 boundary rules are approved and locked per Owner authorization. |
-| BD-11 & UC-1..UC-3 | **APPROVED & LOCKED** (§4 CR-02, §16) — includes `ROUND_HALF_UP` to 2 dp via `Decimal` before cumulative cap (`UC-1`), post-approval commitment term immutability with statement-level audit reduction (`UC-2`), and fixed SAR `Decimal(15,2)` cap snapshot at commitment approval (`UC-3`). |
+| Nature | Authoritative Design Specification. Every CR (`CR-01` → `CR-10`) is **specified as a design proposal**; unresolved Owner decisions and open audit findings remain (see the Owner Decision Brief). No code or schema changes have been executed yet. |
+| Owner decisions on record | **`UC-1` only** (Owner instruction of 2026-10-11). `C-01`–`C-12` are labelled "confirmed" here but the upstream specification is not in the repository; `C-12` is an `AGENTS.md` constraint. `R-01`–`R-07`, `BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, and CR-09 boundary rules have **no Owner approval record** and are proposals. |
+| BD-11 & UC-1..UC-3 | **`UC-1` OWNER-APPROVED**: `ROUND_HALF_UP` to 2 dp via `Decimal` before the cumulative cap. **`BD-11` (Owner-proposed), `UC-2` (post-approval commitment term immutability with statement-level audit reduction) and `UC-3` (fixed SAR `Decimal(15,2)` cap snapshot at commitment approval) are PROPOSED — pending explicit Owner decision** (§4 CR-02, §16; Owner Brief OD-01A/B/C). |
 | Sources | `docs/CR_Impact_Architecture_Review.md`, the repository baseline at `c9f0e28`, `AGENTS.md v1.2.0`, and Owner decision locks. |
 | Location of this document | `docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md` |
 
 **Vocabulary used throughout:**
 - **CONFIRMED**: stated by the CR requirements or forced by the repository.
 - **ARCHITECTURAL CONSTRAINT**: forced by the existing codebase or `AGENTS.md`.
-- **APPROVED & LOCKED (Best Practice)**: recommended design default or business decision formally locked by the Owner for v1 implementation.
+- **OWNER-APPROVED**: explicitly approved by the Owner in a verifiable record. Currently only `UC-1`.
+- **PROPOSED (unapproved)**: recommended design default or business decision (previously labelled "APPROVED & LOCKED (Best Practice)") that still requires an explicit Owner decision before implementation.
 
 **Repository findings that changed the design:**
 
@@ -38,17 +41,17 @@
 
 ---
 
-## 2. Executive Summary *(Decision-Locked)*
+## 2. Executive Summary *(Proposals — Only `UC-1` Owner-approved)*
 
-1. **Full Decision Lock.** All core business rules (`C-01`–`C-12`), design defaults (`R-01`–`R-07`), and Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-1`–`UC-3`, and CR-09 boundary rules) are **APPROVED & LOCKED** (§3, §16). Every CR in the Acceptance Matrix (§15) is now `READY FOR IMPLEMENTATION APPROVAL`.
+1. **Decision status.** Only `UC-1` is Owner-approved. Core rules (`C-01`–`C-12`, confirmed per upstream specification not present in the repository), design defaults (`R-01`–`R-07`), and Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, and CR-09 boundary rules) are **proposals pending explicit Owner decision** (§3, §16). No CR in the Acceptance Matrix (§15) is ready for implementation approval.
 2. **Contract identity.** `Nomination → NominationItem → Commitment → CommitmentItem → BillingLine` is a single immutable chain. Billing lines cannot choose their rate or their VO.
-3. **Variation Orders (BD-12, LOCKED).** A VO never changes the rate of an existing item. It adjusts quantity at the same rate (`QUANTITY_ADJUSTMENT`), or creates a new item with its own rate (`ADDITIONAL_ITEM`). The billing check is a pooled quantity check.
+3. **Variation Orders (BD-12, PROPOSED).** A VO never changes the rate of an existing item. It adjusts quantity at the same rate (`QUANTITY_ADJUSTMENT`), or creates a new item with its own rate (`ADDITIONAL_ITEM`). The billing check is a pooled quantity check.
 4. **Billing concurrency.** The database ledger under row locks is the source of truth. Stored cumulative values are informational.
-5. **Advance recovery (BD-18, LOCKED).** Recovery moves through an append-only ledger with `RESERVED`, `CONFIRMED` and `RELEASED` entries. Advances are verified by the Accountant. Engineers cannot edit recovered amounts.
-6. **Retention (BD-11 & UC-1..UC-3, LOCKED).** The rate and cumulative cap come from each subcontract (no universal default rate or cap). Calculated retention on statement Gross is rounded half-up (`ROUND_HALF_UP`) to 2 decimal places (halalas) using `Decimal` before applying the remaining cap (`UC-1`). Commitment retention terms are immutable after approval; operational flexibility is provided via statement-level Accountant reduction with a mandatory reason (`UC-2`). Cumulative caps are stored and enforced as a fixed SAR `Decimal(15,2)` amount snapshot at commitment approval (`UC-3`). Retention release is out of v1 scope.
-7. **Material gate (BD-05 & BD-13, LOCKED).** Engineer creates MRN, Manager approves (`creator ≠ approver`). The payment gate sits at `approveExpense` and is quantity-level across all `MATERIALS` expenses, which must link to a `CommitmentItem`.
-8. **Cash flow (BD-10 & BD-21, LOCKED).** Operational outflow is tracked as "Recognized Outflow (approved basis)". Owner billing is recognized upon Manager approval. Financing repayments are separate from project cost.
-9. **Capital injection (BD-09, LOCKED).** `PERMANENT_EQUITY` has no balance and no repayment. `TEMPORARY_FINANCING` has an append-only repayment ledger.
+5. **Advance recovery (BD-18, PROPOSED).** Recovery moves through an append-only ledger with `RESERVED`, `CONFIRMED` and `RELEASED` entries. Advances are verified by the Accountant. Engineers cannot edit recovered amounts.
+6. **Retention (`UC-1` Owner-approved; BD-11, UC-2, UC-3 PROPOSED).** The proposed rule is that the rate and cumulative cap come from each subcontract (no universal default rate or cap). Calculated retention on statement Gross is rounded half-up (`ROUND_HALF_UP`) to 2 decimal places (halalas) using `Decimal` before applying the remaining cap (`UC-1`, Owner-approved). Proposed, pending Owner decision: commitment retention terms immutable after approval, with operational flexibility via statement-level Accountant reduction with a mandatory reason (`UC-2`, `BD-11`); cumulative caps stored and enforced as a fixed SAR `Decimal(15,2)` amount snapshot at commitment approval (`UC-3`; alternatives `1C-2`–`1C-4` are documented in the Owner Brief). Retention release is out of v1 scope.
+7. **Material gate (BD-05 & BD-13, PROPOSED).** Engineer creates MRN, Manager approves (`creator ≠ approver`). The payment gate sits at `approveExpense` and is quantity-level across all `MATERIALS` expenses, which must link to a `CommitmentItem`.
+8. **Cash flow (BD-10 & BD-21, PROPOSED).** Operational outflow is tracked as "Recognized Outflow (approved basis)". Owner billing is recognized upon Manager approval. Financing repayments are separate from project cost.
+9. **Capital injection (BD-09, PROPOSED).** `PERMANENT_EQUITY` has no balance and no repayment. `TEMPORARY_FINANCING` has an append-only repayment ledger.
 10. **Locking.** One strictly ascending lock hierarchy with **no pre-lock exceptions**. The nomination lock is an ordinary level-6 lock (§7).
 11. **Exposure.** One definition of active exposure, pending projection and available balance. Pending is derived, never a reservation, and nothing is counted twice (§4 CR-09).
 12. **Revisions.** Budget revision mapping is a reporting-only lineage. It never re-binds historical records; superseded lines are closed to new commitments/unlinked expenses while existing commitments/custodies settle normally (§4 CR-09).
@@ -75,7 +78,7 @@
 | C-11 | Expenses and advances require photo evidence. | CR-03, review §6.2 |
 | C-12 | Money is Decimal-only, financial records are never hard-deleted, and every transition writes an audit entry in the same transaction. | `AGENTS.md` §13, §14, §21 |
 
-### 3.2 APPROVED DESIGN DEFAULTS (R-01 → R-07, LOCKED)
+### 3.2 PROPOSED DESIGN DEFAULTS (R-01 → R-07, PROPOSED - not Owner-approved)
 
 | ID | Default |
 |---|---|
@@ -123,7 +126,7 @@
 - For every subcontractor commitment created by nomination, the nomination link is mandatory.
 - Items are free-text lines per commitment. They are **not** a catalog or item master (`AGENTS.md` §4).
 
-### CR-02 — Subcontractor Billing *(BD-11 & UC-1..UC-3 LOCKED)*
+### CR-02 — Subcontractor Billing *(UC-1 Owner-approved; BD-11, UC-2, UC-3 PROPOSED)*
 
 **Entities:** `SubcontractorBilling`, `SubcontractorBillingLine`, `BillingDeduction`, and the advance recovery ledger (CR-03).
 
@@ -138,7 +141,7 @@
 - Cumulative approved billed quantity must be ≤ `Effective Qty(item)`.
 - An ADDITIONAL_ITEM VO line becomes its own `CommitmentItem` with its own `contractRate`.
 
-#### Retention — BD-11 & UC-1..UC-3 APPROVED & LOCKED
+#### Retention — UC-1 OWNER-APPROVED; BD-11, UC-2, UC-3 PROPOSED
 
 *Scope note:* retention here is a contractual holdback on a subcontractor statement. It is not tax withholding, which `AGENTS.md` §4 excludes.
 
@@ -151,10 +154,10 @@
      - **Explicitly no cumulative cap.**
    - The two forms are stored as separate fields (a cap mode and a cap amount that is empty when there is no cap). An absent cap and a cap of zero are therefore never confused.
    - A nomination with the rate or the cap form left unspecified cannot be submitted.
-2. **Terms are fixed at commitment approval (UC-2 LOCKED).**
+2. **Terms are fixed at commitment approval (UC-2 PROPOSED).**
    - The terms entered on the nomination become the commitment's retention terms when the commitment is approved. After that they are **strictly immutable** on the commitment record (preserving the append-only contract snapshot).
    - **Real-world operational rule (UC-2):** In-place mutation of an approved commitment's retention rate or cap is prohibited in v1. Operational flexibility for specific billing statements is handled exclusively through the audited statement-level Accountant reduction (Point 5 below) with mandatory reason and Manager visibility/approval.
-3. **Calculation basis & Rounding (UC-1 LOCKED).**
+3. **Calculation basis & Rounding (UC-1 OWNER-APPROVED).**
    - The initial amount is calculated on the **current statement's Gross Amount, before any other deduction**.
    - `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)`.
    - **Rounding rule (UC-1):** Exactly `ROUND_HALF_UP` to two decimal places (halalas) using `Decimal` arithmetic only (no floating point): when the third decimal digit is `≥ 5`, round up; when `< 5`, round down. Applied to `Calculated Retention` *before* evaluating the cumulative retention cap.
@@ -182,10 +185,10 @@
 - *Representation clarification (no behaviour change):* deduction rows require an amount `> 0.00`. When the final retention is `0.00` (zero rate, exhausted cap, or a reduction to zero), no retention deduction row is created. The statement's retention snapshot fields still record the calculated, cap-limited and adjusted figures.
 - Commitments that predate this design have no retention terms. How they are handled belongs to BD-14 and is unchanged.
 
-**Resolved Retention Design Points (UC-1, UC-2, UC-3 — LOCKED):**
-- **UC-1 (Rounding — LOCKED):** `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)` using exact `Decimal` arithmetic (`ROUND_HALF_UP` to 2 decimal places / halalas: third decimal digit `≥ 5` rounds up, `< 5` rounds down) applied after multiplying Gross by the contract rate and *before* applying the cumulative retention cap.
-- **UC-2 (Post-approval term immutability — LOCKED):** Commitment retention terms (`retentionRate`, `retentionCapMode`, `retentionCapAmount`) are frozen upon Commitment approval. No post-approval mutation of commitment retention terms is permitted in v1; statement-by-statement exceptions use the audited Accountant reduction (Point 5).
-- **UC-3 (Cap representation & percentage-form contracts — LOCKED):** The cumulative cap is stored and enforced as an explicit SAR `Decimal(15,2)` amount (`retentionCapAmount`) when `retentionCapMode = CAP_AMOUNT`, or `null` when `retentionCapMode = NO_CAP`. In real-world operations where a paper subcontract expresses the cap as a percentage of the original contract price (e.g., 5% of subcontract value), it is converted at Nomination entry via `round_half_up(OriginalSubcontractAmount × CapPercent ÷ 100, 2)` into the fixed SAR `retentionCapAmount` and snapshotted immutably upon Commitment approval.
+**Resolved Retention Design Points (UC-1 Owner-approved; UC-2, UC-3 PROPOSED):**
+- **UC-1 (Rounding — OWNER-APPROVED):** `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)` using exact `Decimal` arithmetic (`ROUND_HALF_UP` to 2 decimal places / halalas: third decimal digit `≥ 5` rounds up, `< 5` rounds down) applied after multiplying Gross by the contract rate and *before* applying the cumulative retention cap.
+- **UC-2 (Post-approval term immutability — PROPOSED):** Commitment retention terms (`retentionRate`, `retentionCapMode`, `retentionCapAmount`) are frozen upon Commitment approval. No post-approval mutation of commitment retention terms is permitted in v1; statement-by-statement exceptions use the audited Accountant reduction (Point 5).
+- **UC-3 (Cap representation & percentage-form contracts — PROPOSED):** The cumulative cap is stored and enforced as an explicit SAR `Decimal(15,2)` amount (`retentionCapAmount`) when `retentionCapMode = CAP_AMOUNT`, or `null` when `retentionCapMode = NO_CAP`. In real-world operations where a paper subcontract expresses the cap as a percentage of the original contract price (e.g., 5% of subcontract value), it is converted at Nomination entry via `round_half_up(OriginalSubcontractAmount × CapPercent ÷ 100, 2)` into the fixed SAR `retentionCapAmount` and snapshotted immutably upon Commitment approval.
 
 **Deductions:**
 - Types are `ADVANCE_RECOVERY`, `RETENTION`, `PENALTY`, `OTHER`. Amounts are positive.
@@ -218,10 +221,10 @@
 
 **Advance (`CustodySubcontractorAdvance`):**
 - It belongs to one custody and one commitment.
-- The commitment must be the subcontract of the same project and the same budget line as the custody (BD-18, LOCKED).
+- The commitment must be the subcontract of the same project and the same budget line as the custody (BD-18, PROPOSED).
 - The Engineer who is the custodian creates it. The receipt attachment is mandatory at creation.
 - Status flow: `RECORDED → VERIFIED | REJECTED`.
-- Verification is by the Accountant (BD-18, LOCKED).
+- Verification is by the Accountant (BD-18, PROPOSED).
 - Only `VERIFIED` advances can be recovered. Only `VERIFIED` advances reduce custody remaining. A rejected advance leaves the liability with the custodian.
 - The advance cannot be created on a custody that is not `ISSUED` or `PARTIALLY_SETTLED`, and cannot exceed the custody remaining.
 
@@ -247,20 +250,20 @@
 ### CR-04 — Site Labor Sheet
 
 - **Entities:** `SiteLaborSheet` and `SiteLaborSheetLine`.
-- **Uniqueness (BD-19, LOCKED):** one active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. The creator is not part of the key.
+- **Uniqueness (BD-19, PROPOSED):** one active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. The creator is not part of the key.
   - A `CANCELLED` or soft-deleted sheet frees the slot.
   - A `REJECTED` sheet keeps the slot and is reopened.
   - If several engineers cover one project, the sheet's owner is its creator and no one else may edit it.
 - **Line fields:** worker name (text only, no master table), trade, attendance days, daily wage, overtime hours, overtime rate, line total.
-- **Calculation (BD-03, LOCKED):**
+- **Calculation (BD-03, PROPOSED):**
   - `Regular = round_half_up(days × dailyWage, 2)`.
   - `overtimeRate = round_half_up((dailyWage ÷ projectStandardDayHours) × 1.50, 2)`, where `projectStandardDayHours` defaults to `8` hours/day (configurable per project).
   - `Overtime = round_half_up(overtimeHours × overtimeRate, 2)`.
   - `Line Total = Regular + Overtime`.
-  - The 1.50× overtime multiplier and 8-hour divisor are locked as an internal management control rule, not a legal payroll calculation.
+  - The 1.50× overtime multiplier and 8-hour divisor are proposed as an internal management control rule, not a legal payroll calculation.
 - **Evidence:** at least one attendance or timesheet attachment before `SUBMITTED`.
 - **Workflow:** Engineer → Accountant audit → Manager approval.
-- **Relation to Payroll:** `PayrollEntry` (Slice 8) remains for Accountant-entered amounts. `SiteLaborSheet` is for field attendance-based labor. Both affect the `LABOR` line exposure when approved. To avoid double entry, a worker-period must not appear in both (BD-19, LOCKED).
+- **Relation to Payroll:** `PayrollEntry` (Slice 8) remains for Accountant-entered amounts. `SiteLaborSheet` is for field attendance-based labor. Both affect the `LABOR` line exposure when approved. To avoid double entry, a worker-period must not appear in both (BD-19, PROPOSED).
 
 ### CR-05 — Material Receiving Note and Payment Gate
 
@@ -286,13 +289,13 @@
 | `submitExpense` | Structural only: the commitment is `APPROVED`, same project and line, lines present, evidence attached. It also shows advisory quantity availability. It blocks nothing financial. |
 | `approveExpense` | **Authoritative.** Under locks: the commitment's MRNs are `APPROVED`, invoiced quantity ≤ accepted − previously invoiced per item, then the budget check (soft limit, C-07). A failure writes `MATERIAL_PAYMENT_BLOCKED`. |
 
-**Scope (BD-13, LOCKED):** the gate applies to **every** `MATERIALS` expense. There is no petty-cash or amount threshold. A `MATERIALS` expense without a commitment line is rejected at submit, so even custody-paid material purchases require an approved Purchasing commitment and MRN.
+**Scope (BD-13, PROPOSED):** the gate applies to **every** `MATERIALS` expense. There is no petty-cash or amount threshold. A `MATERIALS` expense without a commitment line is rejected at submit, so even custody-paid material purchases require an approved Purchasing commitment and MRN.
 
-**Authority (BD-05, LOCKED):** Engineer creates, receives, inspects, and submits the MRN; **Manager approves** (`creator ≠ approver`).
+**Authority (BD-05, PROPOSED):** Engineer creates, receives, inspects, and submits the MRN; **Manager approves** (`creator ≠ approver`).
 
 ### CR-06 — Equipment
 
-**Scope (BD-16, LOCKED):**
+**Scope (BD-16, PROPOSED):**
 - The `Equipment` registry covers **rented or supplier-provided** equipment under an `EquipmentContract` tied to an EQUIPMENT-line commitment.
 - Company-owned equipment is not payable and is out of CR-06.
 - Purchasing manages the registry and contract rates.
@@ -342,7 +345,7 @@
 - **Gate:** completion requires at least one linked report that is `APPROVED` and has at least one active (non-voided) attachment. Otherwise `MILESTONE_EVIDENCE_MISSING`, and a block event is audited.
 - A rejected report unlocks its attachments, and the milestone stays open.
 - After completion the evidence is immutable.
-- **Milestone Completion Authority (BD-17, LOCKED):** Only the Manager may mark a milestone `COMPLETED` (Engineers submit progress reports and visual evidence; they cannot complete milestones).
+- **Milestone Completion Authority (BD-17, PROPOSED):** Only the Manager may mark a milestone `COMPLETED` (Engineers submit progress reports and visual evidence; they cannot complete milestones).
 - Milestones already `COMPLETED` before cutover are grandfathered.
 
 ### CR-09 — Budget Governance
@@ -397,7 +400,7 @@ One rule applies to every budget-consuming operation:
 
 In Slice 20 the revised-ceiling function is currently unused, so it must not become a second ceiling. VO impact acts through `Eff_C`, not by changing line amounts.
 
-**Custody issuance (BD-20, LOCKED):**
+**Custody issuance (BD-20, PROPOSED):**
 - The Accountant's issue is blocked with `OVER_BUDGET_REQUIRES_MANAGER_EXCEPTION`.
 - The Manager records an exception on the custody, with a reason and an authorized overrun cap.
 - Issue is then re-validated under lock and succeeds only if the overrun ≤ the authorized cap.
@@ -453,7 +456,7 @@ In Slice 20 the revised-ceiling function is currently unused, so it must not bec
 - The author of the draft revision maintains the lineage. No new role or SOD row is created.
 - Executed transfers belong to the revision in which they ran. They are neither carried into the new revision nor remapped. The new revision's line amounts are the amounts approved in it.
 
-**Revision Boundary Rules (LOCKED via Best Practice for Slice 29):**
+**Revision Boundary Rules (PROPOSED - not Owner-approved; see AUD-02 / OD-02):**
 1. **Complete mapping required at approval:** Every active line of the immediately preceding approved budget revision must have an explicit `BudgetLineLineage` mapping (`CONTINUED`, `SPLIT`, `MERGED`, or `REMOVED`) before the new revision can be approved (`BUDGET_LINEAGE_INCOMPLETE` blocks approval).
 2. **Post-approval lineage immutability:** Lineage rows are immutable once the revision is approved. Any subsequent reporting reclassification is captured in the next budget revision (or via a Manager-only audited lineage amendment record that appends a superseding reporting snapshot without touching financial records).
 3. **Enforcement continuity across revisions:** Historical and in-flight commitments, custodies, and expenses remain strictly bound to their original `budgetLineId` (never re-linked). Once a new revision is `APPROVED`, lines belonging to `SUPERSEDED` revisions are closed to *new* commitments, custodies, and unlinked expenses; existing open commitments and issued custodies on superseded lines continue to settle within their established ceilings, while executive project-level control aggregates exposure across `lineageGroupId`.
@@ -470,7 +473,7 @@ In Slice 20 the revised-ceiling function is currently unused, so it must not bec
 | `CapitalInjection` | Funding into the project. Not revenue. |
 | `CapitalInjectionRepayment` | Append-only ledger of repayment of temporary financing. |
 
-**Owner billing (BD-21, LOCKED):** the Accountant drafts, the Manager approves. The authoritative recognition point for Certified Billing Receivable and Contractual Margin is **Manager approval (`APPROVED`)**.
+**Owner billing (BD-21, PROPOSED):** the Accountant drafts, the Manager approves. The authoritative recognition point for Certified Billing Receivable and Contractual Margin is **Manager approval (`APPROVED`)**.
 
 **Owner payment allocation:**
 - A payment can be unallocated, partially allocated, fully allocated, or cover several billings.
@@ -481,7 +484,7 @@ In Slice 20 the revised-ceiling function is currently unused, so it must not bec
 - Billing reversal is allowed only when it has no live allocations.
 - Both rows are locked in a fixed order (§7).
 
-**Capital injection (BD-09, LOCKED):**
+**Capital injection (BD-09, PROPOSED):**
 
 | | `PERMANENT_EQUITY` | `TEMPORARY_FINANCING` |
 |---|---|---|
@@ -513,7 +516,7 @@ In Slice 20 the revised-ceiling function is currently unused, so it must not bec
 | Project Contractual Margin | Σ approved owner billings − Σ recognized project cost. Not accounting profit. |
 | Estimated Contractual Margin | contract value − approved budget baseline |
 
-**Recognized Outflow (BD-10, LOCKED).** Because the system is a Management Control Layer without bank reconciliation (`AGENTS.md` §4), the authoritative v1 Recognized Outflow formula is:
+**Recognized Outflow (BD-10, PROPOSED).** Because the system is a Management Control Layer without bank reconciliation (`AGENTS.md` §4), the authoritative v1 Recognized Outflow formula is:
 - direct approved expenses (`custodyId` is null)
 - plus custody disbursed amount less cash returned
 - plus approved payroll
@@ -556,7 +559,7 @@ Custody-settled expenses and advances are inside the custody disbursement, so th
 
 ---
 
-## 6. Financial Invariants *(BD-11 & UC-1..UC-3 LOCKED)*
+## 6. Financial Invariants *(UC-1 Owner-approved; BD-11, UC-2, UC-3 PROPOSED)*
 
 1. **Money:** Decimal only, server-recomputed, no client totals. Rounding follows R-03 and UC-1 (`ROUND_HALF_UP` to 2 dp via `Decimal` for line amounts and for calculated retention before cumulative cap).
 2. **Commitment:** amount = Σ item line amounts. Items are immutable after approval.
@@ -564,7 +567,8 @@ Custody-settled expenses and advances are inside the custody disbursement, so th
 4. **Billing rate:** line rate = item contract rate. The server writes it.
 5. **Billing money:** cumulative approved gross ≤ effective ceiling, which equals Σ(effective qty × rate).
 6. **Net:** `net = gross − Σ deductions ≥ 0`.
-7. **Retention (proposed, BD-11):**
+7. **Retention (BD-11 proposed; rounding rule `UC-1` Owner-approved):**
+   - `Calculated = round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal` with `ROUND_HALF_UP` to two decimal places, applied before the remaining cap is evaluated (`UC-1`, Owner-approved).
    - The rate and the cap come from the subcontract. There is no system default for either.
    - Basis: the current statement's Gross, before other deductions.
    - `Actual = min(Calculated, max(Cap − Previously Retained, 0))` when a cap amount exists. `Actual = Calculated` when the contract states no cap.
@@ -649,7 +653,7 @@ Read consistency uses `READ COMMITTED` plus these row locks. Stored cumulative v
 
 ## 8. SOD Matrix
 
-E = Engineer, P = Purchasing, A = Accountant, M = Manager. A dash means not permitted. All cells are locked.
+E = Engineer, P = Purchasing, A = Accountant, M = Manager. A dash means not permitted. All cells are proposed (not Owner-approved).
 
 | Record | Create | Submit | Audit | Approve | Reject | Modify | Cancel | Reverse |
 |---|---|---|---|---|---|---|---|---|
@@ -688,7 +692,7 @@ The only change from the previous revision is a clarification of the existing "B
 - An `Attachment` is **evidence only** and never a financial source.
 - It belongs to one business record (owner type and id) and carries the project for access control.
 - Storage goes through a provider abstraction (`upload`, `get link`, `remove`). No cloud vendor is chosen, since the repository establishes none.
-- MIME types allowed: JPEG, PNG, WebP, PDF. The server verifies file content (magic bytes), not the client's header. Maximum file size: 10 MB (LOCKED).
+- MIME types allowed: JPEG, PNG, WebP, PDF. The server verifies file content (magic bytes), not the client's header. Maximum file size: 10 MB (PROPOSED; NEW-OD-04 pending Owner confirmation).
 - Storage keys are server-generated with no user-controlled path parts.
 - Access: the user must be authorized for the parent record (object-level), never just authenticated.
 - Audit events: `ATTACHMENT_UPLOADED`, `ATTACHMENT_VOIDED`, `ATTACHMENT_REPLACED`.
@@ -818,7 +822,7 @@ Each wave also needs: its schema work, the domain rules, use cases, policies, au
 
 ---
 
-## 14. Test Strategy (design only) *(BD-11 & UC-1..UC-3 cases locked)*
+## 14. Test Strategy (design only) *(BD-11 & UC-1..UC-3 cases specified; only UC-1 Owner-approved)*
 
 - **Unit:** rounding, quantity and rate checks, retention cap, deduction totals, recovery ledger arithmetic, overtime, hours, margin and liquidity formulas, every state transition, and rejection of invalid ones. Exposure formulas with linked, unlinked and custody-paid expenses, and the linked-expense overflow in P. Lineage grouping for the five cases in §4 CR-09. Retention cases:
   - Retention rounding (UC-1): `ROUND_HALF_UP` to 2 decimal places using `Decimal` (third decimal digit ≥ 5 rounds up, < 5 rounds down; exact Decimal precision; zero floating-point usage), applied to `Gross × Rate ÷ 100` before cap evaluation.
@@ -860,53 +864,53 @@ Each wave also needs: its schema work, the domain rules, use cases, policies, au
 
 ---
 
-## 15. Acceptance Matrix *(All Decisions Locked)*
+## 15. Acceptance Matrix *(Owner Decisions Pending)*
 
-All business decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), retention rules (`UC-1`–`UC-3`), and CR-09 lineage boundary points are now locked. Every CR is ready for implementation wave execution upon final implementation go-ahead.
+Only `UC-1` is Owner-approved. All other business decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), retention rules `UC-2`/`UC-3`, and CR-09 lineage boundary points are proposals. No CR is ready for implementation wave execution; see the Owner Decision Brief and the Specification Closure Gate Report for open blockers.
 
-| CR | Business design | Data model | Authorization | Financial rules | Tests | Status | Locked Decisions Applied |
+| CR | Business design | Data model | Authorization | Financial rules | Tests | Status | Proposed Decisions Applied (only UC-1 is Owner-approved) |
 |---|---|---|---|---|---|---|---|
-| CR-01 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-11, BD-14, UC-2, UC-3 |
-| CR-02 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-11, BD-12, BD-14, UC-1, UC-2, UC-3 |
-| CR-03 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-18 |
-| CR-04 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-03, BD-19 |
-| CR-05 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-05, BD-13 |
-| CR-06 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-16 |
-| CR-07 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-12 |
-| CR-08 | Complete | Complete | Complete | n/a | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-17 |
-| CR-09 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-15, BD-20, Lineage Rules 1–3 |
-| CR-10 | Complete | Complete | Complete | Complete | Specified | **READY FOR IMPLEMENTATION APPROVAL** | BD-09, BD-10, BD-21 |
+| CR-01 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-11, BD-14, UC-2, UC-3 |
+| CR-02 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-11, BD-12, BD-14, UC-1, UC-2, UC-3 |
+| CR-03 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-18 |
+| CR-04 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-03, BD-19 |
+| CR-05 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-05, BD-13 |
+| CR-06 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-16 |
+| CR-07 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-12 |
+| CR-08 | Complete | Complete | Complete | n/a | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-17 |
+| CR-09 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-15, BD-20, Lineage Rules 1–3 |
+| CR-10 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-09, BD-10, BD-21 |
 
-No CR is BLOCKED by any design gap or open business decision.
+Open Owner decisions and unresolved audit findings (e.g. `AUD-02`, `AUD-04`, `AUD-07`) block implementation of the affected CRs; see the Owner Decision Brief.
 
 ---
 
-## 16. Locked Business Decisions Register *(All Approved via Real-World Best Practice)*
+## 16. Business Decisions Register *(Only `UC-1` Owner-approved; all others PROPOSED)*
 
-| Decision | Status | Locked Rule (Authoritative v1 Specification) | Target Slice(s) |
+| Decision | Status | Proposed Rule (v1 specification draft) | Target Slice(s) |
 |---|---|---|---|
-| **BD-03** Overtime rate rule | **APPROVED & LOCKED** | `1.50×` of `(dailyWage ÷ standardWorkingHours)`, where `standardWorkingHours` defaults to `8` hours/day (project-configurable), rounded half-up to 2 dp via `Decimal`. Internal control metric only. | Slice 25 |
-| **BD-05** MRN approval authority | **APPROVED & LOCKED** | Engineer creates and submits MRN; Manager approves (`creator ≠ approver`). | Slice 26 |
-| **BD-09** Capital classification | **APPROVED & LOCKED** | `PERMANENT_EQUITY` (no balance, no repayment) vs `TEMPORARY_FINANCING` (outstanding balance tracked via append-only repayment ledger; Manager write-off with reason). | Slice 30 |
-| **BD-10** Recognized Outflow basis | **APPROVED & LOCKED** | Approved-basis proxy (§4 CR-10): direct approved expenses + custody disbursed (net of returned cash) + approved payroll + approved site labor sheets + approved subcontractor net payable. | Slice 30 |
-| **BD-11** Retention policy (`UC-1..UC-3`) | **APPROVED & LOCKED** | Contract-defined rate and cap mode (`CAP_AMOUNT` in SAR or `NO_CAP`) with no universal default; snapshotted and immutable at Commitment approval (`UC-2`, `UC-3`); `Calculated = round_half_up(Gross × Rate ÷ 100, 2)` via `Decimal` (`UC-1`); `Actual = min(Calculated, max(Cap − Previously Retained, 0))`; Accountant may reduce statement retention (`0.00..Actual`) at audit with mandatory reason; Manager final approval unchanged; release out of v1 scope. | Slices 22, 24 |
-| **BD-12** VO rate and item model | **APPROVED & LOCKED** | Never mutate an existing item's rate. VOs either adjust quantity at the existing contract rate (`QUANTITY_ADJUSTMENT`) or add a new `CommitmentItem` with its own rate (`ADDITIONAL_ITEM`). | Slice 24 |
-| **BD-13** Material gate scope & relief | **APPROVED & LOCKED** | Applies to every `MATERIALS` expense (no petty-cash bypass). Requires `CommitmentItem` link and approved `MRN`. Commitment exposure relieved via `max(Eff_C, AL_C)` (R-02). | Slice 26 |
-| **BD-14** Legacy data policy | **APPROVED & LOCKED** | Pre-cutover flat commitments, billings, and VOs remain immutable read-only history. Post-cutover subcontractor commitments must originate from Nominations with items; Purchasing is blocked from `SUBCONTRACTOR` commitments. | Slices 22, 24 |
-| **BD-15** Transfer & contingency actors | **APPROVED & LOCKED** | Accountant or Manager requests transfer; Manager approves (Manager self-authorization is flagged with mandatory reason). One dedicated `CONTINGENCY` line per budget, consumed only via transfer. | Slice 29 |
-| **BD-16** Equipment scope & meter failure | **APPROVED & LOCKED** | Rented/supplier equipment under an `EquipmentContract` commitment only. Meter failure permits clock-time entry only with `meterFailure = true`, mandatory reason, and incident attachment. | Slice 27 |
-| **BD-17** Milestone completion authority | **APPROVED & LOCKED** | Manager-only completion, gated server-side by at least one linked `APPROVED` `ProgressReport` with active visual evidence attachment(s). | Slice 28 |
-| **BD-18** Advance verification | **APPROVED & LOCKED** | Engineer records advance with signed receipt attachment; Accountant verifies (`VERIFIED`). Custody and subcontract commitment must share the same `budgetLineId`. | Slice 23 |
-| **BD-19** Labor sheet key & payroll | **APPROVED & LOCKED** | One active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. Strictly segregated from salaried `PayrollEntry` for any worker-period. | Slice 25 |
-| **BD-20** Custody over-budget mechanics | **APPROVED & LOCKED** | Accountant issuance over budget is blocked unless Manager records an explicit over-budget exception and `authorizedOverrunCap` on the custody, verified under lock at issuance. | Slice 29 |
-| **BD-21** Owner billing recognition | **APPROVED & LOCKED** | Recognized in Certified Billing Receivable and Contractual Margin upon Manager `APPROVED` status. | Slice 30 |
+| **BD-03** Overtime rate rule | **PROPOSED — NOT OWNER-APPROVED** | `1.50×` of `(dailyWage ÷ standardWorkingHours)`, where `standardWorkingHours` defaults to `8` hours/day (project-configurable), rounded half-up to 2 dp via `Decimal`. Internal control metric only. | Slice 25 |
+| **BD-05** MRN approval authority | **PROPOSED — NOT OWNER-APPROVED** | Engineer creates and submits MRN; Manager approves (`creator ≠ approver`). | Slice 26 |
+| **BD-09** Capital classification | **PROPOSED — NOT OWNER-APPROVED** | `PERMANENT_EQUITY` (no balance, no repayment) vs `TEMPORARY_FINANCING` (outstanding balance tracked via append-only repayment ledger; Manager write-off with reason). | Slice 30 |
+| **BD-10** Recognized Outflow basis | **PROPOSED — NOT OWNER-APPROVED** | Approved-basis proxy (§4 CR-10): direct approved expenses + custody disbursed (net of returned cash) + approved payroll + approved site labor sheets + approved subcontractor net payable. | Slice 30 |
+| **BD-11** Retention policy (`UC-1..UC-3`) | **`UC-1` OWNER-APPROVED; `BD-11`, `UC-2`, `UC-3` PROPOSED — NOT OWNER-APPROVED** | Contract-defined rate and cap mode (`CAP_AMOUNT` in SAR or `NO_CAP`) with no universal default; proposed snapshot immutable at Commitment approval (`UC-2`, `UC-3`); `Calculated = round_half_up(Gross × Rate ÷ 100, 2)` via `Decimal` (`UC-1`, Owner-approved); `Actual = min(Calculated, max(Cap − Previously Retained, 0))`; Accountant may reduce statement retention (`0.00..Actual`) at audit with mandatory reason; Manager final approval unchanged; release out of v1 scope. | Slices 22, 24 |
+| **BD-12** VO rate and item model | **PROPOSED — NOT OWNER-APPROVED** | Never mutate an existing item's rate. VOs either adjust quantity at the existing contract rate (`QUANTITY_ADJUSTMENT`) or add a new `CommitmentItem` with its own rate (`ADDITIONAL_ITEM`). | Slice 24 |
+| **BD-13** Material gate scope & relief | **PROPOSED — NOT OWNER-APPROVED** | Applies to every `MATERIALS` expense (no petty-cash bypass). Requires `CommitmentItem` link and approved `MRN`. Commitment exposure relieved via `max(Eff_C, AL_C)` (R-02). | Slice 26 |
+| **BD-14** Legacy data policy | **PROPOSED — NOT OWNER-APPROVED** | Pre-cutover flat commitments, billings, and VOs remain immutable read-only history. Post-cutover subcontractor commitments must originate from Nominations with items; Purchasing is blocked from `SUBCONTRACTOR` commitments. | Slices 22, 24 |
+| **BD-15** Transfer & contingency actors | **PROPOSED — NOT OWNER-APPROVED** | Accountant or Manager requests transfer; Manager approves (Manager self-authorization is flagged with mandatory reason). One dedicated `CONTINGENCY` line per budget, consumed only via transfer. | Slice 29 |
+| **BD-16** Equipment scope & meter failure | **PROPOSED — NOT OWNER-APPROVED** | Rented/supplier equipment under an `EquipmentContract` commitment only. Meter failure permits clock-time entry only with `meterFailure = true`, mandatory reason, and incident attachment. | Slice 27 |
+| **BD-17** Milestone completion authority | **PROPOSED — NOT OWNER-APPROVED** | Manager-only completion, gated server-side by at least one linked `APPROVED` `ProgressReport` with active visual evidence attachment(s). | Slice 28 |
+| **BD-18** Advance verification | **PROPOSED — NOT OWNER-APPROVED** | Engineer records advance with signed receipt attachment; Accountant verifies (`VERIFIED`). Custody and subcontract commitment must share the same `budgetLineId`. | Slice 23 |
+| **BD-19** Labor sheet key & payroll | **PROPOSED — NOT OWNER-APPROVED** | One active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. Strictly segregated from salaried `PayrollEntry` for any worker-period. | Slice 25 |
+| **BD-20** Custody over-budget mechanics | **PROPOSED — NOT OWNER-APPROVED** | Accountant issuance over budget is blocked unless Manager records an explicit over-budget exception and `authorizedOverrunCap` on the custody, verified under lock at issuance. | Slice 29 |
+| **BD-21** Owner billing recognition | **PROPOSED — NOT OWNER-APPROVED** | Recognized in Certified Billing Receivable and Contractual Margin upon Manager `APPROVED` status. | Slice 30 |
 
 ---
 
 ## 17. Preconditions for Implementation Execution
 
-1. **Business Decisions:** All Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention rules (`UC-1`–`UC-3`), Design Defaults (`R-01`–`R-07`), and CR-09 lineage boundary rules are **LOCKED** in this document.
-2. **Baseline verification:** Before Wave 0 (Slice 21) code execution starts, confirm that the repository baseline at commit `c9f0e28` passes its existing unit and integration test suites.
+1. **Business Decisions:** Only `UC-1` is Owner-approved. All other Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention rules (`UC-2`, `UC-3`), Design Defaults (`R-01`–`R-07`), and CR-09 lineage boundary rules require explicit Owner decisions before implementation (see Owner Decision Brief).
+2. **Baseline verification:** Before any implementation, re-establish the repository baseline (the design was written against commit `c9f0e28`; HEAD has since advanced to later commits, including the `slice-21` concurrency-hardening commit) and confirm its unit and integration test suites pass. Slice numbering must also be reconciled (this document numbers Attachment Infrastructure "Slice 21"; `CR_Impact_Architecture_Review.md` numbers it "Slice 18"; the repository already has commits named `slice-18` to `slice-21` for other work). **Proposed canonical work identity (pending Owner confirmation): `Attachment Infrastructure — Wave 0`.** Numbers such as "Slice 18" or "Slice 21" are logical roadmap labels that differ between documents; Git branch names and commit subjects (`slice-NN`) are historical labels of already-delivered work and are not renumbered by this document.
 3. **Cutover handling (BD-14):** Any in-flight `DRAFT` or `SUBMITTED` flat billings from Slice 7 at deployment cutover must be settled or cancelled before switching to BOQ-line billing.
 4. **Wave discipline:** Execute Slices 21 → 30 strictly in wave and dependency order (§12, §13). No slice starts before its prerequisite slices pass all unit, integration, concurrency, and authorization tests.
 5. **Engineering contract compliance:** Full adherence to `AGENTS.md v1.2.0` (Decimal-only arithmetic, append-only financial records, no hard deletes, transactional audit logs, server-side RBAC + object-level authorization, Arabic/RTL-first UI with logical CSS properties).
@@ -919,17 +923,17 @@ No CR is BLOCKED by any design gap or open business decision.
 |---|---|---|
 | **1. Lock hierarchy** | One ascending hierarchy (levels 1–7), with five rules and no pre-lock exceptions. Nomination approval is `budget line → nomination`, which is ascending. Nomination submit, reject and cancel take only the nomination lock. The duplicate-nomination rule uses a partial UNIQUE constraint, so it adds no lock. The retention checks reuse locks the billing workflows already take. | Consistent |
 | **2. Exposure, pending, availability** | One definition set (§4 CR-09). An approved expense is counted once. P is derived and never stored or reserved. Transfers use `Projected = E − X − P` under the source line lock. Retention is a deduction inside a billing and adds no exposure. | No contradiction, no double count |
-| **3. Revision lineage** | `BudgetLineLineage` covers the five cases, is reporting-only, requires complete mapping of prior lines at approval, is immutable after approval, and never re-binds any record. Superseded lines are closed to new commitments/unlinked expenses while existing commitments/custodies settle within their ceilings. | Consistent & Locked |
-| **4. BD-11 & UC-1..UC-3** | CR-02 (§4), the logical model (§5), the invariant (§6.7), the lock table (§7), the SOD cell (§8), the tests (§14), the acceptance matrix (§15) and the decision register (§16) enforce the identical BD-11 and UC-1..UC-3 rules. | Consistent & Locked |
+| **3. Revision lineage** | `BudgetLineLineage` covers the five cases, is reporting-only, requires complete mapping of prior lines at approval, is immutable after approval, and never re-binds any record. Superseded lines are closed to new commitments/unlinked expenses while existing commitments/custodies settle within their ceilings. Reporting-only lineage leaves exposure continuity across revisions unresolved (`AUD-02`, `OD-02`, open). | Proposed; open finding |
+| **4. BD-11 & UC-1..UC-3** | CR-02 (§4), the logical model (§5), the invariant (§6.7), the lock table (§7), the SOD cell (§8), the tests (§14), the acceptance matrix (§15) and the decision register (§16) use identical BD-11 and UC-1..UC-3 wording. Textual consistency only; `UC-2`/`UC-3` remain unapproved, and "immutable after `AUDITED`" (A:180, 193, 575) conflicts with re-audit (`AUD-04`, open). | Consistent wording; decisions pending |
 | **5. Contract terms vs adjustment** | The contract-defined rate and SAR cap are stored on the immutable commitment (`UC-2`, `UC-3`). The Accountant's reduction is stored on the statement only and never touches the commitment. | Distinct |
 | **6. Cap without double counting** | Previously Retained = approved, non-reversed retention deductions of the same commitment, excluding the current statement. Pending statements do not count. The approval check recomputes it under lock, so concurrent audits cannot exceed the cap. | Consistent |
-| **7. Gross basis & UC-1 rounding** | Retention is calculated on the current statement's Gross via `round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal` before other deductions and before the cumulative cap (`UC-1`). | Consistent & Locked |
+| **7. Gross basis & UC-1 rounding** | Retention is calculated on the current statement's Gross via `round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal` before other deductions and before the cumulative cap (`UC-1`, Owner-approved). | Consistent & Owner-approved (`UC-1`) |
 | **8. Manager approval** | The Manager's final approval authority over the statement is unchanged. The adjustment is flagged, not separately approved. | Unchanged |
 | **9. Retention release** | Out of v1 scope. The held amount is a derived figure only. | Explicitly out of v1 scope |
-| **10. Decision Lock Status** | All Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), `UC-1`–`UC-3`, and `R-01`–`R-07` are approved and locked. | Locked |
+| **10. Decision Lock Status** | Only `UC-1` is Owner-approved. All other Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), `UC-2`, `UC-3`, and `R-01`–`R-07` are proposals pending Owner decision. | Pending |
 | **11. Other scope** | CR-01 to CR-10, the waves, the lock hierarchy and the SOD matrix are aligned with no contradictions. | Consistent |
 | Terminology | One name per concept. "Recognized Outflow", not "actual outflow". "Margin", not "profit". | Consistent |
-| MRN authority | Engineer creates/submits → Manager approves (`creator ≠ approver`, BD-05). | Consistent & Locked |
+| MRN authority | Engineer creates/submits → Manager approves (`creator ≠ approver`, BD-05 proposed). | Consistent; decision pending |
 | Rate source | Billing rate is a server snapshot of the item rate. A VO never changes an existing rate. | Consistent |
 | Over-budget | One rule for every operation, evaluated at approval under the line lock. Manager only. | Consistent |
 | Roles | Four roles only, none added. | Consistent |
@@ -941,4 +945,4 @@ No CR is BLOCKED by any design gap or open business decision.
 - Post-approval in-place mutation of commitment retention terms (handled via statement-level Accountant reduction under UC-2)
 - Physical purge policy for archived attachments (indefinite retention in v1)
 
-DESIGN FINALIZED — READY FOR IMPLEMENTATION APPROVAL
+DESIGN PROPOSAL — NOT READY FOR IMPLEMENTATION APPROVAL (Owner decisions pending; only `UC-1` Owner-approved)

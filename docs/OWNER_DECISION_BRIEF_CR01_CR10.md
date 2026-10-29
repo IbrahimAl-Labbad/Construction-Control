@@ -5,8 +5,8 @@
 - **Status:** Decision preparation only. **No new decisions are approved or locked in this review.**
 - **Baseline Approval:** The only item with verified, explicit Owner approval is **`UC-1`** (explicit Owner instruction of 2026-10-11, which approved the `UC-1` `ROUND_HALF_UP` retention calculation rule only and expressly did not approve `BD-11`, `UC-2`, `UC-3`, or any other decision). `UC-1` is preserved unchanged throughout this brief.
 - **Unapproved Status of All Other Items:** Every other business decision (`BD-*`, `R-*`, `UC-2`, `UC-3`, `OBD-*`, `OD-*`, `NEW-OD-*`), agent recommendation (`Rec.`), and technical design proposal (`§4`, `COR-*`) remains **unapproved** and requires explicit Owner decision or technical sign-off before implementation. The addendum's own "APPROVED & LOCKED" labels are not evidence of Owner approval (finding `AUD-01`).
-- **Implementation is not authorized. Slice 21 has not started.** No application code, Prisma schema, database, migration, or test was modified by this review.
-- **Sources.** `A` = [docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md) (945 lines); `R` = [docs/CR_Impact_Architecture_Review.md](file:///d:/Construction%20Control/docs/CR_Impact_Architecture_Review.md); [AGENTS.md](file:///d:/Construction%20Control/AGENTS.md); [prisma/schema.prisma](file:///d:/Construction%20Control/prisma/schema.prisma); [custody state machine](file:///d:/Construction%20Control/lib/custodies/state-machine.ts); [approve-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/approve-custody.ts); [issue-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/issue-custody.ts); [close-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/close-custody.ts); [record-cash-return.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/record-cash-return.ts); [budget calculations](file:///d:/Construction%20Control/lib/budget/calculations.ts); [approve-variation-order.ts](file:///d:/Construction%20Control/lib/variation-orders/use-cases/approve-variation-order.ts).
+- **Implementation is not authorized.** No CR-01 → CR-10 implementation has been authorized or started by this review. *(Closure-gate note, 2026-10-29: the earlier wording "Slice 21 has not started" was ambiguous. The repository already contains commits named `slice-18` … `slice-21` for unrelated work, and the addendum's "Slice 21 = Attachment infrastructure" numbering collides with them; see `docs/CR01_CR10_SPEC_CLOSURE_GATE_REPORT.md`, finding `SPEC-01`.)* No application code, Prisma schema, database, migration, or test was modified by this review.
+- **Sources.** `A` = [docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md) (944 lines at commit `e236aa7`; **`A:nnn` references were re-mapped on 2026-10-29 to the current working copy**, which carries the closure-gate label corrections. Where a line was reworded, the reference points to the reworded line. Prefer the quoted text or section heading if the file is edited again); `R` = [docs/CR_Impact_Architecture_Review.md](file:///d:/Construction%20Control/docs/CR_Impact_Architecture_Review.md); [AGENTS.md](file:///d:/Construction%20Control/AGENTS.md); [prisma/schema.prisma](file:///d:/Construction%20Control/prisma/schema.prisma); [custody state machine](file:///d:/Construction%20Control/lib/custodies/state-machine.ts); [approve-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/approve-custody.ts); [issue-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/issue-custody.ts); [close-custody.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/close-custody.ts); [record-cash-return.ts](file:///d:/Construction%20Control/lib/custodies/use-cases/record-cash-return.ts); [budget calculations](file:///d:/Construction%20Control/lib/budget/calculations.ts); [approve-variation-order.ts](file:///d:/Construction%20Control/lib/variation-orders/use-cases/approve-variation-order.ts).
 - **Classification tags:** **OBD** = OWNER BUSINESS DECISION REQUIRED; **DOC** = DOCUMENTATION CORRECTION REQUIRED; **TECH** = TECHNICAL DESIGN CLARIFICATION REQUIRED (any schema, constraint, state-machine, formula or lock-order change; never an editorial fix); **SEM** = SOURCE EVIDENCE MISSING.
 - **Status words:** *Previously Owner-approved* (only `UC-1`); *Owner-proposed, pending* (`BD-11`); *Agent recommendation, unapproved*; *Constraint* (repository or AGENTS.md fact).
 
@@ -14,38 +14,38 @@
 
 | ID | Verified meaning | Defined at | Status | Handled in |
 |---|---|---|---|---|
-| `UC-1` | Retention is `round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal`, `ROUND_HALF_UP` to two decimals, before the remaining cap is applied | A:157–160, 186 | **Previously Owner-approved (verified)** | OD-01 |
-| `BD-11` | Retention policy: rate and cap come from each subcontract (explicit `0.00` allowed; cap is `CAP_AMOUNT ≥ 0` or `NO_CAP`), fixed at commitment approval, Gross basis, cumulative-cap formula, statement-level Accountant reduction with reason, Manager final approval, release out of v1 | A:141–176, 892 | Owner-proposed, pending; Owner's original wording not fully retrievable (SEM) | OD-01A |
-| `UC-2` | Post-approval immutability of commitment retention terms (rate, cap mode, cap amount) | A:154–156, 187 | Pending Owner decision | OD-01B |
-| `UC-3` | Retention cap representation and its interaction with approved Variation Orders | A:188 | Pending Owner decision | OD-01C |
-| `C-01`…`C-12` | Core requirements; `C-07` = over-budget is a soft limit needing a Manager reason and audit event; `C-12` = AGENTS money/delete/audit contract | A:63–76 | Labeled confirmed in A; upstream "Specification v2.0" not in repo (SEM); `C-12` is Constraint | baseline |
-| `F1`–`F6` | Repository findings at `c9f0e28` | A:30–37 | Constraint | baseline |
-| `R-01` | Commitment amount = Σ rounded nomination lines (Manager cannot override with a lump sum) | A:82 | Agent recommendation; conflicts with `OBD-01` | OD-06A |
-| `R-02` | Commitment exposure relief `max(Eff_C, AL_C)`; subcontract commitments have `AL_C = 0` so their term is `Eff_C` | A:83, 359 | Agent recommendation; amended by OD-07A | OD-06F, OD-07A |
-| `R-03` | Line-level rounding, half-up, 2 dp, `Decimal` | A:84 | Agent recommendation | OD-06F |
-| `R-04` | Manager-only reversal of approved records with compensating entries | A:85, 751 | Agent recommendation | OD-06F |
-| `R-05` | Evidence is checked at SUBMIT | A:86 | Agent recommendation | OD-06F |
-| `R-06` | Every override, rejection and reversal needs a non-empty trimmed reason | A:87 | Agent recommendation | OD-06F |
-| `R-07` | Seven billing statuses `DRAFT…REVERSED`; rejecting role recorded | A:88, 736 | Agent recommendation; touched by OD-03 | OD-06F, OD-03 |
-| `BD-03` | Site-labor overtime: `1.50 × (daily wage ÷ standard day hours)`, default 8 | A:255–260, 888 | Agent recommendation | OD-06C |
-| `BD-05` | MRN: Engineer creates and submits, Manager approves (`creator ≠ approver`) | A:291, 889 | Agent recommendation (source default) | OD-04B |
-| `BD-09` | Capital injection: `PERMANENT_EQUITY` vs `TEMPORARY_FINANCING` | A:484–497, 890 | Agent recommendation | OD-05C |
-| `BD-10` | Recognized Outflow (approved-payable proxy) | A:516–523, 891 | Agent recommendation; redesigned in OD-05A | OD-05A |
-| `BD-12` | Variation Order item and rate model: never change an item's rate; `QUANTITY_ADJUSTMENT` or `ADDITIONAL_ITEM` | A:45, 134, 323–333, 893 | Agent recommendation; conflicts with `OBD-12` | OD-06E, AUD-09 |
-| `BD-13` | Material gate applies to every MATERIALS expense (no petty-cash threshold) | A:289, 894 | Agent recommendation; conflicts with `OBD-09` | OD-04A |
-| `BD-14` | Legacy cutover policy; Purchasing blocked from SUBCONTRACTOR commitments | A:103, 183, 895 | Agent recommendation | OD-06A |
-| `BD-15` | Budget transfers and contingency line | A:405–425, 896 | Agent recommendation | OD-06E |
-| `BD-16` | Equipment scope (rented/supplier only) and meter-failure override | A:295–313, 897 | Agent recommendation | OD-06D |
-| `BD-17` | Manager-only milestone completion with evidence gate | A:338–345, 898 | Agent recommendation (with constraint F5) | OD-06D |
-| `BD-18` | Subcontractor advance verification and recovery; custody and commitment on the same budget line | A:219–245, 899 | Agent recommendation; affected by `AUD-07` | OD-06B, OD-07A |
-| `BD-19` | Site labor sheet uniqueness per project/line/year/month; segregation from payroll | A:250–263, 900 | Agent recommendation; affected by `AUD-10` | OD-06C |
-| `BD-20` | Custody issuance over budget: Manager exception with an authorized overrun cap | A:400–403, 901 | Agent recommendation; affected by `AUD-08` | OD-07B |
-| `BD-21` | Owner billing recognized at Manager approval | A:473, 902 | Agent recommendation (source default) | OD-05B |
+| `UC-1` | Retention is `round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal`, `ROUND_HALF_UP` to two decimals, before the remaining cap is applied | A:160–163, 189 | **Previously Owner-approved (verified)** | OD-01 |
+| `BD-11` | Retention policy: rate and cap come from each subcontract (explicit `0.00` allowed; cap is `CAP_AMOUNT ≥ 0` or `NO_CAP`), fixed at commitment approval, Gross basis, cumulative-cap formula, statement-level Accountant reduction with reason, Manager final approval, release out of v1 | A:144–179, 896 | Owner-proposed, pending; Owner's original wording not fully retrievable (SEM) | OD-01A |
+| `UC-2` | Post-approval immutability of commitment retention terms (rate, cap mode, cap amount) | A:157–159, 190 | Pending Owner decision | OD-01B |
+| `UC-3` | Retention cap representation and its interaction with approved Variation Orders | A:191 | Pending Owner decision | OD-01C |
+| `C-01`…`C-12` | Core requirements; `C-07` = over-budget is a soft limit needing a Manager reason and audit event; `C-12` = AGENTS money/delete/audit contract | A:66–79 | Labeled confirmed in A; upstream "Specification v2.0" not in repo (SEM); `C-12` is Constraint | baseline |
+| `F1`–`F6` | Repository findings at `c9f0e28` | A:33–40 | Constraint | baseline |
+| `R-01` | Commitment amount = Σ rounded nomination lines (Manager cannot override with a lump sum) | A:85 | Agent recommendation; conflicts with `OBD-01` | OD-06A |
+| `R-02` | Commitment exposure relief `max(Eff_C, AL_C)`; subcontract commitments have `AL_C = 0` so their term is `Eff_C` | A:86, 362 | Agent recommendation; amended by OD-07A | OD-06F, OD-07A |
+| `R-03` | Line-level rounding, half-up, 2 dp, `Decimal` | A:87 | Agent recommendation | OD-06F |
+| `R-04` | Manager-only reversal of approved records with compensating entries | A:88, 755 | Agent recommendation | OD-06F |
+| `R-05` | Evidence is checked at SUBMIT | A:89 | Agent recommendation | OD-06F |
+| `R-06` | Every override, rejection and reversal needs a non-empty trimmed reason | A:90 | Agent recommendation | OD-06F |
+| `R-07` | Seven billing statuses `DRAFT…REVERSED`; rejecting role recorded | A:91, 740 | Agent recommendation; touched by OD-03 | OD-06F, OD-03 |
+| `BD-03` | Site-labor overtime: `1.50 × (daily wage ÷ standard day hours)`, default 8 | A:258–263, 892 | Agent recommendation | OD-06C |
+| `BD-05` | MRN: Engineer creates and submits, Manager approves (`creator ≠ approver`) | A:294, 893 | Agent recommendation (source default) | OD-04B |
+| `BD-09` | Capital injection: `PERMANENT_EQUITY` vs `TEMPORARY_FINANCING` | A:487–500, 894 | Agent recommendation | OD-05C |
+| `BD-10` | Recognized Outflow (approved-payable proxy) | A:519–526, 895 | Agent recommendation; redesigned in OD-05A | OD-05A |
+| `BD-12` | Variation Order item and rate model: never change an item's rate; `QUANTITY_ADJUSTMENT` or `ADDITIONAL_ITEM` | A:48, 137, 326–336, 897 | Agent recommendation; conflicts with `OBD-12` | OD-06E, AUD-09 |
+| `BD-13` | Material gate applies to every MATERIALS expense (no petty-cash threshold) | A:292, 898 | Agent recommendation; conflicts with `OBD-09` | OD-04A |
+| `BD-14` | Legacy cutover policy; Purchasing blocked from SUBCONTRACTOR commitments | A:106, 186, 899 | Agent recommendation | OD-06A |
+| `BD-15` | Budget transfers and contingency line | A:408–428, 900 | Agent recommendation | OD-06E |
+| `BD-16` | Equipment scope (rented/supplier only) and meter-failure override | A:298–316, 901 | Agent recommendation | OD-06D |
+| `BD-17` | Manager-only milestone completion with evidence gate | A:341–348, 902 | Agent recommendation (with constraint F5) | OD-06D |
+| `BD-18` | Subcontractor advance verification and recovery; custody and commitment on the same budget line | A:222–248, 903 | Agent recommendation; affected by `AUD-07` | OD-06B, OD-07A |
+| `BD-19` | Site labor sheet uniqueness per project/line/year/month; segregation from payroll | A:253–266, 904 | Agent recommendation; affected by `AUD-10` | OD-06C |
+| `BD-20` | Custody issuance over budget: Manager exception with an authorized overrun cap | A:403–406, 905 | Agent recommendation; affected by `AUD-08` | OD-07B |
+| `BD-21` | Owner billing recognized at Manager approval | A:476, 906 | Agent recommendation (source default) | OD-05B |
 | `BD-01/02/04/06/07/08` | **No definition exists in any `docs/*.md` file** | none | Withdrawn; never used | none |
 | `OBD-01` | Manager may adjust commitment amount at nomination approval | R:944 | Review default only | OD-06A |
 | `OBD-02` | Ceiling applies to gross | R:945 | Review default; consistent with A | none |
 | `OBD-03` | Backfill net payable on old approved billings | R:946 | Review default | OD-06A (`BD-14`) |
-| `OBD-04`, `OBD-05` | Add `disbursedAmount`; undisbursed part released | R:947–948 | Review defaults; consistent with A:214 | OD-07B |
+| `OBD-04`, `OBD-05` | Add `disbursedAmount`; undisbursed part released | R:947–948 | Review defaults; consistent with A:217 | OD-07B |
 | `OBD-06` | Payroll and labor sheets coexist | R:949 | Review default | OD-06C |
 | `OBD-07`, `OBD-08` | Partial MRN shipments; direct FK on Expense | R:950–951 | Review defaults; consistent with A | none |
 | `OBD-09` | Petty-cash custody material purchases exempt from MRN (example 2,000 SAR) | R:952 | Review default; conflicts with `BD-13` | OD-04A |
@@ -72,11 +72,11 @@
 | `AUD-09` | `VariationOrderLine` quantity precision and `ADDITIONAL_ITEM` schema compatibility | Open | §4.1 |
 | `AUD-10` | Cross-record worker duplication and Payroll overlap with plain-text names | Open | OD-06C, §4.2 |
 | `AUD-11` | Missing lock-order rows: MRN reversal, equipment timesheet approval/reversal, labor sheet approval/reversal | Open | §4.3 |
-| `AUD-12` | A:567 still reads "Retention (proposed, BD-11)" and omits the `UC-1` formula | Open | COR-02 |
+| `AUD-12` | A:570 still reads "Retention (proposed, BD-11)" and omits the `UC-1` formula | Open | COR-02 |
 | `PROV-AUD-13` | Further lock rows missing: custody approve/issue/overrun, advance verify/reverse, payroll/expense approval, revision approval | Open | §4.3 |
 | `PROV-AUD-14` | `lineageGroupId` described on line and lineage row; scoped to one pair, cannot key cross-revision exposure | Open | OD-02, §4.4 |
-| `PROV-AUD-15` | Superseded-line closure rule (A:459) names only commitments, custodies and unlinked expenses | Open | OD-02, §4.4 |
-| `PROV-AUD-16` | Equipment timesheets have no link to commitment items (A:546–547) although expense lines reference items (A:545) | Open, SEM | §4.3 |
+| `PROV-AUD-15` | Superseded-line closure rule (A:462) names only commitments, custodies and unlinked expenses | Open | OD-02, §4.4 |
+| `PROV-AUD-16` | Equipment timesheets have no link to commitment items (A:549–550) although expense lines reference items (A:548) | Open, SEM | §4.3 |
 | `AUD-07A-1` | `APPROVED`-unissued custodies drop out of `P(L)` before issuance, allowing parallel over-approval or budget transfers to drain capacity | Open (new) | OD-07A |
 | `AUD-07A-2` | Stage separation: `Custody.amount` is checked at approval and reserved; `disbursedAmount` is checked at issuance and creates active exposure | Open (new) | OD-07A |
 | `AUD-07A-3` | Concurrent billing or negative VO approval can consume commitment ceiling already advanced or reserved by linked custodies | Open (new) | OD-07A |
@@ -97,7 +97,7 @@
 **Owner-approved rule (`UC-1`, preserved exactly).** Calculated retention = `round_half_up(Gross × Rate ÷ 100, 2)`, computed with `Decimal`, `ROUND_HALF_UP` to two decimals, before the remaining cap is applied. Nothing below changes it. `BD-11`, `UC-2` and `UC-3` remain unapproved until the Owner decides them.
 
 **OD-01A — `BD-11` (retention policy).**
-- *Rule as drafted* (A:145–175): rate and cap come from each subcontract; the rate is an explicit percentage and `0.00` is allowed only as an explicit entry; the cap is `CAP_AMOUNT ≥ 0.00` or explicit `NO_CAP`; retention is calculated on the statement's Gross; `Actual = min(Calculated, max(Cap − Previously Retained, 0))` over approved, non-reversed statements; the Accountant may reduce a statement's retention to any amount from `0.00` to `Actual` with a reason; the Manager's final approval is unchanged; release is out of v1.
+- *Rule as drafted* (A:148–178): rate and cap come from each subcontract; the rate is an explicit percentage and `0.00` is allowed only as an explicit entry; the cap is `CAP_AMOUNT ≥ 0.00` or explicit `NO_CAP`; retention is calculated on the statement's Gross; `Actual = min(Calculated, max(Cap − Previously Retained, 0))` over approved, non-reversed statements; the Accountant may reduce a statement's retention to any amount from `0.00` to `Actual` with a reason; the Manager's final approval is unchanged; release is out of v1.
 - *Evidence gap (SEM).* The Owner's original `BD-11` wording is only partly retrievable. The record that is available lists a "contract approval snapshot" element, which overlaps `UC-2`. The Owner must say whether approving `BD-11` also decides `UC-2`.
 - *Options.* **1A-1** approve as drafted. **1A-2** approve without the statement-level Accountant reduction (`Adjusted = Actual` always).
 - *Recommended (unapproved):* 1A-1.
@@ -110,9 +110,9 @@
 - **Q-OD-01B:** freeze the terms (1B-1) or design an amendment mechanism (1B-2)?
 
 **OD-01C — `UC-3` (cap representation and Variation Orders).**
-*Scenario.* Contract 1,000,000; dynamic cap = 5% of the effective commitment ceiling = 50,000; approved statements retain 50,000 on 500,000 Gross. A negative approved VO of −200,000 lowers the ceiling to 800,000 (still above billed Gross, so A:329 allows it). The recalculated cap is 40,000, **below** the 50,000 already retained. Historical approved statements are immutable (AGENTS §13.7). Future retention can be set to 0, but that does not make cumulative retention ≤ the recalculated cap.
+*Scenario.* Contract 1,000,000; dynamic cap = 5% of the effective commitment ceiling = 50,000; approved statements retain 50,000 on 500,000 Gross. A negative approved VO of −200,000 lowers the ceiling to 800,000 (still above billed Gross, so A:332 allows it). The recalculated cap is 40,000, **below** the 50,000 already retained. Historical approved statements are immutable (AGENTS §13.7). Future retention can be set to 0, but that does not make cumulative retention ≤ the recalculated cap.
 
-| Option | Cap rule | Is "cumulative approved retention ≤ cap" (A:572) still true? | Consequence |
+| Option | Cap rule | Is "cumulative approved retention ≤ cap" (A:576) still true? | Consequence |
 |---|---|---|---|
 | **1C-1** fixed cap (audit label `UC-3A`) | Fixed SAR cap (`CAP_AMOUNT`/`NO_CAP`) set at commitment approval; a paper percentage is converted once at nomination | Yes, always, against the fixed cap | After a positive VO the cap shrinks as a share of the contract; after a negative VO it grows as a share. No new mechanics. |
 | **1C-2** dynamic, blocks negative VO (audit label `UC-3B`) | Cap = % of effective ceiling | Yes, because a negative VO that would push the cap below `Previously Retained` is refused | Legitimate scope reductions are blocked; the only way through is reversing an approved statement under `R-04`. |
@@ -126,15 +126,15 @@
 
 ### OD-02 — Budget revision continuity (`AUD-02`, `AUD-05`, `PROV-AUD-14`, `PROV-AUD-15`)
 
-**Design facts (not policy).** Each `Budget` version owns its own `BudgetLine` rows ([schema 383–463](file:///d:/Construction%20Control/prisma/schema.prisma#L383-L463)); records bind to one line id and are never rebound (A:432, 436). Exposure is computed per line (A:354–365), so a new line starts at zero (`AUD-02`). Transfers belong to the revision in which they ran (A:454). Lineage links adjacent revisions only (A:450). None of this design is implemented or approved.
+**Design facts (not policy).** Each `Budget` version owns its own `BudgetLine` rows ([schema 383–463](file:///d:/Construction%20Control/prisma/schema.prisma#L383-L463)); records bind to one line id and are never rebound (A:435, 439). Exposure is computed per line (A:357–368), so a new line starts at zero (`AUD-02`). Transfers belong to the revision in which they ran (A:457). Lineage links adjacent revisions only (A:453). None of this design is implemented or approved.
 
 **Recommended model 2A-1 (unapproved).** Keep one `BudgetLine` row per revision and add no field to `BudgetLine`. The lineage rows are the only lineage representation.
-- **R1 — where `lineageGroupId` lives.** On `BudgetLineLineage` rows only (as A:549 has it), for reporting, scoped to one revision pair. It is **not** on `BudgetLine`, and it is **not** used by exposure, locking or transfer logic. A:437 ("every line carries a shared `lineageGroupId`") and A:459 ("aggregates exposure across `lineageGroupId`") must be reworded (COR-07).
-- **R2 — family.** For a current line `L`, `Anc*(L)` is every ancestor reached by following lineage rows backwards, and `Fam(L) = {L} ∪ Anc*(L)`. Then `X_eff(L) = Σ X_direct` and `P_eff(L) = Σ P_direct` over `Fam(L)`, using the definitions in A:354–365. `E(L)` is the line's own amount plus its own revision's executed transfers. `Available_eff = E − X_eff` and `Projected_eff = Available_eff − P_eff`. This keeps both active exposure and the pending projection across any number of revisions.
-- **R3 — dormant line.** A line is *dormant* if `X_eff = 0`, `P_eff = 0`, and nothing non-terminal can still change them: no record in `DRAFT`, `SUBMITTED` or `AUDITED`, no approved-but-not-issued custody, and no submitted VO. (Those states are outside `X` and `P`: A:363, 372.)
+- **R1 — where `lineageGroupId` lives.** On `BudgetLineLineage` rows only (as A:552 has it), for reporting, scoped to one revision pair. It is **not** on `BudgetLine`, and it is **not** used by exposure, locking or transfer logic. A:440 ("every line carries a shared `lineageGroupId`") and A:462 ("aggregates exposure across `lineageGroupId`") must be reworded (COR-07).
+- **R2 — family.** For a current line `L`, `Anc*(L)` is every ancestor reached by following lineage rows backwards, and `Fam(L) = {L} ∪ Anc*(L)`. Then `X_eff(L) = Σ X_direct` and `P_eff(L) = Σ P_direct` over `Fam(L)`, using the definitions in A:357–368. `E(L)` is the line's own amount plus its own revision's executed transfers. `Available_eff = E − X_eff` and `Projected_eff = Available_eff − P_eff`. This keeps both active exposure and the pending projection across any number of revisions.
+- **R3 — dormant line.** A line is *dormant* if `X_eff = 0`, `P_eff = 0`, and nothing non-terminal can still change them: no record in `DRAFT`, `SUBMITTED` or `AUDITED`, no approved-but-not-issued custody, and no submitted VO. (Those states are outside `X` and `P`: A:366, 375.)
 - **R4 — mapping at revision approval.** Every non-dormant old line maps `CONTINUED` or `MERGED` with exactly one successor. `SPLIT` and `REMOVED` are allowed only for dormant lines. To carve budget out of an encumbered line, use `CONTINUED` plus `ADDED`. **No prior exposure is ever apportioned between split lines, so none can be allocated twice.**
 - **R5 — successor evaluation.** For a record still bound to a superseded line, the soft limit, `E` and transfer checks are evaluated against its unique current descendant `succ*(L)`. The record's own `budgetLineId` never changes.
-- **R6 — closure.** Superseded lines accept no new budget-consuming records (proposal, wider than A:459: commitments, nominations, custodies, payroll, labor sheets, VOs, unlinked expenses; `PROV-AUD-15`).
+- **R6 — closure.** Superseded lines accept no new budget-consuming records (proposal, wider than A:462: commitments, nominations, custodies, payroll, labor sheets, VOs, unlinked expenses; `PROV-AUD-15`).
 - **R7 — locks.** Level 1 takes every row of `Fam(succ*(L))` in id order. Lineage is immutable after approval, so a pre-read of the family is stable. If a revision commits between the pre-read and the lock, the transaction aborts and retries; it never takes an out-of-order or lower-level lock afterwards. Revision approval locks all of the project's lines in id order.
 - **R8 — why nothing is double-counted or lost.** Given R3–R4, every non-dormant historical line has exactly one current descendant, so the families of the current lines are disjoint and together hold all live exposure.
 
@@ -151,17 +151,17 @@
 
 **Alternatives considered and not selected.**
 - **2A-2:** split of encumbered lines allowed, with a shared ceiling per connected component; harder to explain, and sibling lines consume each other's capacity.
-- **2A-3:** a fixed percentage allocation of prior exposure across split lines. Not selected and not recommended: it cannot follow later changes on ancestor records (a VO, a custody return) without rebinding, which A:432 forbids, and it contradicts R4.
+- **2A-3:** a fixed percentage allocation of prior exposure across split lines. Not selected and not recommended: it cannot follow later changes on ancestor records (a VO, a custody return) without rebinding, which A:435 forbids, and it contradicts R4.
 - **2B:** a stable `BudgetLine` identity plus a `BudgetRevisionLineSnapshot` table; it reworks the existing `budgetId` relation and slice 3 queries.
 
 **Owner questions.**
 - **Q-OD-02A:** choose 2A-1, 2A-2 or 2B. (`AUD-02` stays open until then.)
-- **Q-OD-02B (`AUD-05`):** confirm removing the post-approval lineage-amendment clause at A:458, so lineage is strictly immutable after approval (COR-06).
+- **Q-OD-02B (`AUD-05`):** confirm removing the post-approval lineage-amendment clause at A:461, so lineage is strictly immutable after approval (COR-06).
 - **Q-OD-02C:** when a revised amount is below carried exposure (`E(L_new) < X_eff(L_new)`) should the system (a) block, (b) allow with a Manager reason and audit event consistent with `C-07`, or (c) allow silently and report a negative balance? And what happens to in-flight `DRAFT`/`SUBMITTED` records on a superseded line: block the revision, let them continue against `succ*`, or force them closed? *Recommended (unapproved):* (b) and "continue against `succ*`".
 
 ### OD-03 — Billing re-audit (`AUD-04`, `AUD-03-1`, `AUD-03-2`, touches `R-07`)
 
-**Problem.** A:179 says a statement refused at approval because a concurrent approval exhausted the cap "returns through the existing `REJECTED` path and is re-audited". A:180, 193 and 575 say retention figures and deductions are immutable after `AUDITED`. A:736 allows only `REJECTED → DRAFT`, which sends the Engineer back to re-submit unchanged BOQ quantities.
+**Problem.** A:182 says a statement refused at approval because a concurrent approval exhausted the cap "returns through the existing `REJECTED` path and is re-audited". A:183, 196 and 575 say retention figures and deductions are immutable after `AUDITED`. A:740 allows only `REJECTED → DRAFT`, which sends the Engineer back to re-submit unchanged BOQ quantities.
 
 **Append-Only Snapshot & Deduction Architecture (Option `S1`, Recommended, Unapproved):**
 - **Stateful Aggregate Header (`SubcontractorBilling`):** The header row in `subcontractor_billings` transitions through the status machine (`DRAFT`, `SUBMITTED`, `AUDITED`, `APPROVED`, `REJECTED`, `CANCELLED`, `REVERSED`) and updates pointer column `currentAuditSnapshotId` (nullable FK to `BillingAuditSnapshot`) and `currentAuditCycleNo` (`Int`, default `0`).
@@ -186,15 +186,15 @@
     $$\text{RemainingRecoverable}(Adv) = Adv.\text{amount} - \big(\text{ActiveReserved}(Adv) + \text{ActiveConfirmed}(Adv)\big) \ge 0.00$$
 
 **Transition options:**
-- **T1a (Recommended, unapproved):** `AUDITED → SUBMITTED` on Manager return, with reason. Evidence stays locked (A:703). Inserts `RELEASED` recovery entries and clears `currentAuditSnapshotId = null` without requiring the Engineer to re-submit unchanged BOQ lines.
-- **T1b:** `AUDITED → REJECTED` (Manager) then `REJECTED → SUBMITTED` (Accountant, only when BOQ is unchanged). Reuses existing void/release rules, but requires amending A:704 so `REJECTED` does not unlock Engineer attachments unless reopened to `DRAFT`.
+- **T1a (Recommended, unapproved):** `AUDITED → SUBMITTED` on Manager return, with reason. Evidence stays locked (A:707). Inserts `RELEASED` recovery entries and clears `currentAuditSnapshotId = null` without requiring the Engineer to re-submit unchanged BOQ lines.
+- **T1b:** `AUDITED → REJECTED` (Manager) then `REJECTED → SUBMITTED` (Accountant, only when BOQ is unchanged). Reuses existing void/release rules, but requires amending A:708 so `REJECTED` does not unlock Engineer attachments unless reopened to `DRAFT`.
 - **T2:** keep `REJECTED → DRAFT → SUBMITTED → AUDITED` through the Engineer.
 - **Q-OD-03:** T1a, T1b or T2?
 
 ### OD-04 — Material receiving gate (`BD-13`, `OBD-09`, `BD-05`, `AUD-06`)
 
 **OD-04A.**
-- **4A:** every MATERIALS expense, including custody-paid ones, needs a Purchasing `CommitmentItem` and an approved MRN (A:289, `BD-13`). Strongest control; urgent small cash purchases cannot be recorded on a MATERIALS line without a PO and MRN.
+- **4A:** every MATERIALS expense, including custody-paid ones, needs a Purchasing `CommitmentItem` and an approved MRN (A:292, `BD-13`). Strongest control; urgent small cash purchases cannot be recorded on a MATERIALS line without a PO and MRN.
 - **4B:** direct vendor expenses and PO-linked expenses still need an approved MRN. A custody-funded expense with no commitment may skip the MRN only if all of the following hold under the budget-line and custody locks: (1) per-expense cap; (2) cumulative cap per custody and per project-month; (3) at most one such expense per custody per day; (4) invoice and material photos attached (`C-11`); (5) Accountant verification and Manager approval, with a flag and audit event. The SAR caps are Owner inputs (SEM); no figure is assumed.
 - *Recommended (unapproved):* 4A.
 - **Q-OD-04A:** 4A or 4B (and, for 4B, the exact SAR caps)?
@@ -204,7 +204,7 @@
 
 ### OD-05 — Cash coverage, project cost, margin, and owner payment consistency (`AUD-03`, `AUD-05-1..4`, `BD-09`, `BD-10`, `BD-21`, `INV-OPA-1`, `NEW-OD-01`, `NEW-OD-02`)
 
-**Evidence & Domain Scope.** The system records physical cash movements only for owner payments, capital injections and repayments, and custody `disbursedAmount` and cash returns (`F1`, A:32). Approved expenses, payroll, labor sheets and subcontractor net payables are **approved liabilities**, not proof of cash disbursement (bank accounts and bank reconciliation are permanently out of scope: AGENTS §3–§4). Every liability metric is recognized at `status = 'APPROVED'` and never labeled "paid".
+**Evidence & Domain Scope.** The system records physical cash movements only for owner payments, capital injections and repayments, and custody `disbursedAmount` and cash returns (`F1`, A:35). Approved expenses, payroll, labor sheets and subcontractor net payables are **approved liabilities**, not proof of cash disbursement (bank accounts and bank reconciliation are permanently out of scope: AGENTS §3–§4). Every liability metric is recognized at `status = 'APPROVED'` and never labeled "paid".
 
 **OD-05A — Schema-Verified Cash Coverage Formulas (1–4):**
 1. **Recorded Cash & Funding Inflows (`NetCashAndFundingInflows(P)`):**
@@ -239,13 +239,13 @@
    - **Owner Payment Reversal & Allocation Atomic Invariant (`INV-OPA-1`):**
      Reversing an `OwnerPayment` (`RECORDED → REVERSED`, Manager-only) **must** execute in an atomic transaction that: (1) locks target `owner_billings (id ASC)` then `owner_payments`; (2) inserts compensating `OwnerPaymentAllocation(entryType = 'REVERSED', compensatesAllocationId = alloc.id)` for every active allocation of that payment; (3) sets `payment.status = 'REVERSED'`. An `OwnerPayment` with `status = 'REVERSED'` is guaranteed to have zero uncompensated allocations.
    - **Q-OD-05B1:** approve formulas 5–6 and invariant `INV-OPA-1`?
-   - **Q-OD-05B2:** confirm that `OwnerBilling` has a single certified `amount` (`Decimal(15,2)`) as in R:635 and A:550, or specify if owner-side retention/deduction columns are required?
+   - **Q-OD-05B2:** confirm that `OwnerBilling` has a single certified `amount` (`Decimal(15,2)`) as in R:635 and A:553, or specify if owner-side retention/deduction columns are required?
 
-**OD-05C — `BD-09`.** `PERMANENT_EQUITY` (no balance, no repayment, no write-off) vs `TEMPORARY_FINANCING` (append-only repayment ledger, Manager-only write-off with reason) as in A:484–497.
+**OD-05C — `BD-09`.** `PERMANENT_EQUITY` (no balance, no repayment, no write-off) vs `TEMPORARY_FINANCING` (append-only repayment ledger, Manager-only write-off with reason) as in A:487–500.
 - **Q-OD-05C:** confirm `BD-09`?
 
 **NEW-OD-01 — Site labor sheet funding.**
-- **F1 (Recommended, unapproved):** direct payable only (no `custodyId` on sheet, A:543).
+- **F1 (Recommended, unapproved):** direct payable only (no `custodyId` on sheet, A:546).
 - **F2:** optional `custodyId` on sheet, settling $S_{K,\text{unlinked}}$ under locks `budget_lines → custodies → sheet`.
 - **Q-NEW-OD-01:** F1 or F2?
 
@@ -255,16 +255,16 @@
 ### OD-06 — Remaining business rules
 
 **OD-06A — `R-01` vs `OBD-01`, and `BD-14`.**
-- `R-01` keeps `Commitment.amount = Σ nomination lines` and forbids a Manager lump-sum override (protecting item sum equality A:562).
+- `R-01` keeps `Commitment.amount = Σ nomination lines` and forbids a Manager lump-sum override (protecting item sum equality A:565).
 - `BD-14`: pre-cutover flat commitments, billings and VOs stay read-only history; after cutover SUBCONTRACTOR commitments come only from nominations, and Purchasing is blocked from them.
 - *Recommended (unapproved):* keep `R-01` and `BD-14`.
 - **Q-OD-06A:** approve `R-01` (over `OBD-01`) and `BD-14`?
 
-**OD-06B — `BD-18` workflow.** The custodian Engineer records an advance with a mandatory receipt; the Accountant verifies it; only verified advances reduce the custodian's balance and can be recovered through the append-only ledger `RESERVED → CONFIRMED / RELEASED` (A:219–245). Option **6B-1** as drafted; **6B-2** adds Manager approval of each advance. *Recommended (unapproved):* 6B-1.
+**OD-06B — `BD-18` workflow.** The custodian Engineer records an advance with a mandatory receipt; the Accountant verifies it; only verified advances reduce the custodian's balance and can be recovered through the append-only ledger `RESERVED → CONFIRMED / RELEASED` (A:222–248). Option **6B-1** as drafted; **6B-2** adds Manager approval of each advance. *Recommended (unapproved):* 6B-1.
 - **Q-OD-06B:** 6B-1 or 6B-2?
 
 **OD-06C — `BD-03`, `BD-19`, `AUD-10`, `AUD-05-4` (Labor rules and exclusivity).**
-- `BD-03`: **OT1** overtime formula at A:255–260; **OT2** no overtime column in v1 (R:292). *Recommended (unapproved):* OT1.
+- `BD-03`: **OT1** overtime formula at A:258–263; **OT2** no overtime column in v1 (R:292). *Recommended (unapproved):* OT1.
 - `BD-19` + `AUD-10`: worker names are plain text. **DUP1:** unique index on normalized name within a sheet; warning flag + reason across project sheets and payroll. **DUP2:** hard block on normalized match. *Recommended (unapproved):* DUP1.
 - **Q-OD-06C3 (Labor Path Exclusivity — `AUD-05-4`):** Choose:
   - **`LAB-1` *(Recommended, unapproved):*** Mutually exclusive per `((projectId, budgetLineId, periodYear, periodMonth)` + project-period worker uniqueness.
@@ -285,10 +285,10 @@
 
 **NEW-OD-03 — AGENTS time and attendance exclusion (SEM blocker).**
 - `AGENTS.md` §1 (lines 11–12) states this document wins over all other documentation. §3 (line 70) permits only "Payroll data capture (NOT payroll processing)". §3 (line 87) explicitly lists **"Time tracking / timesheets"** as permanently out of scope. §3 (lines 102–103) strictly forbids introducing out-of-scope features without explicit written approval in a task brief. §4 (lines 116, 120) permanently excludes **"Leave management / attendance"** and **"Time tracking"**.
-- CR-04 captures `attendanceDays` and `overtimeHours` with mandatory attendance evidence (A:719). CR-06 introduces `EquipmentTimesheet` with daily start/stop hours and meter readings. Neither `CR_Impact_Architecture_Review.md` nor `DESIGN_ADDENDUM_CR01_CR10_FINAL.md` constitutes an Owner-signed task brief overriding the engineering contract.
+- CR-04 captures `attendanceDays` and `overtimeHours` with mandatory attendance evidence (A:723). CR-06 introduces `EquipmentTimesheet` with daily start/stop hours and meter readings. Neither `CR_Impact_Architecture_Review.md` nor `DESIGN_ADDENDUM_CR01_CR10_FINAL.md` constitutes an Owner-signed task brief overriding the engineering contract.
 - **Q-NEW-OD-03:** Provide explicit written task-brief authorization overriding `AGENTS.md` §3 (line 87) and §4 (lines 116, 120) for CR-04 and CR-06, or restrict CR-04 and CR-06 to lump-sum cost capture without attendance/timesheet tracking?
 
-**NEW-OD-04 — Attachment rules.** JPEG, PNG, WebP and PDF only, magic-byte verification, 10 MB maximum (A:691).
+**NEW-OD-04 — Attachment rules.** JPEG, PNG, WebP and PDF only, magic-byte verification, 10 MB maximum (A:695).
 - **Q-NEW-OD-04:** confirm these rules?
 
 ### OD-07 — Custody (`AUD-07`, `AUD-07A-1..5`, `AUD-08`, `BD-18`, `BD-20`, amends `R-02`)
@@ -356,7 +356,7 @@ Every row below except `UC-1` has **no Owner approval** (`Status = Unapproved`).
 | **OD-01B** | `UC-2` | Post-approval immutability of commitment retention terms | `1B-1`, `1B-2` | `1B-1` | **Unapproved** | `OBD` | `Q-OD-01B` |
 | **OD-01C** | `UC-3` | Retention cap representation & Variation Order interaction | `1C-1`, `1C-2`, `1C-3`, `1C-4` | `1C-1` | **Unapproved** | `OBD`, `SEM` | `Q-OD-01C` |
 | **OD-02A** | `AUD-02` | Budget revision exposure continuity model | `2A-1`, `2A-2`, `2B` (`2A-3` rejected) | `2A-1` | **Unapproved** | `OBD`, `TECH` | `Q-OD-02A` |
-| **OD-02B** | `AUD-05` | Remove post-approval lineage amendment clause at `A:458` | Keep or remove `A:458` parenthetical | Remove | **Unapproved** | `DOC` | `Q-OD-02B` |
+| **OD-02B** | `AUD-05` | Remove post-approval lineage amendment clause at `A:461` | Keep or remove `A:461` parenthetical | Remove | **Unapproved** | `DOC` | `Q-OD-02B` |
 | **OD-02C** | — | Revision approval gate when `E(L_new) < X_eff(L_new)` & in-flight records | Gates `(a)`, `(b)`, `(c)`; 3 in-flight rules | `(b)`; continue against `succ*` | **Unapproved** | `OBD` | `Q-OD-02C` |
 | **OD-03** | `AUD-04`, `AUD-03-1..2` | Billing re-audit state transition & append-only `BillingAuditSnapshot` / `BillingDeduction` / recovery ledger | `T1a`, `T1b`, `T2`; `S1` (append-only) vs `S2` | `T1a` + `S1` | **Unapproved** | `OBD`, `TECH` | `Q-OD-03` |
 | **OD-04A** | `BD-13`, `OBD-09`, `AUD-06` | Material receiving gate vs. petty-cash exemption | `4A`, `4B` | `4A` | **Unapproved** | `OBD`, `SEM` | `Q-OD-04A` |
@@ -382,20 +382,20 @@ Every row below except `UC-1` has **no Owner approval** (`Status = Unapproved`).
 
 | Id | Location | Current text | Proposed change | Class | Depends on |
 |---|---|---|---|---|---|
-| COR-01 | [A lines 1, 5, 7, 18–19, 26, 43, 45, 47–51, 78, 126, 141, 154, 157, 185–188, 221, 224, 250, 255, 263, 289, 291, 295, 345, 400, 456, 473, 484, 516, 559, 652, 691, 865–878, 888–902, 908, 929, 944](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L1) | "DECISION-LOCKED", "APPROVED & LOCKED", "READY FOR IMPLEMENTATION APPROVAL" | Keep the lock label only for `UC-1` and for items the Owner expressly decides | DOC | Owner answers |
-| COR-02 | [A:567](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L567) | "7. **Retention (proposed, BD-11):**" | State the `UC-1` formula before `Actual = min(...)`; keep status wording accurate | DOC | none |
-| COR-03 | [A:180](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L180), [A:193](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L193), [A:575](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L575) | "After `AUDITED` the retention figures are immutable" (and deductions) | State aggregate header vs. append-only `BillingAuditSnapshot` & `BillingDeduction` scoped to snapshot (`S1`) | TECH | OD-03 |
-| COR-04 | [A:179](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L179), [A:88](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L88), [A:657](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L657), [A:736–737](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L736) | Re-audit "through the existing `REJECTED` path"; `REJECTED → DRAFT` only; deductions voided only on reject/cancel/reverse | Re-audit transition `T1a` (`AUDITED → SUBMITTED`), append-only `RELEASED` recovery rows, role permissions | TECH | OD-03 |
-| COR-05 | [A:188](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L188), [A:533–535](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L533-L535) | Fixed SAR cap `UC-3`; nomination and commitment retention fields | Cap mode and fields per OD-01C; add percentage field only for 1C-2, 1C-3 or 1C-4 | TECH | OD-01C |
-| COR-06 | [A:458](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L458) | "…or via a Manager-only audited lineage amendment record…" | Remove parenthetical | DOC | Q-OD-02B |
-| COR-07 | [A:434–438](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L434-L438), [A:459](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L459), [A:549](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L549), [A:593](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L593) | Lineage is "reporting only", never enters exposure; every line carries `lineageGroupId` | Replace with OD-02 family rule (R1–R8), place `lineageGroupId` on lineage rows only, widen closure list | TECH | OD-02A |
-| COR-08 | [A:83](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L83), [A:359–364](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L359-L364), [A:370](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L370) | Subcontract term is `Eff_C`; submitted custodies enter `P(L)` | Replace with reconciled `R_linked(K)`, `R_unlinked(K)`, `Term(C)`, `P(L)` unissued reservation & `SETTLED`/`CLOSED` balance guards | TECH (amends `R-02`) | OD-07A |
-| COR-09 | [A:400–403](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L400-L403), [A:542](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L542) | Manager "records an exception on the custody"; `Custody` has "over-budget exception fields" | Replace with `CustodyOverrunAuthorization` and issue check (7B-1); snapshot fields written at issue | TECH | OD-07B |
-| COR-10 | [A:499](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L499), [A:505–514](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L505-L514), [A:516–523](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L516-L523), [A:594](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L594) | "Liquidity"; undefined "recognized project cost"; custody-based outflow | Formulas 1–6 with verified `cashReturnedAmount`, conditional labor terms, `INV-OPA-1` reversal invariant | TECH + OBD | OD-05 |
-| COR-11 | [A:263](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L263), [A:543](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L543) | Sheet has no custody link; worker overlap is data-entry policy | `custodyId` rule under F2; labor path exclusivity under LAB-1/2/3 (`AUD-05-4`) | TECH | NEW-OD-01, OD-06C |
-| COR-12 | [A:529](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L529), [A:555](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L555), [A:323–333](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L323-L333), [A:769](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L769) | "line type, `commitmentItemId`, rate-equality validation" only | The `AUD-09` proposal of §4.1 | TECH | none |
-| COR-13 | [A:628–642](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L628-L642) | Lock table lacks listed rows | Add rows of §4.3 including Owner Cash domain canonical locks & retry rule | TECH | OD-02, OD-05, OD-07 |
-| COR-14 | [A:289](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L289) | "There is no petty-cash or amount threshold" | Keep 4A, or add 4B controls | DOC if 4A; TECH + OBD if 4B | OD-04A |
+| COR-01 | [A lines 1, 7, 9, 20–19, 26, 43, 45, 47–51, 78, 126, 141, 154, 157, 185–188, 221, 224, 250, 255, 263, 289, 291, 295, 345, 400, 456, 473, 484, 516, 559, 652, 691, 865–878, 888–902, 908, 929, 944](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L1) | "DECISION-LOCKED", "APPROVED & LOCKED", "READY FOR IMPLEMENTATION APPROVAL" | Keep the lock label only for `UC-1` and for items the Owner expressly decides | DOC | Owner answers |
+| COR-02 | [A:570](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L570) | "7. **Retention (proposed, BD-11):**" | State the `UC-1` formula before `Actual = min(...)`; keep status wording accurate | DOC | none |
+| COR-03 | [A:183](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L183), [A:196](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L196), [A:579](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L579) | "After `AUDITED` the retention figures are immutable" (and deductions) | State aggregate header vs. append-only `BillingAuditSnapshot` & `BillingDeduction` scoped to snapshot (`S1`) | TECH | OD-03 |
+| COR-04 | [A:182](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L182), [A:91](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L91), [A:661](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L661), [A:740–741](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L740) | Re-audit "through the existing `REJECTED` path"; `REJECTED → DRAFT` only; deductions voided only on reject/cancel/reverse | Re-audit transition `T1a` (`AUDITED → SUBMITTED`), append-only `RELEASED` recovery rows, role permissions | TECH | OD-03 |
+| COR-05 | [A:191](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L191), [A:536–538](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L536-L538) | Fixed SAR cap `UC-3`; nomination and commitment retention fields | Cap mode and fields per OD-01C; add percentage field only for 1C-2, 1C-3 or 1C-4 | TECH | OD-01C |
+| COR-06 | [A:461](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L461) | "…or via a Manager-only audited lineage amendment record…" | Remove parenthetical | DOC | Q-OD-02B |
+| COR-07 | [A:437–441](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L437-L441), [A:462](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L462), [A:552](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L552), [A:597](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L597) | Lineage is "reporting only", never enters exposure; every line carries `lineageGroupId` | Replace with OD-02 family rule (R1–R8), place `lineageGroupId` on lineage rows only, widen closure list | TECH | OD-02A |
+| COR-08 | [A:86](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L86), [A:362–367](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L362-L367), [A:373](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L373) | Subcontract term is `Eff_C`; submitted custodies enter `P(L)` | Replace with reconciled `R_linked(K)`, `R_unlinked(K)`, `Term(C)`, `P(L)` unissued reservation & `SETTLED`/`CLOSED` balance guards | TECH (amends `R-02`) | OD-07A |
+| COR-09 | [A:403–406](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L403-L406), [A:545](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L545) | Manager "records an exception on the custody"; `Custody` has "over-budget exception fields" | Replace with `CustodyOverrunAuthorization` and issue check (7B-1); snapshot fields written at issue | TECH | OD-07B |
+| COR-10 | [A:502](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L502), [A:508–517](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L508-L517), [A:519–526](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L519-L526), [A:598](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L598) | "Liquidity"; undefined "recognized project cost"; custody-based outflow | Formulas 1–6 with verified `cashReturnedAmount`, conditional labor terms, `INV-OPA-1` reversal invariant | TECH + OBD | OD-05 |
+| COR-11 | [A:266](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L266), [A:546](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L546) | Sheet has no custody link; worker overlap is data-entry policy | `custodyId` rule under F2; labor path exclusivity under LAB-1/2/3 (`AUD-05-4`) | TECH | NEW-OD-01, OD-06C |
+| COR-12 | [A:532](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L532), [A:558](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L558), [A:326–336](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L326-L336), [A:773](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L773) | "line type, `commitmentItemId`, rate-equality validation" only | The `AUD-09` proposal of §4.1 | TECH | none |
+| COR-13 | [A:632–646](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L632-L646) | Lock table lacks listed rows | Add rows of §4.3 including Owner Cash domain canonical locks & retry rule | TECH | OD-02, OD-05, OD-07 |
+| COR-14 | [A:292](file:///d:/Construction%20Control/docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md#L292) | "There is no petty-cash or amount threshold" | Keep 4A, or add 4B controls | DOC if 4A; TECH + OBD if 4B | OD-04A |
 
 ## 7. Remaining gaps
 

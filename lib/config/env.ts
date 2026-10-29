@@ -39,6 +39,31 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['error', 'warn', 'info', 'debug'])
     .default('info'),
+
+  // Attachment Object Storage (Wave 0 — backend-neutral abstraction)
+  // NOTE: Production cloud storage provider is intentionally NOT selected in Wave 0.
+  // 'local_dev' and 'memory' are strictly rejected when NODE_ENV === 'production'.
+  ATTACHMENT_STORAGE_PROVIDER: z
+    .enum(['disabled', 'memory', 'local_dev'])
+    .optional(),
+  ATTACHMENT_LOCAL_STORAGE_DIR: z.string().min(1).optional(),
+}).superRefine((data, ctx) => {
+  if (data.NODE_ENV === 'production') {
+    if (data.ATTACHMENT_STORAGE_PROVIDER === 'memory') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ATTACHMENT_STORAGE_PROVIDER'],
+        message: 'ATTACHMENT_STORAGE_PROVIDER "memory" cannot be used in production mode.',
+      });
+    }
+    if (data.ATTACHMENT_STORAGE_PROVIDER === 'local_dev') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ATTACHMENT_STORAGE_PROVIDER'],
+        message: 'ATTACHMENT_STORAGE_PROVIDER "local_dev" cannot be used in production mode.',
+      });
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
