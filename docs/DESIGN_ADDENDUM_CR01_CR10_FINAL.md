@@ -1,118 +1,163 @@
-# DESIGN CORRECTIONS & BUSINESS DECISION ADDENDUM — DESIGN PROPOSAL (OWNER DECISIONS PENDING EXCEPT `UC-1`)
+# DESIGN CORRECTIONS & BUSINESS DECISION ADDENDUM — SYNCHRONIZED WITH OWNER DECISIONS (2026-10-31)
 
-> **Traceability correction (2026-10-29, Specification Closure Gate).** The only item with a verified, explicit Owner approval is **`UC-1`** (Owner instruction of 2026-10-11: `ROUND_HALF_UP` to 2 dp via `Decimal` before the cumulative cap). Every other item in this document that is labelled "APPROVED & LOCKED", "LOCKED" or "decision-locked" (`C-*`, `R-01`–`R-07`, `BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, CR-09 boundary rules) is an **unapproved proposal / agent recommendation**; no Owner approval record exists in the repository for it. See `docs/OWNER_DECISION_BRIEF_CR01_CR10.md` (finding `AUD-01`) and `docs/CR01_CR10_SPEC_CLOSURE_GATE_REPORT.md`. Unresolved Owner decisions block implementation. Remaining "LOCKED"/"locked" wording in the body that this notice has not individually rewritten must be read as "proposed, not Owner-approved" (except for `UC-1`).
+> **Owner Decision Synchronization Notice (v2.0 — 2026-10-31).** This specification is synchronized with the authoritative `OWNER_DECISION_REGISTER_2026-10-31.md` and `REQUIREMENTS_AMENDMENT_2026-10-31.md`.
+> - **Owner-Approved Decisions Recorded:** `UC-1`, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3`, `OD-02A`, `OD-02B`, `OD-02C`, `OD-03`, `OD-04 / BD-13`, `OD-05A`, `OD-05B`, `OD-05C / BD-21`, `OD-06A-1`, `OD-06A-3`, `OD-06A-5`, `OD-06B-1`, `OD-06B-3`, `OD-06C-4`, `OD-06D-1`, `OD-06D-3`, `OD-06E-1`, `OD-07A` (`7A-1` & `7A-2`), `OD-07B` (`7B-1`), `OD-07C` (four technical/documentation corrections, subject to scope boundary), and `NEW-REQ-01` (Subcontractor Master Identity & Cash Payment Sub-Ledger).
+> - **Items Remaining `OPEN` (Must Not Be Assumed):** (1) `OD-02A/02C` exact `SPLIT` exposure allocation sub-rule (`allocationSharePercent` summing to 100% vs restricting `SPLIT` to unencumbered lines); (2) `OD-06A-3` exact priority order of deduction categories when total deductions exceed a bill's gross amount; (3) `OD-06A` initial commitment value derivation if BOQ sum differs from an explicit contract/override value; (4) Production cloud object-storage provider selection for attachments.
+> - **Technical Clarifications Required Before Implementation:** (1) `OD-06D-3` normalization and de-duplication of `AL_C` components/statuses in `Exposure_C = max(Eff_C, AL_C)`; (2) `OD-05C` schema/model-name reconciliation between existing `CapitalInjection` terminology and the approved temporary internal company-to-project liquidity funding semantics (no Prisma/schema changes in this documentation task).
+> - **Scope Exclusions (`OUT OF SCOPE / DEFERRED`):** `CR-04` worker attendance, timesheets, overtime, and site labor sheet workflows, and `CR-06` equipment operating-hour / timesheet workflows remain **out of scope** under `AGENTS.md` §3–§4 until a separate written scope override is issued.
 
-**Project:** Construction Control — Management Control Layer (Business Logic Change Program v2.0: CR-01 → CR-10)  
-**Baseline:** Slices 1–20 | Branch: `slice-20` | Commit: `c9f0e28` | Contract: `AGENTS.md v1.2.0`  
-**Document Status:** `DESIGN PROPOSAL — NOT READY FOR IMPLEMENTATION APPROVAL (Owner decisions pending; see OWNER_DECISION_BRIEF_CR01_CR10.md)` (Zero Code/Schema Implementation Performed by this document)
+**Project:** Construction Control — Management Control Layer (Business Logic Change Program v2.0: CR-01 → CR-10)
+**Baseline:** Branch `wave-0` | Commit: `7615e91` (Design originally baselined at `c9f0e28`, updated through `e236aa7` and `7615e91`) | Contract: `AGENTS.md v1.2.0`
+**Document Version & Date:** `v2.0 — 2026-10-31`
+**Document Status:** `OWNER DECISIONS SYNCHRONIZED — OPEN SUB-RULES, TECHNICAL CLARIFICATIONS & SCOPE EXCLUSIONS EXPLICITLY GATED` (Documentation-only update; zero code/schema changes performed by this synchronization)
 
-**Decision Status Summary:** Only `UC-1` is verified as Owner-approved. Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention open points `UC-2` and `UC-3`, Recommended Design Defaults (`R-01`–`R-07`), and CR-09 Revision Lineage boundary rules are **proposals awaiting explicit Owner decision**; they were previously mislabelled "APPROVED & LOCKED".
+**Decision Status Summary:** All core Owner decisions in `OWNER_DECISION_REGISTER_2026-10-31.md` are integrated in place below. Open sub-rules (`OD-02A/02C` `SPLIT`, `OD-06A-3` deduction priority, `OD-06A` BOQ vs override, production storage provider), technical clarifications (`OD-06D-3` `AL_C`, `OD-05C` `CapitalInjection` naming), and `AGENTS.md` scope exclusions (`CR-04`, `CR-06`) remain explicitly gated.
 
 ---
 
-## 1. Document Status *(Only `UC-1` Owner-approved — Other Decisions Pending)*
+## 1. Document Status *(Synchronized 2026-10-31)*
 
 | Item | Value |
 |---|---|
-| Baseline | Slices 1–20, branch `slice-20`, commit `c9f0e28` |
+| Baseline | Branch `wave-0`, commit `7615e91` (`Attachment Infrastructure — Wave 0` merged; earlier slices 1–21 at `c9f0e28` / `e236aa7`) |
 | Contract | `AGENTS.md v1.2.0` |
-| Nature | Authoritative Design Specification. Every CR (`CR-01` → `CR-10`) is **specified as a design proposal**; unresolved Owner decisions and open audit findings remain (see the Owner Decision Brief). No code or schema changes have been executed yet. |
-| Owner decisions on record | **`UC-1` only** (Owner instruction of 2026-10-11). `C-01`–`C-12` are labelled "confirmed" here but the upstream specification is not in the repository; `C-12` is an `AGENTS.md` constraint. `R-01`–`R-07`, `BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, and CR-09 boundary rules have **no Owner approval record** and are proposals. |
-| BD-11 & UC-1..UC-3 | **`UC-1` OWNER-APPROVED**: `ROUND_HALF_UP` to 2 dp via `Decimal` before the cumulative cap. **`BD-11` (Owner-proposed), `UC-2` (post-approval commitment term immutability with statement-level audit reduction) and `UC-3` (fixed SAR `Decimal(15,2)` cap snapshot at commitment approval) are PROPOSED — pending explicit Owner decision** (§4 CR-02, §16; Owner Brief OD-01A/B/C). |
-| Sources | `docs/CR_Impact_Architecture_Review.md`, the repository baseline at `c9f0e28`, `AGENTS.md v1.2.0`, and Owner decision locks. |
+| Nature | Authoritative Design Specification synchronized with `OWNER_DECISION_REGISTER_2026-10-31.md` and `REQUIREMENTS_AMENDMENT_2026-10-31.md`. Decisions approved by the Owner do not by themselves authorize code implementation or scope expansion without slice execution authorization. |
+| Owner decisions on record | **`UC-1`** (2026-10-11), **`OD-01A / BD-11`** & **`OD-01B / UC-2`** (2026-10-29), and **`OD-01C / UC-3`, `OD-02A..C`, `OD-03`, `OD-04 / BD-13`, `OD-05A..C`, `OD-06A-1`, `OD-06A-3`, `OD-06A-5`, `OD-06B-1`, `OD-06B-3`, `OD-06C-4`, `OD-06D-1`, `OD-06D-3`, `OD-06E-1`, `OD-07A`, `OD-07B`, `OD-07C`, `NEW-REQ-01`** (2026-10-31). |
+| Open Sub-Rules & Technical Alignments | **`OPEN`:** `OD-02A/02C` `SPLIT` allocation rule; `OD-06A-3` deduction priority order when exceeding gross; `OD-06A` initial commitment value if BOQ sum differs from contract/override; production attachment storage provider. **`TECH CLARIFICATION`:** `OD-06D-3` `AL_C` component/status normalization; `OD-05C` `CapitalInjection` naming alignment. **`OUT OF SCOPE`:** `CR-04` attendance/labor sheets and `CR-06` equipment timesheets. |
+| Sources | `OWNER_DECISION_REGISTER_2026-10-31.md`, `REQUIREMENTS_AMENDMENT_2026-10-31.md`, `docs/OWNER_DECISION_BRIEF_CR01_CR10.md`, `docs/CR01_CR10_SPEC_CLOSURE_GATE_REPORT.md`, `docs/CR_Impact_Architecture_Review.md`, and `AGENTS.md v1.2.0`. |
 | Location of this document | `docs/DESIGN_ADDENDUM_CR01_CR10_FINAL.md` |
 
 **Vocabulary used throughout:**
 - **CONFIRMED**: stated by the CR requirements or forced by the repository.
 - **ARCHITECTURAL CONSTRAINT**: forced by the existing codebase or `AGENTS.md`.
-- **OWNER-APPROVED**: explicitly approved by the Owner in a verifiable record. Currently only `UC-1`.
-- **PROPOSED (unapproved)**: recommended design default or business decision (previously labelled "APPROVED & LOCKED (Best Practice)") that still requires an explicit Owner decision before implementation.
+- **OWNER-APPROVED**: explicitly approved by the Owner in `OWNER_DECISION_REGISTER_2026-10-31.md`.
+- **OWNER-APPROVED WITH OPEN SUB-RULE / TECH CLARIFICATION**: core rule approved by the Owner, with a specific sub-rule or technical normalization explicitly marked `OPEN` or `TECH CLARIFICATION REQUIRED`.
+- **OUT OF SCOPE / DEFERRED**: excluded from implementation unless a separate written scope override is granted.
 
-**Repository findings that changed the design:**
+**Repository findings that shaped the design:**
 
 | # | Finding | Consequence |
 |---|---|---|
-| F1 | `approveExpense` is the only point where spend becomes "actual". There is no payment or disbursement subsystem. The only real cash-release step is `issueCustody`. | The MRN gate belongs at expense approval (§4, CR-05). Actual outflow cannot be bank-based (BD-10). |
-| F2 | `lib/variation-orders/calculations.ts` defines `calculateEffectiveCommitmentCeiling` and `calculateRevisedBudgetLineCeiling`, but nothing in `lib/` uses them. Billing approval checks `Commitment.amount` only. `approveVariationOrder` already locks `budget_lines → commitments → variation_orders`. | Slice 20 is **EXTEND**, not NO IMPACT (§11). |
-| F3 | `Commitment` has a single `amount` and no lines. `Expense` has no `commitmentId`. | Quantity-level control needs a new `CommitmentItem`. MRN needs an Expense↔Commitment link, which changes the exposure formula (§4 CR-09, R-02). |
-| F4 | The over-budget check runs at `approveCommitment`, `approveExpense` and `issueCustody`. In `issueCustody` the actor is the Accountant. | The soft-limit design must handle a non-Manager actor (BD-20). |
-| F5 | Milestones are Manager-managed (Slice 12). Progress reports are approved by the Manager (Slice 10). | Milestone completion by the Manager is an **ARCHITECTURAL CONSTRAINT** (BD-17). |
-| F6 | Prior text said approved equipment timesheets add budget exposure. That would double-count the commitment. | Corrected in §4 CR-06 and §6. |
+| F1 | `approveExpense` is the only point where spend becomes "actual". There is no payment or disbursement subsystem. The only real cash-release step is `issueCustody`. | Standard material PO gate belongs at expense approval (§4 CR-05); urgent small site material purchases funded from custody are exempt from MRN (`OD-04 / BD-13`). Cash coverage separates evidenced custody cash out from approved direct payables (`OD-05A`). |
+| F2 | `lib/variation-orders/calculations.ts` defines `calculateEffectiveCommitmentCeiling` and `calculateRevisedBudgetLineCeiling`, but nothing in `lib/` uses them. Billing approval checks `Commitment.amount` only. `approveVariationOrder` already locks `budget_lines → commitments → variation_orders`. | Slice 20 is **EXTEND**, not NO IMPACT (§11). Approved VOs adjust the commitment ceiling (`OD-06C-4`). |
+| F3 | `Commitment` has a single `amount` and no lines. `Expense` has no `commitmentId`. | Quantity-level control needs `CommitmentItem`. Subcontractor master identity and per-contract sub-ledgers are required (`NEW-REQ-01`). |
+| F4 | The over-budget check runs at `approveCommitment`, `approveExpense`, `approvePayroll`, `approveCustody` and `issueCustody`. In `issueCustody` the actor is the Accountant. | Soft-limit design uses a two-stage custody check (`OD-07B / BD-20`): Manager approves overrun cap at custody approval or via an independent `authorizeCustodyOverrun` action; Accountant re-checks at disbursement and cannot approve overruns. |
+| F5 | Milestones are Manager-managed (Slice 12). Progress reports are approved by the Manager (Slice 10). | Field milestones and progress completion operate independently of Owner billings with optional reference linking (`OD-06D-1`, `BD-17`). |
+| F6 | Prior text said approved equipment timesheets add budget exposure. That would double-count the commitment. | Corrected in §4 CR-06 and §6; moreover, CR-06 equipment operating-hour timesheets are **OUT OF SCOPE / DEFERRED** until a separate written scope override. |
 
 ---
 
-## 2. Executive Summary *(Proposals — Only `UC-1` Owner-approved)*
+## 2. Executive Summary *(Synchronized with 2026-10-31 Owner Decisions)*
 
-1. **Decision status.** Only `UC-1` is Owner-approved. Core rules (`C-01`–`C-12`, confirmed per upstream specification not present in the repository), design defaults (`R-01`–`R-07`), and Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`, `UC-2`, `UC-3`, and CR-09 boundary rules) are **proposals pending explicit Owner decision** (§3, §16). No CR in the Acceptance Matrix (§15) is ready for implementation approval.
-2. **Contract identity.** `Nomination → NominationItem → Commitment → CommitmentItem → BillingLine` is a single immutable chain. Billing lines cannot choose their rate or their VO.
-3. **Variation Orders (BD-12, PROPOSED).** A VO never changes the rate of an existing item. It adjusts quantity at the same rate (`QUANTITY_ADJUSTMENT`), or creates a new item with its own rate (`ADDITIONAL_ITEM`). The billing check is a pooled quantity check.
-4. **Billing concurrency.** The database ledger under row locks is the source of truth. Stored cumulative values are informational.
-5. **Advance recovery (BD-18, PROPOSED).** Recovery moves through an append-only ledger with `RESERVED`, `CONFIRMED` and `RELEASED` entries. Advances are verified by the Accountant. Engineers cannot edit recovered amounts.
-6. **Retention (`UC-1` Owner-approved; BD-11, UC-2, UC-3 PROPOSED).** The proposed rule is that the rate and cumulative cap come from each subcontract (no universal default rate or cap). Calculated retention on statement Gross is rounded half-up (`ROUND_HALF_UP`) to 2 decimal places (halalas) using `Decimal` before applying the remaining cap (`UC-1`, Owner-approved). Proposed, pending Owner decision: commitment retention terms immutable after approval, with operational flexibility via statement-level Accountant reduction with a mandatory reason (`UC-2`, `BD-11`); cumulative caps stored and enforced as a fixed SAR `Decimal(15,2)` amount snapshot at commitment approval (`UC-3`; alternatives `1C-2`–`1C-4` are documented in the Owner Brief). Retention release is out of v1 scope.
-7. **Material gate (BD-05 & BD-13, PROPOSED).** Engineer creates MRN, Manager approves (`creator ≠ approver`). The payment gate sits at `approveExpense` and is quantity-level across all `MATERIALS` expenses, which must link to a `CommitmentItem`.
-8. **Cash flow (BD-10 & BD-21, PROPOSED).** Operational outflow is tracked as "Recognized Outflow (approved basis)". Owner billing is recognized upon Manager approval. Financing repayments are separate from project cost.
-9. **Capital injection (BD-09, PROPOSED).** `PERMANENT_EQUITY` has no balance and no repayment. `TEMPORARY_FINANCING` has an append-only repayment ledger.
-10. **Locking.** One strictly ascending lock hierarchy with **no pre-lock exceptions**. The nomination lock is an ordinary level-6 lock (§7).
-11. **Exposure.** One definition of active exposure, pending projection and available balance. Pending is derived, never a reservation, and nothing is counted twice (§4 CR-09).
-12. **Revisions.** Budget revision mapping is a reporting-only lineage. It never re-binds historical records; superseded lines are closed to new commitments/unlinked expenses while existing commitments/custodies settle normally (§4 CR-09).
-13. **Wave 2 dependency.** CR-06 depends on CR-05, because both share one expense-matching gate (§12).
+1. **Decision status.** All Owner decisions recorded in `OWNER_DECISION_REGISTER_2026-10-31.md` are now integrated into this specification. Open sub-rules (`OD-02A/02C` `SPLIT`, `OD-06A-3` deduction priority, `OD-06A` BOQ vs override, production storage provider), technical clarifications (`OD-06D-3` `AL_C`, `OD-05C` model naming), and `CR-04`/`CR-06` scope exclusions remain explicitly flagged (§3, §15, §16, §17).
+2. **Subcontractor master identity & cash payment sub-ledger (`NEW-REQ-01`, OWNER-APPROVED).** Each subcontractor has a single company-wide master identity with isolated per-project, per-contract sub-ledgers. Every cash payment records actual payment date, amount, movement type (advance, on-account, or billing payment), cash source, method, receipt proof, and actors. Payments made from an Engineer's custody use a single shared transaction ID linked to both the subcontractor sub-ledger and the custody settlement so they are never double-counted.
+3. **Nomination & commitments (`OD-06A-1`, `OD-06A-5`, OWNER-APPROVED).** Manager approval of a subcontractor nomination atomically and idempotently creates the financial `Commitment` and reserves budget line capacity. Multiple independent subcontractor commitments may bind to one budget line with isolated contract accounts and aggregated exposure checks. *(Initial commitment value derivation if BOQ sum differs from an explicit contract/override value remains `OPEN`.)*
+4. **Variation Orders (`OD-06C-4`, `BD-12`, OWNER-APPROVED).** VOs have no financial effect before approval. After approval, additions/reductions adjust the same contract commitment after budget and contract ceiling checks; negative VOs release only unused capacity and never invalidate executed work, approved billings, or paid advances. Contract ceiling overruns require an approved VO/addendum (`OD-06D-3`).
+5. **Billing re-audit & deductions (`OD-03`, `OD-06A-3`, OWNER-APPROVED; deduction priority `OPEN`).** When only deductions/caps change and BOQ quantities are unchanged, the billing returns directly to `SUBMITTED` (`AUDITED → SUBMITTED`) for Accountant re-audit, preserving append-only audit snapshots and marking prior cycle deductions superseded (never deleted). Net billing payable is never negative (`>= 0.00`), and unapplied deduction balances carry forward by type/source without expiring or repeating; **exact priority order among deduction categories when total deductions exceed gross remains `OPEN`**.
+6. **Subcontractor advances & custody exposure (`OD-06B-1`, `OD-06B-3`, `OD-07A`, OWNER-APPROVED).** Advances require an approved commitment, stay within `Eff_C - ApprovedBills - OpenAdvances`, and become recoverable from billings only after payout verification (`VERIFIED`). Partial cash return of an advance is supported (to an open Engineer custody or company treasury, keeping status `PARTIALLY_SETTLED` until zero). Both dedicated commitment-linked custodies (`7A-1`, absorbed inside `max(Eff_C, AL_C + OutstandingCustodiesOn(C))`) and general `SITE_OPERATIONS` custodies (`7A-2`, transferring exposure upon verification) are supported without double-counting exposure.
+7. **Retention (`UC-1`, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3`, ALL OWNER-APPROVED).** Rate and cap come from each approved subcontract (`OD-01A`). `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` via `Decimal` before applying `min(scheduledRetentionThisBill, remainingRetentionCap)` (`UC-1`). Zero-retention contracts (`retentionApplicable = false`, `retentionRatePercent = 0.00`, `retentionCapMode = NO_CAP`, no deduction row) and post-approval term immutability are enforced (`OD-01B`). Percentage retention caps are dynamic on effective contract value (`Eff_C`) after approved VOs; negative VOs never rewrite historical retention or trigger automatic cash refunds—the new cap applies prospectively and pauses new retention if historical retention ≥ new cap (`OD-01C`).
+8. **Material gate & custody urgent purchases (`OD-04 / BD-13`, `BD-05`, OWNER-APPROVED).** Urgent small site material purchases funded from an Engineer's custody are exempt from creating a separate MRN with **no independent fixed SAR cap per transaction or per custody** (natural limit = actual remaining disbursed custody cash), subject to mandatory receipt/invoice, material photo, description, purpose, and custody settlement approval. Standard PO/vendor purchases follow the normal PO/MRN gate (`BD-05`).
+9. **Cash coverage, contractual margin & temporary company funding (`OD-05A`, `OD-05B`, `OD-05C / BD-21`, ALL OWNER-APPROVED).** Cash coverage separates `EvidencedCustodyCashOut` (`disbursedAmount - cashReturnedAmount`) from `ApprovedDirectPayables` and is labeled **Net Cash Coverage Position After Approved Payables** (`صافي تغطية السيولة بعد المستحقات المعتمدة`), never as reconciled bank cash (`OD-05A`). Contractual margin is `ApprovedOwnerBilling.netAmount - RecognizedProjectCost`, where subcontractor cost is `grossAmount - active penalties` (`OD-05B`). Project liquidity inflows come from Owner billing collections (partial supported) and temporary company-to-project funding; company funding repayment is a separate Manager-approved transaction (**never automatic** upon Owner billing collection), eliminated at company-level aggregation, and excluded from margin (`OD-05C`).
+10. **Budget revisions, exposure & custody overrun (`OD-02A..C`, `OD-06D-3`, `OD-07B`, OWNER-APPROVED; `SPLIT` sub-rule `OPEN`, `AL_C` normalization `TECH-CLAR`).** Active and pending exposure carries forward across budget revisions via `lineage group` (`OD-02A`), `BudgetLineLineage` is strictly immutable post-approval (`OD-02B`), and every old line requires an explicit fate before revision approval (`OD-02C`, with `SPLIT` exposure allocation remaining `OPEN`). Contractual exposure is `Exposure_C = max(Eff_C, AL_C)` with strict separation between budget overruns and contract-ceiling overruns (`OD-06D-3`). Custody budget overruns use a two-stage check at Manager approval and Accountant disbursement with an independent Manager overrun-cap action (`OD-07B`).
+11. **Non-destructive financial corrections & technical controls (`OD-06E-1`, `OD-07C`, OWNER-APPROVED).** Approved financial transactions are never mutated or deleted; errors use partial corrective entries, full reversal + re-entry, or recoverable overpayment balances (`OD-06E-1`). Monetary precision is standardized to `Decimal(15,2)`, canonical lock ordering is completed, worker names are normalized for in-scope data, and `UC-1` wording is unified (`OD-07C`).
+12. **Scope exclusions (`CR-04`, `CR-06`, OUT OF SCOPE).** Worker attendance/timesheet/overtime labor sheets (`CR-04`) and equipment operating-hour timesheets (`CR-06`) remain **out of scope** until a separate written scope override.
 
 ---
 
 ## 3. Final Business Decisions
 
-### 3.1 CONFIRMED (traceable to the CR sources or forced by the repository)
+### 3.1 CONFIRMED & OWNER-APPROVED CORE RULES
 
-| ID | Decision | Basis |
+| ID | Decision | Basis / Status |
 |---|---|---|
-| C-01 | The Engineer proposes a subcontractor nomination. Manager approval turns it into an official Commitment. Rejection keeps its reason. | CR-01 |
-| C-02 | Subcontractor billing runs Engineer (BOQ + evidence) → Accountant (audit, deductions, net) → Manager (final approval). | CR-02 |
-| C-03 | Gross is Σ(executed quantity × contractual rate). Net is Gross minus advance recovery, retention, penalties and other approved deductions. Net must not be negative. | CR-02 |
-| C-04 | A subcontractor advance is paid from custody, evidenced by a receipt, reduces the custodian's balance, and is later recovered through billing. Liability equals `disbursedAmount`. | CR-03 |
-| C-05 | An approved VO raises the effective billing ceiling without mutating the commitment. | CR-07 |
-| C-06 | Material payment requires an approved MRN with signed evidence. | CR-05 |
-| C-07 | Over-budget is a soft limit. It needs a Manager exception, a reason and an audit event. | CR-09 |
-| C-08 | Budget revisions create new versions. The original baseline is immutable. | CR-09 |
-| C-09 | Owner billing, owner payment and capital injection are distinct concepts. Commitment is not outflow. Billing is not payment. Injection is not revenue. | CR-10 |
-| C-10 | Milestone completion requires visual evidence. | CR-08 |
-| C-11 | Expenses and advances require photo evidence. | CR-03, review §6.2 |
-| C-12 | Money is Decimal-only, financial records are never hard-deleted, and every transition writes an audit entry in the same transaction. | `AGENTS.md` §13, §14, §21 |
+| C-01 | The Engineer proposes a subcontractor nomination. Manager approval atomically and idempotently turns it into an official Commitment (`OD-06A-1`). Rejection keeps its reason. | CR-01 / **OWNER-APPROVED (`OD-06A-1`)** |
+| C-02 | Subcontractor billing runs Engineer (BOQ + evidence) → Accountant (audit, deductions, net) → Manager (final approval). Unchanged-BOQ re-audit returns directly to `SUBMITTED` (`OD-03`). | CR-02 / **OWNER-APPROVED (`OD-03`)** |
+| C-03 | Gross is Σ(executed quantity × contractual rate). Net is Gross minus advance recovery, retention, penalties and other approved deductions. Net must not be negative (`>= 0.00`), and unapplied deductions carry forward by type/source (`OD-06A-3`; priority order `OPEN`). | CR-02 / **OWNER-APPROVED WITH OPEN SUB-RULE (`OD-06A-3`)** |
+| C-04 | A subcontractor advance is paid from custody (dedicated commitment custody `7A-1` or general `SITE_OPERATIONS` custody `7A-2`), evidenced by a receipt, verified by Accountant (`VERIFIED`), and recovered through billing or partial cash return (`OD-06B-1`, `OD-06B-3`, `OD-07A`). Liability equals `disbursedAmount`. | CR-03 / **OWNER-APPROVED (`OD-06B-1`, `OD-06B-3`, `OD-07A`)** |
+| C-05 | An approved VO adjusts the effective commitment ceiling (`Eff_C`) on the same commitment without mutating original contract history; negative VOs release unused capacity only (`OD-06C-4`). | CR-07 / **OWNER-APPROVED (`OD-06C-4`)** |
+| C-06 | Standard PO material payment requires an approved MRN with signed evidence (`BD-05`). Urgent small site material purchases funded from Engineer custody are exempt from a separate MRN with no independent fixed SAR cap, bounded by actual remaining disbursed custody cash (`OD-04 / BD-13`). | CR-05 / **OWNER-APPROVED (`OD-04 / BD-13`)** |
+| C-07 | Project budget-line overrun halts new financial approval until a reasoned Manager exception within authority (and never raises contract value); contract-ceiling overrun halts approval until an approved VO/contract amendment raises `Eff_C` (`OD-06D-3`). | CR-09 / **OWNER-APPROVED (`OD-06D-3`)** |
+| C-08 | Budget revisions create new versions; baseline is immutable; `BudgetLineLineage` is strictly immutable post-approval (`OD-02B`); exposure carries forward across `lineage group` (`OD-02A`, `OD-02C`; `SPLIT` sub-rule `OPEN`). | CR-09 / **OWNER-APPROVED (`OD-02A..C`, `SPLIT` `OPEN`)** |
+| C-09 | Owner billing collections and temporary company-to-project liquidity funding are the two project inflow paths (`OD-05C`). Company funding is not revenue/profit/Owner collection; repayment requires separate Manager approval (never automatic on Owner collection). | CR-10 / **OWNER-APPROVED (`OD-05A..C`)** |
+| C-10 | Field milestones and progress completion operate independently of Owner billings, with optional reference linking (`OD-06D-1`). Milestone completion requires visual evidence (`BD-17`). | CR-08 / **OWNER-APPROVED (`OD-06D-1`)** |
+| C-11 | Expenses, urgent custody material purchases, and subcontractor advances require receipt/photo evidence. | CR-03, CR-05 / **OWNER-APPROVED (`OD-04`, `NEW-REQ-01`)** |
+| C-12 | Money is `Decimal(15,2)` only (`OD-07C`), financial records are never hard-deleted, and every transition writes an audit entry in the same transaction. | `AGENTS.md` §13, §14, §21 / **OWNER-APPROVED (`OD-07C`)** |
+| NEW-REQ-01 | Unified company-wide Subcontractor Master Identity with isolated per-project, per-contract sub-ledgers, mandatory cash payment fields, and single-transaction dual-view linking for Engineer custody payments. | CR-01..03 / **OWNER-APPROVED (`NEW-REQ-01`)** |
 
-### 3.2 PROPOSED DESIGN DEFAULTS (R-01 → R-07, PROPOSED - not Owner-approved)
+### 3.2 CROSS-CUTTING RULES (`R-01` → `R-07`, Synchronized with `OWNER_DECISION_REGISTER_2026-10-31.md`)
 
-| ID | Default |
+> *Note on ID mapping:* In `OWNER_DECISION_REGISTER_2026-10-31.md`, `R-01`..`R-07` also denote specific Owner-approved rules (`OD-06A-5 / R-01`, `OD-06B-3 / R-02`, `OD-06D-1 / R-04`, `OD-06C-4 / R-05`, `OD-06E-1 / R-06, R-07`). Both meanings are preserved below for full traceability.
+
+| ID | Rule Summary & Status |
 |---|---|
-| R-01 | **Commitment amount** = Σ nomination lines, each line rounded half-up to 2 dp. The Manager cannot override with a lump sum. A rate change means the Engineer amends the BOQ. |
-| R-02 | **Commitment relief.** A commitment's contribution to exposure is `max(EffectiveAmount, ApprovedLinkedExpenses)`. The linked approved expenses are the actual-spend part, and the remainder is the open part. This applies only to commitments that receive expenses (materials, equipment). Subcontractor commitments keep their full amount, because billings certify and do not post expenses. The full formulas are in §4 CR-09. |
-| R-03 | **Rounding.** Line amount = quantity × rate, rounded half-up (`ROUND_HALF_UP`) to 2 dp once per line using `Decimal`. Gross is the sum of the rounded lines. For retention: `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)` via `Decimal` before applying the cumulative cap (`UC-1`, locked in §4 CR-02). |
-| R-04 | **Reversal authority.** Reversing any approved financial record is Manager-only. It needs a mandatory reason, is flagged in the audit log, and uses a compensating entry. It is never a deletion. |
-| R-05 | **Evidence is checked at SUBMIT.** The minimum evidence per record type is in §9. |
-| R-06 | **Generic reason rule.** Every override, rejection and reversal needs a non-empty trimmed reason. Length thresholds are not specified, because they are unsourced. |
-| R-07 | **Seven Billing statuses.** `DRAFT, SUBMITTED, AUDITED, APPROVED, REJECTED, CANCELLED, REVERSED`. The Accountant may reject at the audit stage and the Manager at the approval stage. The rejecting role is recorded. |
+| R-01 (`OD-06A-5` / `OD-06A-1`) | **Multiple Commitments per Budget Line (`OD-06A-5`, OWNER-APPROVED):** Multiple independent subcontractor commitments/contracts may bind to a single budget line, keeping each contract and subcontractor account isolated while aggregating exposure against the shared budget line capacity. **Initial Commitment Value (`OD-06A-1`):** `estimatedAmount` is Σ rounded nomination lines; how initial commitment value is derived if BOQ sum differs from an explicit contract/override value remains **`OPEN`**. |
+| R-02 (`OD-06D-3`, `OD-07A`, `OD-06B-3`) | **Commitment Exposure & Relief (`OD-06D-3`, `OD-07A`, OWNER-APPROVED WITH `AL_C` TECH CLARIFICATION):** Contractual exposure is `Exposure_C = max(Eff_C, AL_C)` (and `max(Eff_C, AL_C + OutstandingCustodiesOn(C))` when dedicated subcontractor custodies exist under `7A-1`). Also in Register as `OD-06B-3 / R-02` (**Partial Cash Return of Subcontractor Advance — OWNER-APPROVED**). |
+| R-03 (`UC-1`, `OD-07C`) | **Monetary Precision & Rounding (OWNER-APPROVED):** All monetary fields use `Decimal(15,2)` (`OD-07C`). Line amount = quantity × rate rounded half-up (`ROUND_HALF_UP`) to 2 dp via `Decimal`. Retention: `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` via `Decimal` before applying `min(scheduledRetentionThisBill, remainingRetentionCap)` (`UC-1`, `OD-07C`). |
+| R-04 (`OD-06E-1`, `OD-06D-1`) | **Non-Destructive Financial Correction (`OD-06E-1`, OWNER-APPROVED):** Approved financial records are never edited in place or deleted; corrections use a linked partial corrective entry, full reversal + re-entry, or recoverable cash overpayment balance. Also in Register as `OD-06D-1 / R-04` (**Milestone Independence from Owner Billing — OWNER-APPROVED**). |
+| R-05 (`OD-06C-4`) | **Evidence at Submit & VO Commitment Rules (OWNER-APPROVED):** Minimum evidence per record type is checked at submit (§9). Also in Register as `OD-06C-4 / R-05` (**Variation Orders on Subcontractor Commitments — OWNER-APPROVED**). |
+| R-06 (`OD-06E-1`) | **Mandatory Reason & Audit Traceability (OWNER-APPROVED):** Every override, overrun authorization, retention reduction, rejection, reversal, and corrective entry requires a non-empty trimmed reason, actor, timestamp, and audit log entry. |
+| R-07 (`OD-03`, `OD-06E-1`) | **Seven Billing Statuses & Direct Re-Audit (`OD-03`, OWNER-APPROVED):** `DRAFT, SUBMITTED, AUDITED, APPROVED, REJECTED, CANCELLED, REVERSED`. When only deductions/caps change and BOQ quantities are unchanged, the billing returns directly to `SUBMITTED` (`AUDITED → SUBMITTED`) for Accountant re-audit with append-only audit snapshots and superseded prior deductions. |
 
 ---
 
 ## 4. CR-01 → CR-10 Final Specifications
 
-### CR-01 — Subcontractor Nomination → Commitment
+### 4.0 Subcontractor Master Identity & Cash Payment Sub-Ledger (`NEW-REQ-01` — OWNER-APPROVED)
 
-- **Aggregate:** `SubcontractorNomination` with `SubcontractorNominationItem` lines.
+1. **Subcontractor Master Identity Across Projects:**
+   - The system must never create duplicate independent subcontractor entities simply because the same subcontractor works across multiple projects.
+   - A single company-wide master subcontractor record holds the subcontractor's core identity, linked to independent contractual relationships and sub-accounts/sub-ledgers for each `(project, contract/commitment)`.
+   - Contract balances (advances, billings, payments, deductions) remain strictly isolated per contract. Cross-project summary views may be displayed for management oversight, but never commingle contract balances or auto-offset one contract's balance against another without an explicit approved transaction.
+2. **Subcontractor Cash Payment Sub-Ledger (`دفتر حركة المقاول` — `NEW-REQ-01`):**
+   - Every cash payment received by a subcontractor must appear in the sub-ledger of its linked contract and record the following **exact mandatory fields**:
+     - `paymentDate` (`paidAt`): Actual date when cash was paid to the subcontractor.
+     - `amount`: Monetary payment amount in SAR, stored as exact `Decimal(15,2)` (> 0.00).
+     - `paymentType` (`movementType`): Approved movement type — `ADVANCE` (`سلفة`), `ON_ACCOUNT` (`دفعة تحت الحساب`), or `BILLING_PAYMENT` (`دفعة مستخلص`).
+     - `cashSource`: Actual source of physical cash (e.g. `ENGINEER_CUSTODY`, `COMPANY_TREASURY`).
+     - `paymentMethod`: Payment instrument / transfer method (e.g. `CASH_PHYSICAL`, `BANK_TRANSFER`, `CHECK`, `DIGITAL_PAYMENT`). Distinct from `cashSource`.
+     - `transactionReference` (`مرجع السند النقدي / مرجع العملية`): Mandatory reference identifier across all payment methods (never omitted or left blank). For direct physical cash payments (`CASH_PHYSICAL`), recording the cash disbursement voucher number, cash receipt voucher number, or custody payment voucher reference (`رقم سند الصرف النقدي / إيصال القبض / سند صرف العهدة`) is strictly mandatory. For bank-mediated methods (`BANK_TRANSFER`, `CHECK`, `DIGITAL_PAYMENT`), recording the bank transfer reference number, check number, or digital transaction reference is strictly mandatory.
+     - `projectId`: ID of the project where work is performed.
+     - `commitmentId`: ID of the approved subcontractor contract / commitment (`Commitment`).
+     - `subcontractorId`: ID of the company-wide Subcontractor Master Identity (`Subcontractor`).
+     - `receiptEvidence` (`receiptAttachmentId`): Mandatory uploaded receipt voucher, signed acknowledgment, or photo evidence of receipt.
+     - When paid from an Engineer's custody:
+       - `engineerId` / `engineerName`: Full identity of the paying Engineer.
+       - `custodyId`: Identification of the specific open custody (`Custody`) from which cash was disbursed.
+       - `sharedCustodyPaymentTxId` (`canonicalTransactionId`): Single shared transaction identifier linking the subcontractor payment entry directly to the custody settlement record.
+     - Governance actors: `paidById` (payer), `recordedById` (recorder), and `approvedById` (reviewer/approver per permission matrix).
+3. **Classification of Payment Effect:**
+   - **Advance (`سلفة`):** Upfront payment that remains a recoverable balance governed by the contract's recovery terms.
+   - **On-Account / Billing Payment (`دفعة تحت الحساب / دفعة مستخلص`):** Payment settled against a contractual entitlement, linked to the relevant billing statement/claim and never reclassified as an advance without an approved corrective transaction.
+   - Approving a billing statement must never be confused with proving its payment; a received payment is recorded in the subcontractor's sub-ledger only when actual payout is evidenced.
+4. **Custody Linkage Without Double-Counting (`قيد واحد وأثران مترابطان` — Non-Duplication Rule):**
+   - When an Engineer pays a subcontractor from custody, a single financial movement with one shared transaction reference (`sharedCustodyPaymentTxId`) is created and surfaced in two linked views:
+     - As cash received in the subcontractor's contract sub-ledger (`SubcontractorLedgerEntry`).
+     - As cash expended in the Engineer's custody settlement (`CustodySettlementEntry` / `CustodySubcontractorAdvance`).
+   - **Non-Duplication Invariant:** The contractor sub-ledger and custody settlement reference one shared financial transaction (`sharedCustodyPaymentTxId`). The same payment is **never counted twice** in aggregate project expenses, recognized cash outflows (`RecognizedOutflow`), or budget exposure calculations. Disbursing a custody to an Engineer is not proof that the subcontractor received funds; the subcontractor sub-ledger is credited only when actual payout to the subcontractor is evidenced.
+
+---
+
+### CR-01 — Subcontractor Nomination → Commitment (`OD-06A-1`, `OD-06A-5` — OWNER-APPROVED; BOQ vs Override `OPEN`)
+
+- **Aggregate:** `SubcontractorNomination` with `SubcontractorNominationItem` lines, linked to the company-wide Subcontractor Master Identity (`NEW-REQ-01`).
 - **Author:** Engineer assigned to an ACTIVE project.
-- **Budget line:** category `SUBCONTRACTOR`, same project, approved budget. The nomination's `budgetLineId` is **immutable from SUBMITTED onward**. This lets approval resolve its lock target safely (§7).
-- **Retention terms:** entered with the nomination from the subcontract agreement (see CR-02 and BD-11). They are fixed when the commitment is approved.
-- **Total:** `estimatedAmount` is a server-computed Σ item lines. It is not a free input.
-- **Approval:** Manager only, and the Manager cannot be the creator or the submitter.
-- **Approval effect:** in a single transaction it creates the Commitment as `APPROVED`, creates the `CommitmentItem` rows, and links the nomination to the commitment.
+- **Budget line & Multiple Commitments (`OD-06A-5 / R-01`, OWNER-APPROVED):**
+  - Category `SUBCONTRACTOR`, same project, approved budget. The nomination's `budgetLineId` is **immutable from SUBMITTED onward**. This lets approval resolve its lock target safely (§7).
+  - Multiple independent commitments for different subcontractors/contracts may be linked to a single budget line. Each contract and subcontractor sub-account remains isolated, while their exposures are summed to check capacity against the shared budget line. Sub-lines may be used when separate control over materially distinct work scopes is required.
+- **Retention terms:** entered with the nomination from the subcontract agreement (see CR-02, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3`). They are fixed when the commitment is approved.
+- **Total & Initial Commitment Value (`OD-06A-1`):** `estimatedAmount` is a server-computed Σ item lines. *(Open detail `OPEN`: how the initial commitment value is derived if the BOQ sum differs from an explicit contract/override value is not settled in the recorded decisions; neither is assumed to override the other without Owner clarification.)*
+- **Approval (`OD-06A-1 / BD-03`, OWNER-APPROVED):** Manager only, and the Manager cannot be the creator or the submitter.
+- **Approval effect (`OD-06A-1`, OWNER-APPROVED):** Upon Manager approval of the subcontractor nomination/contract request, the system automatically and atomically creates the financial `Commitment` as `APPROVED`, creates the `CommitmentItem` rows, reserves the amount on the appropriate budget line, and preserves full links between the nomination, contract, commitment, and approval. No financial commitment is created prior to approval.
 - **Bypass guard:** after cutover, Purchasing cannot create commitments on `SUBCONTRACTOR` lines. Otherwise Purchasing could skip the BOQ path (BD-14).
 - **Cardinality:**
   - One approved nomination produces exactly one commitment.
   - `Commitment.nominationId` is UNIQUE and nullable (nullable because Purchasing commitments have no nomination).
   - `Nomination.resultingCommitmentId` is UNIQUE and NULL until approval.
   - Both are set in the same transaction.
-- **Retry safety and duplicate approval** (no lock exception):
+- **Idempotency, retry safety, and duplicate approval (`OD-06A-1`, OWNER-APPROVED):**
   - Approval follows the canonical order: it locks the `budget_lines` row first, then the nomination row (a level-6 header lock), then revalidates.
   - Concurrent approvals of the same nomination, and of any nomination on the same line, serialize on the budget-line lock. They then queue on the nomination row.
-  - The second caller finds the nomination already `APPROVED` with a commitment, and returns that commitment without creating anything. If the status is not `SUBMITTED` and there is no commitment, it fails.
+  - The second caller finds the nomination already `APPROVED` with a commitment, and returns that commitment without creating anything (idempotent retry protection). If the status is not `SUBMITTED` and there is no commitment, it fails.
   - The UNIQUE constraints on `resultingCommitmentId` and `nominationId` are the final backstop.
 - **Duplicate nominations:** a second `SUBMITTED` nomination with the same project, normalized subcontractor name and budget line is rejected while the first is open. This is enforced by a **partial UNIQUE constraint on those columns where status is SUBMITTED**, so it needs no extra lock.
 
@@ -126,524 +171,500 @@
 - For every subcontractor commitment created by nomination, the nomination link is mandatory.
 - Items are free-text lines per commitment. They are **not** a catalog or item master (`AGENTS.md` §4).
 
-### CR-02 — Subcontractor Billing *(UC-1 Owner-approved; BD-11, UC-2, UC-3 PROPOSED)*
+### CR-02 — Subcontractor Billing (`UC-1`, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3`, `OD-03`, `OD-06A-3` — OWNER-APPROVED; Deduction Priority `OPEN`)
 
-**Entities:** `SubcontractorBilling`, `SubcontractorBillingLine`, `BillingDeduction`, and the advance recovery ledger (CR-03).
+**Entities:** `SubcontractorBilling`, `SubcontractorBillingLine`, `BillingAuditSnapshot`, `BillingDeduction`, and the advance recovery ledger (CR-03).
 
 **Billing line identity:**
 - `commitmentItemId` is mandatory.
 - The server sets `unitRate` as a snapshot of `CommitmentItem.contractRate`. The client cannot supply it.
 - Unique per `(billingId, commitmentItemId)`.
-- There is **no user-chosen VO field**. VO quantity is a pooled extension of the item (BD-12).
+- There is **no user-chosen VO field**. VO quantity is a pooled extension of the item (`BD-12`).
 
 **Quantity rule:**
 - `Effective Qty(item) = contractQuantity + Σ approved VO quantity adjustments on the item`.
 - Cumulative approved billed quantity must be ≤ `Effective Qty(item)`.
 - An ADDITIONAL_ITEM VO line becomes its own `CommitmentItem` with its own `contractRate`.
 
-#### Retention — UC-1 OWNER-APPROVED; BD-11, UC-2, UC-3 PROPOSED
+#### Retention — `UC-1`, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3` (ALL OWNER-APPROVED)
 
 *Scope note:* retention here is a contractual holdback on a subcontractor statement. It is not tax withholding, which `AGENTS.md` §4 excludes.
 
-1. **Terms come from each subcontract.**
-   - The retention rate and the cumulative retention cap are defined separately in each subcontract agreement.
-   - The system has **no universal default rate and no universal numerical cap**.
-   - The rate is an explicit percentage entered for the subcontract. `0.00` is allowed only as an explicit entry for an agreement that withholds nothing. It is never a default. A percentage has the structural validity bound 0–100, which is not a policy range.
-   - The cap has exactly one of two explicit forms:
-     - **Cap amount** (`≥ 0.00`). A cap of `0.00` is a real cap: nothing may be retained.
-     - **Explicitly no cumulative cap.**
-   - The two forms are stored as separate fields (a cap mode and a cap amount that is empty when there is no cap). An absent cap and a cap of zero are therefore never confused.
+1. **Terms come from each subcontract (`OD-01A / BD-11` & `OD-01B / UC-2` OWNER-APPROVED).**
+   - The retention rate and the cumulative retention cap are defined strictly by each approved subcontract agreement.
+   - The system introduces **no universal default rate and no universal numerical cap**.
+   - The rate is an explicit percentage entered for the subcontract. Retention terms must accurately reflect the approved subcontract.
+   - **Zero-Retention Contracts (`OD-01B / UC-2` Approved Specification):** Where a subcontract agreement stipulates zero retention, it is explicitly captured and represented as:
+     - `retentionApplicable = false`
+     - `retentionRatePercent = 0.00`
+     - `retentionCapMode = NO_CAP`
+     - **No retention deduction row** is created for billing statements against such zero-retention contracts.
+   - For contracts where retention applies, the rate has the structural validity bound `0.00` to `100.00%`, and the cap is governed by the contract (`NO_CAP`, fixed `CAP_AMOUNT`, or dynamic percentage cap on effective contract value `Eff_C` under `OD-01C / UC-3`). An absent cap (`NO_CAP`) and a cap of `0.00` are never confused.
    - A nomination with the rate or the cap form left unspecified cannot be submitted.
-2. **Terms are fixed at commitment approval (UC-2 PROPOSED).**
-   - The terms entered on the nomination become the commitment's retention terms when the commitment is approved. After that they are **strictly immutable** on the commitment record (preserving the append-only contract snapshot).
-   - **Real-world operational rule (UC-2):** In-place mutation of an approved commitment's retention rate or cap is prohibited in v1. Operational flexibility for specific billing statements is handled exclusively through the audited statement-level Accountant reduction (Point 5 below) with mandatory reason and Manager visibility/approval.
-3. **Calculation basis & Rounding (UC-1 OWNER-APPROVED).**
-   - The initial amount is calculated on the **current statement's Gross Amount, before any other deduction**.
-   - `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)`.
-   - **Rounding rule (UC-1):** Exactly `ROUND_HALF_UP` to two decimal places (halalas) using `Decimal` arithmetic only (no floating point): when the third decimal digit is `≥ 5`, round up; when `< 5`, round down. Applied to `Calculated Retention` *before* evaluating the cumulative retention cap.
-4. **Cumulative cap.**
-   - Where the contract has a cap amount: `Actual Retention = min(Calculated Retention, max(Cap − Previously Retained, 0))`.
-   - **Previously Retained** = Σ retention deductions on the `APPROVED` statements of the same commitment. It excludes the current statement. A statement that is `REVERSED` no longer counts, because its deductions are voided. Statements that are still pending do not count.
-   - Because the current statement is excluded and only approved history is summed, prior retention is never counted twice.
-   - Where the contract states no cap: `Actual Retention = Calculated Retention`. No cap is invented.
-5. **Accountant adjustment (statement level only).**
-   - During audit, the Accountant may **reduce** the retention for the current statement only, to any amount from `0.00` up to `Actual Retention`.
-   - A non-empty reason is mandatory. The statement stores the calculated, cap-limited and adjusted amounts, a flag that an adjustment was made, and the reason. An audit event records who changed it, from what and to what.
-   - The adjustment never changes the commitment's rate or cap. It does not affect any other statement or any approved statement. The reduced amount is not carried forward, because later statements use their own Gross and the cap formula above.
-6. **Final approval.**
-   - The Manager keeps final approval authority over the statement, unchanged.
-   - A statement with an adjustment is visibly flagged to the Manager. There is no separate approval step for the adjustment.
-7. **Release of retention is outside BD-11.**
-   - No release condition and no release workflow is specified in any authoritative source, and none is invented here.
-   - The held amount is a derived figure, computed only as the input to the cap formula and to reporting.
+2. **Terms are fixed at commitment approval (`OD-01B / UC-2` OWNER-APPROVED).**
+   - The retention terms entered on the nomination become the commitment's retention terms when the commitment is approved. After that, commitment retention terms are **strictly immutable** on the commitment record.
+   - **No informal contract mutation:** Commitment retention terms cannot be altered after approval except through an authorized formal contract amendment/addendum.
+   - For contracts where retention applies, preserve the approved `UC-1` calculation and all applicable cap controls.
+3. **Calculation basis & Rounding (`UC-1` & `OD-07C` OWNER-APPROVED).**
+   - The system calculates scheduled retention automatically on the **current statement's Gross Amount, before any other deduction**:
+     `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)`
+   - **Rounding rule (`UC-1`):** Computed with exact `Decimal` arithmetic (`ROUND_HALF_UP` to 2 decimal places / halalas: third decimal digit `≥ 5` rounds up, `< 5` rounds down; zero floating-point usage) *before* applying `min(scheduledRetentionThisBill, remainingRetentionCap)`.
+4. **Cumulative cap & Dynamic Variation Order Interaction (`OD-01C / UC-3` OWNER-APPROVED).**
+   - Where the contract specifies a percentage retention cap, the cap is **dynamic on the effective contract value (`Eff_C`) after approved Variation Orders** (`OD-01C / UC-3`).
+   - `Actual Retention = min(scheduledRetentionThisBill, max(EffectiveRetentionCap − PreviouslyRetained, 0))` when a cap applies (`Actual Retention = scheduledRetentionThisBill` when `NO_CAP`).
+   - **Previously Retained** = Σ active retention deductions on the `APPROVED` (non-reversed) statements of the same commitment, excluding the current statement. Pending statements do not count.
+   - **Scope reductions (Negative VOs) under `OD-01C / UC-3`:** A negative Variation Order **never rewrites historical approved retention** and **never generates an automatic cash refund** of previously retained amounts. The new recalculated cap applies **prospectively**: if `PreviouslyRetained` already equals or exceeds the new recalculated cap (`EffectiveRetentionCap`), new retention deductions stop (`0.00`) on subsequent billing statements until available cap space reopens.
+5. **Accountant downward adjustment (statement level only, `OD-01A / BD-11` OWNER-APPROVED).**
+   - During audit of an individual bill, the Accountant may propose a **downward adjustment** of the retention for the current statement only, reducing it to any amount from `0.00` up to scheduled `Actual Retention`.
+   - A non-empty reason is mandatory. The audit snapshot stores the calculated, cap-limited and adjusted amounts, a flag that an adjustment was made, and the reason. An audit event records who changed it, from what and to what.
+   - **Adjustment bounds & contract fidelity:** The adjustment must not exceed scheduled retention or the remaining applicable cap, and must not violate the governing contract.
+   - **Discretion vs. contract amendment:** Any reduction requiring a formal contract amendment must follow an authorized contract amendment process. Accountant audit discretion is strictly limited to statement-level audit adjustments and is not authority to override or informally amend contractual terms.
+   - The adjustment never changes the commitment's rate or cap and does not affect any other statement.
+6. **Final approval & Immutability (`OD-01A / BD-11` OWNER-APPROVED).**
+   - The Manager keeps final approval authority over the statement and any retention adjustment.
+   - A statement with an adjustment is visibly flagged to the Manager with its mandatory reason.
+   - **Append-only immutability:** Approved billing and audit records remain immutable; approved historical retention records are never altered retroactively.
+7. **Release of retention is outside v1 scope.**
+   - No release workflow is in v1 scope; held retention is tracked as a derived contractual balance.
 
-**Safeguards:**
-- All retention amounts use Decimal only. No floating-point.
-- **Authoritative approval check.** At approval, under the existing locks (§7), the system recomputes Previously Retained from approved history. If the statement's retention would exceed the remaining cap, for example because two statements were audited concurrently, the approval is refused. Nothing is changed silently. The statement returns through the existing `REJECTED` path and is re-audited.
-- After `AUDITED` the retention figures are immutable.
-- The retention deduction cannot exceed the statement's Gross, and total deductions still cannot exceed Gross.
-- *Representation clarification (no behaviour change):* deduction rows require an amount `> 0.00`. When the final retention is `0.00` (zero rate, exhausted cap, or a reduction to zero), no retention deduction row is created. The statement's retention snapshot fields still record the calculated, cap-limited and adjusted figures.
-- Commitments that predate this design have no retention terms. How they are handled belongs to BD-14 and is unchanged.
+#### Re-Audit of Subcontractor Billing (`OD-03` — OWNER-APPROVED)
 
-**Resolved Retention Design Points (UC-1 Owner-approved; UC-2, UC-3 PROPOSED):**
-- **UC-1 (Rounding — OWNER-APPROVED):** `Calculated Retention = round_half_up(Gross × Rate ÷ 100, 2)` using exact `Decimal` arithmetic (`ROUND_HALF_UP` to 2 decimal places / halalas: third decimal digit `≥ 5` rounds up, `< 5` rounds down) applied after multiplying Gross by the contract rate and *before* applying the cumulative retention cap.
-- **UC-2 (Post-approval term immutability — PROPOSED):** Commitment retention terms (`retentionRate`, `retentionCapMode`, `retentionCapAmount`) are frozen upon Commitment approval. No post-approval mutation of commitment retention terms is permitted in v1; statement-by-statement exceptions use the audited Accountant reduction (Point 5).
-- **UC-3 (Cap representation & percentage-form contracts — PROPOSED):** The cumulative cap is stored and enforced as an explicit SAR `Decimal(15,2)` amount (`retentionCapAmount`) when `retentionCapMode = CAP_AMOUNT`, or `null` when `retentionCapMode = NO_CAP`. In real-world operations where a paper subcontract expresses the cap as a percentage of the original contract price (e.g., 5% of subcontract value), it is converted at Nomination entry via `round_half_up(OriginalSubcontractAmount × CapPercent ÷ 100, 2)` into the fixed SAR `retentionCapAmount` and snapshotted immutably upon Commitment approval.
+- **Direct Return to `SUBMITTED` When BOQ Quantities Are Unchanged (`OD-03`):**
+  - If a billing statement requires re-audit because financial deductions or caps changed (for example, concurrent cap/advance exhaustion or Manager return on deductions) while field BOQ quantities remain unchanged, the billing statement is returned directly to `SUBMITTED` (`AUDITED → SUBMITTED`) so the Accountant can re-audit it directly without forcing the Engineer to re-enter unchanged BOQ quantities.
+  - Each audit cycle preserves an independent append-only historical snapshot (`BillingAuditSnapshot`). Deductions from the prior audit cycle are marked as **superseded by re-audit** (and any `RESERVED` advance recovery entries from the superseded cycle are compensated with `RELEASED` entries) and are **never deleted**.
+  - If field BOQ quantities must change, the billing returns to the Engineer (`REJECTED` / reopened to `DRAFT`) for quantity correction and resubmission.
+  - Once final Manager `APPROVED` status is reached, the approved audit snapshot is frozen.
 
-**Deductions:**
-- Types are `ADVANCE_RECOVERY`, `RETENTION`, `PENALTY`, `OTHER`. Amounts are positive.
-- Only the Accountant creates or edits them, and only while the billing is `SUBMITTED` and being audited.
-- After `AUDITED` they are immutable.
-- `Σ deductions ≤ Gross`.
-- The deduction formula is unchanged: `Net = Gross − (Advance Recovery + Retention + Penalties + Other)`. Retention is calculated on Gross, so the order of the other deductions does not affect it.
+#### Billing Deductions & Carry-Forward (`OD-06A-3 / BD-12` — OWNER-APPROVED; Priority Order `OPEN`)
 
-**Lifecycle** (§10): `DRAFT → SUBMITTED → AUDITED → APPROVED`, with `REJECTED`, `CANCELLED` and `REVERSED` as exits.
+- Deduction types are `ADVANCE_RECOVERY`, `RETENTION`, `PENALTY`, `OTHER`. Amounts are positive (`Decimal(15,2) > 0.00`; zero-amount deduction rows are not created).
+- Only the Accountant creates or records deductions during the audit cycle (`SUBMITTED → AUDITED`), scoped to that cycle's `BillingAuditSnapshot`.
+- **Non-Negative Net & Carry-Forward Rule (`OD-06A-3`, OWNER-APPROVED):**
+  - Net billing payable must never be negative (`Net = Gross − AppliedDeductions ≥ 0.00`).
+  - Total deductions applied in a billing statement cannot exceed the gross value of work due in that statement (`Σ AppliedDeductions ≤ Gross`).
+  - Any deduction amount that cannot be applied in the current statement remains an active carry-forward balance linked to its deduction type and source (e.g., remaining verified advance balance, remaining retention cap, or unapplied penalty/other balance) and is neither lost/forfeited nor double-deducted in subsequent statements.
+  - **Open Sub-Rule (`OPEN`):** **The exact priority order for applying deduction categories (`ADVANCE_RECOVERY`, `RETENTION`, `PENALTY`, `OTHER`) when their combined total exceeds the statement's Gross amount has not yet been selected by the Owner and must not be assumed or invented.**
+
+**Lifecycle** (§10): `DRAFT → SUBMITTED → AUDITED → APPROVED`, with `AUDITED → SUBMITTED` (re-audit when BOQ unchanged, `OD-03`), `REJECTED`, `CANCELLED` and `REVERSED`.
 
 **Checks by stage:**
 
 | Stage | Check | Nature |
 |---|---|---|
 | Submit | Item belongs to the commitment. Quantity ≤ remaining (counting approved plus pending). Evidence present. | Advisory; may be stale |
-| Audit | Re-check under locks. Create deductions and advance reservations. Calculate retention and apply the cap. | Advisory for quantity and cap |
-| **Approve** | Full re-check under locks. Quantity, money and the retention cap use **approved** history only. | **Authoritative** |
+| Audit | Re-check under locks. Create new `BillingAuditSnapshot`, deductions, and advance reservations (`RESERVED`). Calculate retention (`UC-1`) and apply dynamic cap (`OD-01C`). Enforce `Net ≥ 0` (`OD-06A-3`). | Snapshot recorded (append-only) |
+| **Approve** | Full re-check under locks. Quantity, money and retention cap use **approved** history only. Confirm advance recoveries (`CONFIRMED`) and freeze snapshot. If financial caps changed concurrently while BOQ is valid, return to `SUBMITTED` for Accountant re-audit (`OD-03`). | **Authoritative** |
 
-### CR-03 — Custody and Subcontractor Advances
+### CR-03 — Custody, Subcontractor Advances, and Exposure Non-Duplication (`OD-06B-1`, `OD-06B-3`, `OD-07A` — ALL OWNER-APPROVED)
 
 **Custody amounts:**
 - `Custody.amount` is retained as the requested amount.
 - `disbursedAmount` is set by the Accountant at issuance. It is mandatory and must satisfy `0 < disbursedAmount ≤ amount`.
 - Liability, exposure and settlement use `disbursedAmount`.
-- It is immutable after `ISSUED`. A correction uses an explicit Manager-approved adjustment record.
-- The difference `amount − disbursedAmount` is not exposure.
+- It is immutable after `ISSUED`. A correction uses an explicit Manager-approved adjustment record (`OD-06E-1`).
+- The difference `amount − disbursedAmount` is released at issuance and is not active exposure.
 - Every disbursement writes an audit event with the delta.
 
-**Remaining balance** = `disbursedAmount − approved expenses − verified advances − cash returned`. It must be ≥ 0.
+**Remaining custody balance** = `disbursedAmount − approved expenses − verified advances − cash returned ≥ 0.00`.
 
-**Advance (`CustodySubcontractorAdvance`):**
-- It belongs to one custody and one commitment.
-- The commitment must be the subcontract of the same project and the same budget line as the custody (BD-18, PROPOSED).
-- The Engineer who is the custodian creates it. The receipt attachment is mandatory at creation.
-- Status flow: `RECORDED → VERIFIED | REJECTED`.
-- Verification is by the Accountant (BD-18, PROPOSED).
-- Only `VERIFIED` advances can be recovered. Only `VERIFIED` advances reduce custody remaining. A rejected advance leaves the liability with the custodian.
-- The advance cannot be created on a custody that is not `ISSUED` or `PARTIALLY_SETTLED`, and cannot exceed the custody remaining.
+**Two Approved Custody Paths for Subcontractor Advances (`OD-07A / BD-18` — OWNER-APPROVED):**
+1. **Path 1 — Dedicated Commitment-Linked Custody (`7A-1`):**
+   - A custody linked directly to an approved subcontractor commitment (`C`).
+   - The outstanding balance of this custody (`OutstandingCustodiesOn(C)`) is absorbed within the commitment's own exposure envelope `max(Eff_C, AL_C + OutstandingCustodiesOn(C))` rather than being added a second time to the budget line's exposure.
+2. **Path 2 — General `SITE_OPERATIONS` Custody (`7A-2`):**
+   - An Engineer's general `SITE_OPERATIONS` custody may be used to pay a subcontractor advance.
+   - Prior to payout verification, the unspent cash remains under the general custody's exposure.
+   - Upon verification/documentation of the payout to the subcontractor (`VERIFIED`), the exposure effect transfers from the general `SITE_OPERATIONS` custody to the subcontractor commitment while reducing the general custody's exposure 1-for-1 without double-counting.
+- **Accountability Separation (`OD-07A`):** Contractual exposure on the subcontractor commitment and personal cash-possession accountability on the Engineer are distinct; transferring exposure never erases the Engineer's custody responsibility except to the extent settled and evidenced (`NEW-REQ-01`).
 
-**Recovery ledger (`AdvanceRecoveryEntry`, append-only):**
-- Entry states are `RESERVED`, `CONFIRMED`, `RELEASED`.
-- `RESERVED` is created at billing audit.
-- It becomes `CONFIRMED` at billing approval.
-- If the billing is rejected, cancelled or reversed, a compensating `RELEASED` entry is appended.
-- **Remaining(advance)** = `original − Σ(RESERVED + CONFIRMED entries not released)`. The ledger is the source of truth. Any stored `recoveredAmount` or `remainingBalance` is a cache, recomputed and verified under lock.
-- Each `ADVANCE_RECOVERY` deduction maps to exactly one ledger entry.
-- The Engineer cannot edit any recovery value.
-- Recovery is allowed only when the advance's commitment equals the billing's commitment.
+**Subcontractor Advance Ceiling & Verification (`OD-06B-1 / BD-16, BD-17` — OWNER-APPROVED):**
+- An advance requires an approved subcontractor commitment (`C`).
+- **Ceiling:** The advance ceiling is governed by the contract or an explicit financial approval by the Manager; the system imposes **no arbitrary universal default percentage or amount**. Every advance must stay within the remaining contractual capacity after approved billings and open advances:
+  `advance.amount <= Eff_C - ApprovedBills - OpenAdvances`
+- **Verification:** The custodian Engineer records the advance with mandatory receipt proof (`NEW-REQ-01`). Status flows `RECORDED → VERIFIED | REJECTED`, verified by the Accountant.
+- An advance is recorded on the subcontractor's sub-ledger only upon proven actual payout and receipt, and becomes **recoverable from billing statements only after verification (`VERIFIED`)**. A rejected advance leaves the cash liability with the custodian Engineer.
 
-**Locking and invariants:**
-- The advance row is locked as part of audit and approval (§7).
-- `Σ(RESERVED + CONFIRMED) ≤ advance amount`.
-- Partial recovery is allowed. Full recovery makes the advance `FULLY_RECOVERED`.
-- Over-recovery is rejected.
-- A duplicate deduction is prevented by a unique `(billingId, advanceId)` among active deductions.
-- A disputed billing is simply `REJECTED`, which releases its reservations.
-- No recovery is allowed once an advance is `FULLY_RECOVERED`.
+**Recovery from Billings (`OD-06B-1` — OWNER-APPROVED):**
+- Recovery value is governed by the approved contract terms for each advance: percentage, fixed amount, or schedule.
+- During billing audit, the Accountant sets the recovery amount within the remaining balance of `VERIFIED` advances and not exceeding the billing amount available after retention (`OD-06A-3`).
+- **FIFO scope (`OD-06B-1`):** FIFO is used **only** to allocate an already-computed recovery amount across advances that share compatible recovery terms; advances with distinct contractual terms maintain independent recovery schedules.
+- **Recovery ledger (`AdvanceRecoveryEntry`, append-only):**
+  - Entry states are `RESERVED` (at billing audit), `CONFIRMED` (at billing approval), and `RELEASED` (compensating entry on return for re-audit `OD-03`, rejection, cancellation, or reversal).
+  - **Remaining recoverable balance** = `advance.amount − cashReturnedBySubcontractor − Σ(active RESERVED + active CONFIRMED entries not released) ≥ 0.00`.
+  - The Engineer cannot edit any recovery value. Recovery is allowed only when the advance's commitment equals the billing's commitment.
 
-### CR-04 — Site Labor Sheet
+**Partial Cash Return of a Subcontractor Advance (`OD-06B-3 / R-02` — OWNER-APPROVED):**
+- A subcontractor may return part (or all) of an advance in cash rather than via billing deduction.
+- A new receipt transaction is recorded linked to the original advance, capturing the receipt date, receiver, receipt evidence/voucher, amount, and explicit cash destination:
+  1. **Added to an open Engineer custody:** increases the available cash balance of that open custody; or
+  2. **Received into company treasury:** recorded as a treasury cash receipt.
+- The advance's outstanding balance is reduced by the received amount, and its status remains `PARTIALLY_SETTLED` until the remaining balance reaches `0.00`, at which point it closes (`FULLY_RECOVERED` / `CLOSED`).
+- The returned amount must never exceed the advance's remaining unrecovered balance and is never counted twice.
 
-- **Entities:** `SiteLaborSheet` and `SiteLaborSheetLine`.
-- **Uniqueness (BD-19, PROPOSED):** one active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. The creator is not part of the key.
-  - A `CANCELLED` or soft-deleted sheet frees the slot.
-  - A `REJECTED` sheet keeps the slot and is reopened.
-  - If several engineers cover one project, the sheet's owner is its creator and no one else may edit it.
-- **Line fields:** worker name (text only, no master table), trade, attendance days, daily wage, overtime hours, overtime rate, line total.
-- **Calculation (BD-03, PROPOSED):**
-  - `Regular = round_half_up(days × dailyWage, 2)`.
-  - `overtimeRate = round_half_up((dailyWage ÷ projectStandardDayHours) × 1.50, 2)`, where `projectStandardDayHours` defaults to `8` hours/day (configurable per project).
-  - `Overtime = round_half_up(overtimeHours × overtimeRate, 2)`.
-  - `Line Total = Regular + Overtime`.
-  - The 1.50× overtime multiplier and 8-hour divisor are proposed as an internal management control rule, not a legal payroll calculation.
-- **Evidence:** at least one attendance or timesheet attachment before `SUBMITTED`.
-- **Workflow:** Engineer → Accountant audit → Manager approval.
-- **Relation to Payroll:** `PayrollEntry` (Slice 8) remains for Accountant-entered amounts. `SiteLaborSheet` is for field attendance-based labor. Both affect the `LABOR` line exposure when approved. To avoid double entry, a worker-period must not appear in both (BD-19, PROPOSED).
+### CR-04 — Site Labor Sheet (`OUT OF SCOPE / DEFERRED` per `OWNER_DECISION_REGISTER_2026-10-31.md` & `AGENTS.md` §3–§4)
 
-### CR-05 — Material Receiving Note and Payment Gate
+> **Authoritative Scope Status (2026-10-31 — `OUT OF SCOPE / DEFERRED`):**
+> - Under `OWNER_DECISION_REGISTER_2026-10-31.md` (§4, §5) and `REQUIREMENTS_AMENDMENT_2026-10-31.md` (§14.2, §15), **there is no current Owner approval to implement worker attendance sheets, working hours, or overtime workflows (`SiteLaborSheet`) under CR-04**. Expanding scope to include attendance/timesheet tracking requires a **separate written scope override**.
+> - Under **`OD-07C` (item 2, OWNER-APPROVED WITH SCOPE CONSTRAINT)**, worker name normalization and duplicate-prevention rules are approved **only for the portion of labor/payroll data that is in scope** (`PayrollEntry` capture under Slice 8), and do **not** authorize implementing an attendance or check-in/check-out workflow.
+> - Where `ApprovedSiteLaborSheets` appears in the cash coverage (`OD-05A`) or project cost (`OD-05B`) formulas, it is strictly conditional (`only if CR-04 is later authorized in scope`) and evaluates to `0.00` while CR-04 remains deferred.
 
-**Which commitment is a material purchase** (ARCHITECTURAL CONSTRAINT, F3):
-- A Purchasing-authored `Commitment` on a `MATERIALS` line is the PO.
-- Purchasing must enter its lines as `CommitmentItem` rows with `sourceType = PURCHASING`. Without lines there is no item-level gate.
-- No new "PO" entity is introduced.
+*(Historical draft design notes below are retained for reference only and are **not authorized for implementation** without a separate written scope override):*
+- Draft entities: `SiteLaborSheet` and `SiteLaborSheetLine` (one sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`, plain-text normalized worker name, attendance days, daily wage, overtime at `1.50 × (dailyWage ÷ projectStandardDayHours)`). **Status: DEFERRED / OUT OF SCOPE.**
 
-**Chain:** Commitment → CommitmentItem (ordered qty, rate) → MRNItem (delivered, accepted, rejected) → Expense material line (invoiced qty).
+### CR-05 — Material Receiving Note, Payment Gate, and Custody Urgent Materials Exception (`OD-04 / BD-13`, `BD-05` — OWNER-APPROVED)
 
-**MRN rules:**
-- `Delivered = Accepted + Rejected`.
-- Cumulative accepted over approved MRNs ≤ ordered quantity per item.
-- A rejected quantity can never become payable.
-- Source of truth for payable quantity: `Σ accepted (APPROVED MRNs) − Σ invoiced (APPROVED expenses)`, recomputed under lock.
+**1. Standard Purchase Order & MRN Path (`BD-05` — OWNER-APPROVED):**
+- A Purchasing-authored `Commitment` on a `MATERIALS` line is the PO, with `CommitmentItem` rows (`sourceType = PURCHASING`).
+- **Chain:** Commitment → CommitmentItem (ordered qty, rate) → MRNItem (delivered, accepted, rejected) → Expense material line (invoiced qty).
+- **MRN rules:** `Delivered = Accepted + Rejected`; cumulative accepted over approved MRNs ≤ ordered quantity per item; rejected quantities are never payable; payable quantity = `Σ accepted (APPROVED MRNs) − Σ invoiced (APPROVED expenses)` under lock.
+- **MRN Authority (`BD-05`):** Engineer creates, receives, inspects, and submits the MRN; **Manager approves** (`creator ≠ approver`).
+- **Standard PO Gate:** At `approveExpense` under locks, standard PO/vendor material expenses require `APPROVED` MRNs with `invoiced quantity ≤ accepted − previously invoiced` per item, followed by the budget check (`C-07`).
 
-**Expense material lines:** a `MATERIALS` expense carries lines `(commitmentItemId, invoicedQuantity)`. The rate comes from the item. Totals are recomputed server-side.
+**2. Urgent Site Material Purchases Funded from Custody (`OD-04 / BD-13` — OWNER-APPROVED):**
+- **Approved Exception:** Urgent small material purchases funded from a site Engineer's custody are **exempt from creating a separate MRN** and from requiring a prior PO `CommitmentItem`.
+- **No Independent Fixed SAR Cap:** There is **no independent fixed SAR cap per transaction and no fixed SAR cap per custody**; the natural spending limit is the **actual remaining disbursed cash balance in the custody** (`RemainingBalance(K)`).
+- **Mandatory Documentation per Transaction:** Every custody-funded urgent material purchase must record:
+  1. Material description and explicit purpose.
+  2. Project and linked Custody (`custodyId`).
+  3. Amount (`Decimal(15,2)`) and transaction date.
+  4. Clear tax invoice or clear field receipt attachment.
+  5. Material photo / field proof attachment.
+- **Settlement & Review:** Each such purchase is subject to the normal custody settlement review, Accountant verification, and Manager approval workflow.
+- **Scope Boundary of Exception:** This exception applies strictly to urgent small purchases funded from site custody; standard supplier purchases and purchase orders remain subject to the normal PO/MRN workflow above.
 
-**Gate (single, no split):**
+### CR-06 — Equipment (`OUT OF SCOPE / DEFERRED` per `OWNER_DECISION_REGISTER_2026-10-31.md` & `AGENTS.md` §3–§4)
 
-| Step | Checks |
-|---|---|
-| `submitExpense` | Structural only: the commitment is `APPROVED`, same project and line, lines present, evidence attached. It also shows advisory quantity availability. It blocks nothing financial. |
-| `approveExpense` | **Authoritative.** Under locks: the commitment's MRNs are `APPROVED`, invoiced quantity ≤ accepted − previously invoiced per item, then the budget check (soft limit, C-07). A failure writes `MATERIAL_PAYMENT_BLOCKED`. |
+> **Authoritative Scope Status (2026-10-31 — `OUT OF SCOPE / DEFERRED`):**
+> - Under `OWNER_DECISION_REGISTER_2026-10-31.md` (§4, §5) and `REQUIREMENTS_AMENDMENT_2026-10-31.md` (§15), **there is no current Owner approval to implement an equipment operating-hour or timesheet system (`EquipmentTimesheet`) under CR-06**. Expanding scope to include equipment operating-hour tracking requires a **separate written scope override**.
 
-**Scope (BD-13, PROPOSED):** the gate applies to **every** `MATERIALS` expense. There is no petty-cash or amount threshold. A `MATERIALS` expense without a commitment line is rejected at submit, so even custody-paid material purchases require an approved Purchasing commitment and MRN.
+*(Historical draft design notes below are retained for reference only and are **not authorized for implementation** without a separate written scope override):*
+- Draft entities: `Equipment`, `EquipmentContract`, and `EquipmentTimesheet` (rented/supplier equipment tied to an `EQUIPMENT` commitment, hour-meter vs clock-time basis, `METER_FAILURE` flag, signed field ticket, and `F6` rule that timesheets add no extra budget exposure beyond the commitment). **Status: DEFERRED / OUT OF SCOPE.**
 
-**Authority (BD-05, PROPOSED):** Engineer creates, receives, inspects, and submits the MRN; **Manager approves** (`creator ≠ approver`).
+### CR-07 — Variation Order Integration (`OD-06C-4 / R-05`, `BD-12` — OWNER-APPROVED)
 
-### CR-06 — Equipment
+- **No Effect Before Approval (`OD-06C-4`, OWNER-APPROVED):** A Variation Order (`VO`) has no financial impact on a commitment before it is `APPROVED`.
+- **VO Line Types (extending Slice 20, `BD-12`):**
+  - `QUANTITY_ADJUSTMENT`: references an existing `CommitmentItem`, keeps the same contractual rate, and applies a quantity delta.
+  - `ADDITIONAL_ITEM`: creates a new `CommitmentItem` (`sourceType = VARIATION`) upon approval.
+- **Post-Approval Effect on Commitment (`OD-06C-4`, OWNER-APPROVED):**
+  - Positive VOs increase the effective ceiling (`Eff_C = Commitment.amount + Σ APPROVED VO impact`) of the **same contract commitment** after verifying contractual cover and project budget availability (`OD-06D-3`).
+  - Negative VOs (scope reductions) **release only the unused portion of the commitment** and **never** cancel or invalidate already-executed work, approved billing statements, or subcontractor advances already paid (`OD-06C-4`), nor do they rewrite historical retention or trigger automatic cash refunds (`OD-01C / UC-3`).
+  - A negative adjustment is rejected if it would drop effective quantity below cumulative approved billed quantity or drop `Eff_C` below committed/paid obligations.
+- **Audit & History Preservation (`OD-06C-4`):** The original contract commitment value and the complete log of all Variation Orders, before/after values, reasons, and approvals are permanently preserved.
+- **Contract Ceiling vs Budget Exception (`OD-06D-3`):** Any increase above the contract ceiling requires an approved VO or formal contract addendum; a project budget-line exception alone never raises the contract value.
 
-**Scope (BD-16, PROPOSED):**
-- The `Equipment` registry covers **rented or supplier-provided** equipment under an `EquipmentContract` tied to an EQUIPMENT-line commitment.
-- Company-owned equipment is not payable and is out of CR-06.
-- Purchasing manages the registry and contract rates.
+### CR-08 — Field Progress, Milestones, and Independence from Owner Billing (`OD-06D-1 / R-04`, `BD-17` — OWNER-APPROVED)
 
-**Timesheet:**
-- Per equipment-contract per date. Fields: date, start and end time, meter start and end, operator name, work description, hours, contract rate, total.
-- **Hours:**
-  - If the equipment is registered with an hour-meter basis: `Hours = Meter End − Meter Start`.
-  - Otherwise: `Hours = End time − Start time`.
-  - The basis is set in the registry, so hours have exactly one source.
-- **Invariants:** `Meter End ≥ Meter Start`, `Hours ≥ 0`, `Total = Hours × contract rate`. The rate is a server snapshot from the contract. The client cannot supply it.
-- **Meter failure** (the only override, BD-16):
-  - The Engineer records the timesheet on clock-time basis.
-  - A reason and evidence are mandatory.
-  - The record is flagged `METER_FAILURE` and writes an audit event.
-  - The Manager approves the timesheet knowingly.
-  - There are no other manual overrides.
-  - Hours cannot change after approval.
-- **Signatures:** the system has no signature capture. The driver's signature and the engineer's signature are evidenced on a **signed field-ticket attachment**, which is mandatory at submit. The Engineer's submit is the in-system engineer attestation.
-- **Authority:** Engineer creates, Manager approves (the Accountant matches invoices).
+- **Independence from Owner Billing (`OD-06D-1 / R-04`, OWNER-APPROVED):**
+  - The field milestones and progress completion workflow operates **independently** of the Owner billing workflow, with **optional reference linking**.
+  - Field progress and milestone completion may be documented and approved before any Owner billing is drafted.
+  - Approving a field milestone **does not** automatically generate an Owner billing claim and **does not** constitute a financial approval.
+  - An Owner billing may optionally link to one or more milestones, Engineer progress reports, and visual attachments to evidence fulfillment of a contractual billing condition when needed.
+- **Chain & Roles (Slices 10 and 12, `BD-17`):**
+  - `ProgressReport ↔ Milestone` (many-to-many) `↔ Attachment` (on the report).
+  - The Engineer creates the progress report and attaches visual evidence; the Manager approves the report; only the **Manager** marks a milestone `COMPLETED` (`F5`, `BD-17`).
+- **Evidence Gate:** Completing a milestone requires at least one linked `APPROVED` progress report with at least one active (non-voided) visual attachment; otherwise `MILESTONE_EVIDENCE_MISSING` is raised and audited. After milestone completion, its supporting evidence is immutable.
 
-**Exposure** (correction of F6): approved timesheets do **not** add exposure. They certify hours against the commitment, which already encumbers the line.
+### CR-09 — Budget Governance, Contractual Exposure, Custody Overruns, and Revision Lineage (`OD-02A..C`, `OD-06D-3`, `OD-07A`, `OD-07B` — OWNER-APPROVED; `SPLIT` Sub-Rule `OPEN`, `AL_C` Normalization `TECH-CLAR`)
 
-**Invoice matching:** an equipment-supplier invoice is an Expense linked to the commitment, and the same gate as materials applies at `approveExpense`: invoiced hours ≤ approved timesheet hours − previously invoiced.
+#### 4.9.1 Contractual Exposure & Budget Line Exposure Model (`OD-06D-3`, `OD-07A`, `OD-02A`)
 
-### CR-07 — Variation Order Integration
-
-- VO line types (**new, extending Slice 20**):
-  - `QUANTITY_ADJUSTMENT`: references a `CommitmentItem`, same rate, quantity delta.
-  - `ADDITIONAL_ITEM`: creates a new `CommitmentItem` (source `VARIATION`) at approval.
-- A VO that changes the rate of an existing item is rejected at creation.
-- The `impactAmount` is the server-computed sum of line deltas.
-- Only `APPROVED` VOs count.
-- A negative adjustment is rejected if it would drop effective quantity below the cumulative approved billed quantity.
-- **Effective commitment ceiling** = `Σ(effective qty × item rate)`. This equals `Commitment.amount + approved VO impact`, and both must agree.
-- VO approval is a budget-consuming operation. A positive impact raises the commitment's exposure (`Eff_C` in §4 CR-09) and passes through the soft-limit check (C-07). Slice 20 already holds the right locks.
-- Billing is blocked when the VO is not approved or the quantity is above effective quantity.
-- Several VOs on one item form a pool, so one VO's quantity cannot be reused. A per-VO allocation view is derived for reporting only.
-
-### CR-08 — Visual Progress and Milestones
-
-- **Chain:** ProgressReport ↔ Milestone (many-to-many) ↔ Attachment (on the report).
-- **Roles (Slice 10 and 12, ARCHITECTURAL CONSTRAINT):**
-  - The Engineer creates the report and attaches evidence.
-  - The Manager approves the report.
-  - The **Manager** marks the milestone `COMPLETED`.
-- **Gate:** completion requires at least one linked report that is `APPROVED` and has at least one active (non-voided) attachment. Otherwise `MILESTONE_EVIDENCE_MISSING`, and a block event is audited.
-- A rejected report unlocks its attachments, and the milestone stays open.
-- After completion the evidence is immutable.
-- **Milestone Completion Authority (BD-17, PROPOSED):** Only the Manager may mark a milestone `COMPLETED` (Engineers submit progress reports and visual evidence; they cannot complete milestones).
-- Milestones already `COMPLETED` before cutover are grandfathered.
-
-### CR-09 — Budget Governance
-
-#### 4.9.1 Exposure model (single definition)
-
-All terms below are computed per budget line `L`. They are **derived from ledger rows on read**. None is stored, and none is a lock or reservation.
+1. **Contractual Commitment Exposure (`OD-06D-3 / BD-19, BD-20` — OWNER-APPROVED WITH `AL_C` TECH CLARIFICATION):**
+   - For each commitment `C`, contractual exposure is:
+     `Exposure_C = max(Eff_C, AL_C)`
+     where `Eff_C = commitment.amount + Σ APPROVED VO impact on C` is the effective contract value after approved Variation Orders, and `AL_C` is the total approved liabilities/exposures linked to contract `C` after removing any duplication.
+   - When dedicated subcontractor custodies (`7A-1` under `OD-07A`) are linked to commitment `C`, their outstanding uninvoiced balance `OutstandingCustodiesOn(C)` is absorbed inside the commitment's exposure envelope:
+     `Exposure_C = max(Eff_C, AL_C + OutstandingCustodiesOn(C))`
+   - **Technical Clarification Required (`OD-06D-3`):** The exact component elements, statuses, and de-duplication keys of `AL_C` across commitment types must be normalized in the technical specification before code implementation.
+2. **Budget Line Exposure Terms (Evaluated Across the Line's `Lineage Group` per `OD-02A`):**
 
 | Term | Definition |
 |---|---|
-| **E(L)** Effective amount | `line.amount + Σ EXECUTED transfers in − Σ EXECUTED transfers out` |
+| **E(L)** Effective budget line amount | `line.amount + Σ EXECUTED transfers in − Σ EXECUTED transfers out` |
 | **Eff_C** Effective commitment amount | `commitment.amount + Σ APPROVED VO impact on C` |
-| **AL_C** Approved linked expenses | `Σ APPROVED expenses with commitmentId = C`, whether or not they are custody-paid |
-| **Commitment term(C)** | `max(Eff_C, AL_C)`. The actual-spend part is `AL_C`. The open part is `max(Eff_C − AL_C, 0)`. Subcontract commitments have `AL_C = 0`, so their term is `Eff_C`. |
-| **X(L)** Active exposure | `Σ commitment terms on L` + `Σ APPROVED expenses on L with no commitmentId` + `OutstandingCustodies(L)` + `approved payroll` + `approved labor sheets` |
-| **OutstandingCustodies(L)** | For each custody on L that is `ISSUED` or `PARTIALLY_SETTLED`: `disbursed − approved settled expenses (linked or not) − verified advances − cash returned` |
+| **Exposure_C** Commitment exposure term | `max(Eff_C, AL_C)` (or `max(Eff_C, AL_C + OutstandingCustodiesOn(C))` for dedicated commitment-linked custodies per `OD-07A`) |
+| **X(L)** Active exposure (across lineage group per `OD-02A`) | `Σ Exposure_C` + `Σ APPROVED unlinked expenses` + `OutstandingGeneralCustodies(L)` + `approved payroll` + `approved labor sheets (only if CR-04 is later authorized)` |
+| **OutstandingGeneralCustodies(L)** | For each general (`SITE_OPERATIONS`) custody in `ISSUED` or `PARTIALLY_SETTLED`: `disbursedAmount − approved settled expenses − verified subcontractor advances (transferred to C per OD-07A) − cashReturnedAmount` |
 | **Available(L)** | `E(L) − X(L)` |
-| **P(L)** Pending projection | `Σ SUBMITTED commitments (full amount)` + `Σ SUBMITTED expenses with no commitmentId` + `Σ SUBMITTED custodies` + `Σ SUBMITTED payroll` + `Σ SUBMITTED or AUDITED labor sheets` + the **linked-expense overflow** below |
-| **Linked-expense overflow** | For each commitment C: `max(Eff_C, AL_C + PL_C) − max(Eff_C, AL_C)`, where `PL_C` is the sum of SUBMITTED expenses linked to C. A pending linked expense therefore adds to P only the part that exceeds C's open amount. |
+| **P(L)** Pending projection | `Σ SUBMITTED commitments` + `Σ SUBMITTED unlinked expenses` + `Σ SUBMITTED / APPROVED-unissued custodies` + `Σ SUBMITTED payroll` + `linked-expense overflow` |
 | **Projected(L)** | `Available(L) − P(L)` |
 
-**Why nothing is counted twice:**
-- An approved linked expense is counted once, inside the commitment term, and never again as direct or custody spend. That is why direct spend is limited to expenses with no `commitmentId`.
-- A custody-settled linked expense leaves `OutstandingCustodies` (it is settled) and is counted in the commitment term. A custody-settled unlinked expense leaves `OutstandingCustodies` and is counted as direct spend. Either way it is counted once.
-- A verified advance reduces `OutstandingCustodies`. It is not added anywhere else, because the subcontract commitment already carries its full amount (same budget line, BD-18).
-- Billings, MRNs and equipment timesheets contribute nothing to X or P. Retention is a deduction inside a billing, so it adds nothing either.
-- Pending VOs and approved-but-not-yet-issued custodies are not projected in P. This matches the existing formula, which has no such term. Issuing a custody and approving a VO are each re-evaluated at their own approval time.
-- The labor sheet pre-approval statuses mirror the existing payroll treatment.
+**Why nothing is counted twice (`OD-07A`, `NEW-REQ-01`):**
+- Under `OD-07A` Path 1 (`7A-1`), a dedicated custody linked to subcontractor commitment `C` sits inside `max(Eff_C, AL_C + OutstandingCustodiesOn(C))` and is never added as a separate line custody exposure.
+- Under `OD-07A` Path 2 (`7A-2`), when an advance is paid from a general `SITE_OPERATIONS` custody and verified (`VERIFIED`), its exposure transfers to the subcontractor commitment while reducing `OutstandingGeneralCustodies(L)` by the exact verified amount.
+- Under `NEW-REQ-01`, a custody-funded subcontractor payment shares one canonical transaction ID between the subcontractor sub-ledger and the custody settlement so it is never summed twice.
+- Billings, MRNs, and retention deductions do not add separate budget line exposure beyond `Exposure_C`.
 
-**Pending is not a reservation.** It is a point-in-time projection computed from rows in their pre-approval statuses. No row holds funds. Nothing blocks a record from being submitted.
+#### 4.9.2 Separation of Project Budget Overrun vs. Contract Ceiling Overrun (`OD-06D-3` — OWNER-APPROVED) & Custody Overrun Check (`OD-07B` — OWNER-APPROVED)
 
-**Transition test.** When a record is being approved or posted, the check removes that record's own pending contribution from P, then adds its active contribution to X. It is over-budget when `X_after > E(L)`, and the overrun is `X_after − E(L)`. This is the same comparison as today's hard ceiling.
+1. **Strict Separation of Overrun Types (`OD-06D-3 / BD-19, BD-20` — OWNER-APPROVED):**
+   - **Project Budget-Line Overrun (`X_after > E(L)`):** Halts new financial approval until the Manager records a reasoned exception within Manager authority (`OVER_BUDGET_APPROVED`). **A project budget exception never raises the value or ceiling of a contract.**
+   - **Contract Ceiling Overrun (obligations exceeding `Eff_C`):** Halts new financial approval until an **approved Variation Order (`VO`) or formal contract addendum** raises `Eff_C`. A budget exception is never a substitute for amending the contract.
+2. **Two-Stage Custody Budget Overrun Workflow (`OD-07B / BD-20`, Option `7B-1` — OWNER-APPROVED):**
+   - **At Manager Custody Approval (`approveCustody`):** The system checks available budget on the line. If an overrun exists, the Manager must record the mandatory reason, the overrun amount, and the **approved overrun cap** (`authorizedOverrunCap`).
+   - **At Accountant Custody Disbursement (`issueCustody`):** The Accountant re-checks available budget under lock at the moment of disbursement:
+     - If the actual overrun remains within the Manager's approved cap (`actualOverrun ≤ authorizedOverrunCap`), disbursement is permitted.
+     - If the overrun has grown beyond the approved cap (because other approvals consumed budget in the meantime), disbursement is **blocked** (`OVER_BUDGET_REQUIRES_MANAGER_EXCEPTION`) until the Manager approves an additional overrun cap via an independent action on the approved custody (e.g. `authorizeCustodyOverrun`), which records the updated cap and mandatory reason in an append-only authorization/audit record.
+   - **Role Constraint:** The Accountant never has authority to approve a budget overrun.
 
-#### 4.9.2 Soft limit and the inventory of operations
+#### 4.9.3 Budget Transfer & Contingency (`BD-15`)
 
-One rule applies to every budget-consuming operation:
-- It is evaluated **at approval or posting time, under the budget-line lock**.
-- If `X_after > E(L)`, the Manager must supply a reason. The record then stores an immutable snapshot (`isOverBudget`, overrun amount, reason) and writes `OVER_BUDGET_APPROVED`.
-- Only the Manager may authorize. No other role can.
-- The Accountant audits only and cannot authorize.
+- Same project only; inter-project transfers are forbidden (`AGENTS.md`).
+- **Availability rule:** `0 < amount ≤ Projected(L_source)` (`E − X − P`, evaluated with lineage-carried exposure per `OD-02A`) under the source line lock.
+- Both lines belong to the same approved budget (`source ≠ target`). Statuses: `REQUESTED → APPROVED → EXECUTED`, with `REJECTED`, `CANCELLED` and `REVERSED`. Manager self-initiation is flagged `SELF_AUTHORIZED` with a mandatory reason. Execution locks both lines in id order.
+- **Contingency:** One dedicated `CONTINGENCY` line holds the reserve; direct spend on it is `0.00` (cannot be targeted by expenses, commitments, custodies, or payroll) and it is consumed only via an approved `BudgetTransfer`.
 
-| Operation | Today | Under CR-09 |
-|---|---|---|
-| Commitment approval | Hard stop | Soft, Manager exception |
-| Nomination approval (creates commitment) | New | Same as commitment |
-| Expense approval | Hard stop | Soft, Manager exception |
-| Payroll approval | Hard stop | Soft, Manager exception |
-| Site labor sheet approval | New | Soft, Manager exception |
-| Custody **issuance** (Accountant) | Hard stop | Special, BD-20 |
-| VO approval (positive impact) | Revised-ceiling guard | Soft, Manager exception |
-| Subcontractor billing, equipment timesheet, MRN | No budget impact | None |
+#### 4.9.4 Budget Revisions and Revision Lineage (`OD-02A`, `OD-02B`, `OD-02C` — OWNER-APPROVED; `SPLIT` Sub-Rule `OPEN`)
 
-In Slice 20 the revised-ceiling function is currently unused, so it must not become a second ceiling. VO impact acts through `Eff_C`, not by changing line amounts.
+1. **Exposure Continuity Across Revisions (`OD-02A` — OWNER-APPROVED WITH OPEN SUB-RULE):**
+   - Version 1 is the immutable baseline; approving a new revision marks the prior version `SUPERSEDED`.
+   - Historical financial transactions, commitments, and custodies remain strictly bound to their original `budgetLineId` (never retroactively relinked).
+   - **Lineage-Group Exposure Carry-Forward (`OD-02A`):** Active and pending financial exposure from prior revisions carries forward across the budget line's **`lineage group`** so that available capacity on a revised line never restarts at zero while commitments or exposures exist on ancestor lines. Effective exposure is calculated across the connected chain of related budget lines.
+2. **Strict Post-Approval Lineage Immutability (`OD-02B` — OWNER-APPROVED):**
+   - `BudgetLineLineage` records are editable only while the new budget revision is in `DRAFT`.
+   - Once the budget revision is `APPROVED`, **`BudgetLineLineage` records are strictly immutable and cannot be modified**. Any subsequent structural change must go through a new budget revision, never through historical edits or post-approval lineage amendment records.
+3. **Budget Revision Approval Gate (`OD-02C` — OWNER-APPROVED WITH OPEN SUB-RULE):**
+   - A budget revision cannot be approved until **every old budget line** from the immediately preceding approved revision receives an explicit classification/fate (`CONTINUED`, `SPLIT`, `MERGED`, or `REMOVED`), while new lines may be added as `ADDED` (`BUDGET_LINEAGE_INCOMPLETE` blocks approval).
+   - **Protection of Encumbered Lines (`OD-02C`):** Budget lines carrying active exposure or active commitments **cannot be `REMOVED`** without explicit approved handling. Superseded lines are closed to new budget-consuming records.
+   - **Open Sub-Rule for `SPLIT` (`OD-02A / OD-02C` — `OPEN`):** **The exact rule for allocating prior exposure when an encumbered old budget line is `SPLIT` into multiple new lines—either via explicit `allocationSharePercent` percentages summing to `100%`, or by restricting `SPLIT` strictly to unencumbered (`dormant`) lines—has not yet been selected by the Owner and remains `OPEN`.**
 
-**Custody issuance (BD-20, PROPOSED):**
-- The Accountant's issue is blocked with `OVER_BUDGET_REQUIRES_MANAGER_EXCEPTION`.
-- The Manager records an exception on the custody, with a reason and an authorized overrun cap.
-- Issue is then re-validated under lock and succeeds only if the overrun ≤ the authorized cap.
+### CR-10 — Project Liquidity, Temporary Company Funding, Cash Coverage, and Contractual Margin (`OD-05A`, `OD-05B`, `OD-05C / BD-21` — ALL OWNER-APPROVED)
 
-#### 4.9.3 Budget transfer (BD-15)
+#### 4.10.1 Operational Liquidity Sources & Temporary Company Funding (`OD-05C / BD-21` — OWNER-APPROVED)
 
-- Same project only. Inter-project transfers are **forbidden** (`AGENTS.md` single-tenant scope, and no source authorizes them).
-- **Availability rule:** amount > 0 and `amount ≤ Projected(L_source)`, where `Projected = E − X − P`. The check runs **under the source line lock**.
-- What this protects:
-  - Active exposure `X` is a ledger fact and is protected absolutely: after a transfer, `E_source ≥ X`.
-  - Pending exposure `P` is protected as of execution time. A transfer cannot take funds that a record already in a pre-approval status needs.
-  - Pending records hold no reservation, so a record submitted after the transfer sees the smaller `E`. At its approval it is evaluated under the soft limit and, if over, needs a Manager exception. Nothing fails silently.
-- Both lines belong to the same approved budget. Source ≠ target.
-- Statuses: `REQUESTED → APPROVED → EXECUTED`, with `REJECTED`, `CANCELLED` and `REVERSED`.
-- Requester and approver are separate fields. The Manager may also initiate. In that case it is flagged `SELF_AUTHORIZED` with a mandatory reason, because only one top authority exists.
-- Execution is atomic and locks both lines in id order.
-- Reversal is Manager-only. It creates a compensating transfer, and the same availability rule applies with the roles swapped (the original target is now the source).
+The approved operational liquidity model for a project consists strictly of **two inflow paths**:
 
-#### 4.9.4 Contingency (BD-15)
+1. **Owner Billing Collections (`ActiveOwnerPayments`):**
+   - Every amount collected from the property/facility Owner links to an `OwnerBilling` record, capturing collection date, amount (`Decimal(15,2)`), collection method, and supporting proof document.
+   - Supports **partial collections** and tracks the remaining uncollected balance per `OwnerBilling` via append-only `OwnerPaymentAllocation` records.
+2. **Temporary Company-to-Project Liquidity Funding (`ActiveCompanyProjectFunding`):**
+   - When the company injects liquidity into a project prior to collecting an Owner billing, the funding is recorded as a **temporary internal repayable transfer**, capturing project, amount, date, funding source, reason, Manager approval, transfer reference, and expected Owner billing (if applicable).
+   - **Not Revenue or Profit:** Company funding is **never** classified as revenue, profit, or an Owner billing collection.
+   - **No Permanent Equity Category:** No permanent capital-contribution (`PERMANENT_EQUITY`) category is created in this operational model (`OD-05C`).
+3. **Repayment of Company Funding (`ActiveCompanyProjectFundingRepayments` — Non-Automatic, Manager-Approved):**
+   - Returning temporary funding to company treasury is a **separate, explicitly approved transaction** (partial or full, linked to the original funding record).
+   - **Never Automatic:** The system **must never automatically repay** company funding merely because an Owner billing is collected. The Manager reviews project liquidity needs, near-term obligations, and available cash coverage before approving any repayment amount.
+   - **Bounds:** Cumulative repayments linked to a funding record cannot exceed its outstanding balance, and cannot exceed the project's available liquidity per system records.
+4. **Company-Level Aggregation & Margin Exclusion (`OD-05C`):**
+   - Company-to-project funding appears as an inflow at the **project level** for project cash-coverage tracking, but **must be eliminated/excluded as an internal transfer when aggregating cash flows at the company level** so it is never counted as a new external cash inflow.
+   - Neither company funding nor its repayment enters `ProjectContractualMargin`.
+5. **Technical/Schema Naming Alignment Note (`OD-05C`):**
+   - Existing draft/schema names (`CapitalInjection` / `CapitalInjectionRepayment`) must be reconciled with the approved temporary internal company-to-project funding semantics (`ActiveCompanyProjectFunding` / `ActiveCompanyProjectFundingRepayments`) prior to code implementation; no Prisma schema or database rename is performed in this documentation task.
 
-- One dedicated `CONTINGENCY` budget line holds the reserve. Its amount is fixed in the approved budget. No percentage is imposed.
-- Direct spend on it is `0.00`. Expenses, commitments, custodies, labor and equipment cannot target it. The server rejects them. Its `X` and `P` therefore stay `0`.
-- It can only be consumed by an approved `BudgetTransfer` out of it.
-- Unused reserve stays visible as the line's remaining balance, so it is never counted as operating budget. Because it is excluded from operating availability, it cannot be counted twice.
-- Reporting shows Original, Transferred in/out, Effective, Consumed and Remaining.
+#### 4.10.2 Project-Level Inflows & Net Cash Coverage Position After Approved Payables (`OD-05A / BD-09` — OWNER-APPROVED)
 
-#### 4.9.5 Revisions and revision lineage
+1. **Project Net Inflows (`NetInflows`):**
+   `NetInflows = ActiveOwnerPayments + ActiveCompanyProjectFunding - ActiveCompanyProjectFundingRepayments`
+2. **Evidenced Custody Cash Out (`EvidencedCustodyCashOut`):**
+   `EvidencedCustodyCashOut = SUM(disbursedAmount - cashReturnedAmount)`
+   evaluated across all custodies that have reached `ISSUED` or subsequent states (`PARTIALLY_SETTLED`, `SETTLED`, `CLOSED`), excluding custody requests whose cash has not been disbursed.
+3. **Approved Direct Payables (`ApprovedDirectPayables`):**
+   `ApprovedDirectPayables = ApprovedDirectExpenses(custodyId IS NULL) + ApprovedPayroll + ApprovedSiteLaborSheets(only if CR-04 is authorized) + ApprovedSubcontractorBilling.netAmount`
+   - Custody-settled expenses (`custodyId IS NOT NULL`) and custody-paid subcontractor advances are already inside `EvidencedCustodyCashOut` and must **never** be counted a second time inside `ApprovedDirectPayables`.
+4. **Recognized Outflow & Net Cash Coverage Position (`OD-05A`):**
+   `RecognizedOutflow = EvidencedCustodyCashOut + ApprovedDirectPayables`
+   `NetCashCoveragePosition = NetInflows - RecognizedOutflow`
+   - **Mandatory Display Name:** The indicator must be titled **Net Cash Coverage Position After Approved Payables** / **صافي تغطية السيولة بعد المستحقات المعتمدة**.
+   - **Non-Negotiable Protection:** This metric is an oversight coverage indicator and **must never be labeled or represented as actual bank cash or a reconciled bank balance** (bank reconciliation is permanently out of scope per `AGENTS.md` §3–§4).
 
-**Revision rules:**
-- Version 1 is the immutable baseline.
-- The new version is a DRAFT. The Manager approves it. On approval the previous version becomes `SUPERSEDED`. It stays readable and is never edited.
-- Existing transactions and commitments keep their original line links. No retroactive re-linking or mutation occurs.
+#### 4.10.3 Project Contractual Margin (`OD-05B / BD-10` — OWNER-APPROVED)
 
-**Revision line lineage (reporting only):**
-- A `BudgetLineLineage` record connects a line of the new revision to a line of the immediately preceding approved revision, for reporting and audit only.
-- Lineage **never** changes `budgetLineId` on any transaction, commitment, custody or other record. It never feeds any exposure, available-balance, soft-limit or transfer calculation. The original baseline and the superseded revision stay immutable.
-- Every line that is part of the mapping carries a shared `lineageGroupId`. A group is a connected set of old and new lines.
-- Reports compare **group totals** (Σ old lines vs Σ new lines in the group). A per-line comparison is shown only for 1:1 groups. This needs no amount allocation between lines and invents no policy.
+- **Recognized Project Cost (`RecognizedProjectCost`):**
+  `RecognizedProjectCost = ApprovedDirectExpenses + ApprovedCustodySettledExpenses + ApprovedPayroll + ApprovedSiteLaborSheets(only if CR-04 is later authorized) + SUM(ApprovedSubcontractorBilling.grossAmount - ActivePenaltyDeductions)`
+- **Project Contractual Margin (`ProjectContractualMargin`):**
+  `ProjectContractualMargin = ApprovedOwnerBilling.netAmount - RecognizedProjectCost`
+- **Governing Rules (`OD-05B`):**
+  - Owner billing is recognized upon Manager `APPROVED` status.
+  - Company funding and its repayments are excluded from `RecognizedProjectCost` and `ProjectContractualMargin`.
+  - **Subcontractor Cost Basis:** Retention holdbacks and advance recoveries do **not** reduce the cost of completed subcontractor work; therefore `SubcontractorBilling.netAmount` must **never** be used as project cost—subcontractor cost is strictly `grossAmount - ActivePenaltyDeductions`. Unspent custody cash and unrecovered advances are not project cost.
 
-| Case | How it is recorded | Report behavior |
-|---|---|---|
-| One old → one new | One record, type `CONTINUED`, one group | Per-line comparison |
-| One old → many new | One record per new line, type `SPLIT`, one group | Group total comparison |
-| Many old → one new | One record per old line, type `MERGED`, one group | Group total comparison |
-| Old line removed | A record with the old line and no new line, type `REMOVED` | Shown as removed |
-| New line with no predecessor | A record with the new line and no old line, type `ADDED` | Shown as added |
-| Old line superseded | Every old line is superseded by its revision's status. Only lines with a record appear in lineage. | n/a |
+#### 4.10.4 Dashboard Metrics Summary
 
-**Constraints:**
-- Both lines belong to the same project. The new line belongs to a budget with a higher version than the old line's budget, and that old budget is the immediately preceding approved version.
-- UNIQUE `(previousLineId, newLineId)` where both are present.
-- Records are editable while the new revision is DRAFT. They become **immutable once the revision is approved**. The approval audit event (`BUDGET_REVISION_APPROVED`) carries a lineage summary (counts per type and group count).
-- The author of the draft revision maintains the lineage. No new role or SOD row is created.
-- Executed transfers belong to the revision in which they ran. They are neither carried into the new revision nor remapped. The new revision's line amounts are the amounts approved in it.
-
-**Revision Boundary Rules (PROPOSED - not Owner-approved; see AUD-02 / OD-02):**
-1. **Complete mapping required at approval:** Every active line of the immediately preceding approved budget revision must have an explicit `BudgetLineLineage` mapping (`CONTINUED`, `SPLIT`, `MERGED`, or `REMOVED`) before the new revision can be approved (`BUDGET_LINEAGE_INCOMPLETE` blocks approval).
-2. **Post-approval lineage immutability:** Lineage rows are immutable once the revision is approved. Any subsequent reporting reclassification is captured in the next budget revision (or via a Manager-only audited lineage amendment record that appends a superseding reporting snapshot without touching financial records).
-3. **Enforcement continuity across revisions:** Historical and in-flight commitments, custodies, and expenses remain strictly bound to their original `budgetLineId` (never re-linked). Once a new revision is `APPROVED`, lines belonging to `SUPERSEDED` revisions are closed to *new* commitments, custodies, and unlinked expenses; existing open commitments and issued custodies on superseded lines continue to settle within their established ceilings, while executive project-level control aggregates exposure across `lineageGroupId`.
-
-### CR-10 — Cash Flow
-
-**Entities and meaning:**
-
-| Entity | Meaning |
+| Metric | Approved Formula / Definition |
 |---|---|
-| `OwnerBilling` | A claim on the owner. Not cash. |
-| `OwnerPayment` | Cash received. |
-| `OwnerPaymentAllocation` | Appends an allocation of a payment to a billing. |
-| `CapitalInjection` | Funding into the project. Not revenue. |
-| `CapitalInjectionRepayment` | Append-only ledger of repayment of temporary financing. |
-
-**Owner billing (BD-21, PROPOSED):** the Accountant drafts, the Manager approves. The authoritative recognition point for Certified Billing Receivable and Contractual Margin is **Manager approval (`APPROVED`)**.
-
-**Owner payment allocation:**
-- A payment can be unallocated, partially allocated, fully allocated, or cover several billings.
-- Allocation entries are append-only. A mistaken allocation is reversed by a compensating entry, never edited.
-- Rules: `Σ allocations(payment) ≤ payment amount` and `Σ allocations(billing) ≤ billing certified amount`.
-- Overpayment stays as `unallocated` and is shown as such.
-- Payment reversal is Manager-only. It reverses its allocations, which reopens the billing balances and reduces liquidity.
-- Billing reversal is allowed only when it has no live allocations.
-- Both rows are locked in a fixed order (§7).
-
-**Capital injection (BD-09, PROPOSED):**
-
-| | `PERMANENT_EQUITY` | `TEMPORARY_FINANCING` |
-|---|---|---|
-| Outstanding balance | None | `amount − Σ repayments` |
-| Repayment | Not allowed | Allowed, append-only |
-| Status | Recorded, then Reversed only | Outstanding, Partially repaid, Repaid, Written off |
-| Written off | **No** | Yes, Manager only, with a reason and an append-only write-off entry |
-| Records | Manager | Manager records, Accountant records repayments |
-
-- Status is derived from the ledger. It is not set by hand.
-- Repayment ≤ outstanding, under a row lock on the injection.
-- Duplicate repayment is stopped by a bank reference unique per injection.
-- Reversal is a compensating entry.
-
-**Liquidity** = `Owner payments received + Capital injections − Recognized outflow − Financing repayments`.
-- Equity and financing both increase liquidity.
-- Neither is revenue or project cost.
-- A repayment reduces liquidity but is not project cost and does not affect margin.
-- A write-off has no cash effect and no margin effect.
-
-**Dashboard metrics** (these names replace "profit"):
-
-| Metric | Formula |
-|---|---|
-| Certified Billing Receivable | Σ approved owner billings − Σ allocations |
-| Collected | Σ owner payments |
-| Liquidity | as above |
-| Recognized Outflow | see BD-10 |
-| Project Contractual Margin | Σ approved owner billings − Σ recognized project cost. Not accounting profit. |
-| Estimated Contractual Margin | contract value − approved budget baseline |
-
-**Recognized Outflow (BD-10, PROPOSED).** Because the system is a Management Control Layer without bank reconciliation (`AGENTS.md` §4), the authoritative v1 Recognized Outflow formula is:
-- direct approved expenses (`custodyId` is null)
-- plus custody disbursed amount less cash returned
-- plus approved payroll
-- plus approved labor sheets
-- plus approved subcontractor net payable
-
-Custody-settled expenses and advances are inside the custody disbursement, so they are not added again. Equipment is paid through linked expenses. A commitment is never an outflow.
+| **Certified Billing Receivable** | `Σ ApprovedOwnerBilling.netAmount − Σ ActiveOwnerPaymentAllocations` |
+| **Collected from Owner** | `Σ ActiveOwnerPayments` |
+| **Net Cash Coverage Position After Approved Payables (`صافي تغطية السيولة بعد المستحقات المعتمدة`)** | `NetInflows − RecognizedOutflow` (`OD-05A`; never labeled as reconciled bank balance) |
+| **Recognized Outflow** | `EvidencedCustodyCashOut + ApprovedDirectPayables` (`OD-05A`) |
+| **Recognized Project Cost** | `ApprovedDirectExpenses + ApprovedCustodySettledExpenses + ApprovedPayroll + ApprovedSiteLaborSheets(if CR-04 authorized) + SUM(ApprovedSubcontractorBilling.grossAmount − ActivePenaltyDeductions)` (`OD-05B`) |
+| **Project Contractual Margin** | `ApprovedOwnerBilling.netAmount − RecognizedProjectCost` (`OD-05B`; not accounting profit) |
+| **Estimated Contractual Margin** | `Contract Value − Approved Budget Baseline` |
 
 ---
 
-## 5. Corrected Logical Model *(revised for BD-11)*
+## 5. Corrected Logical Model *(Synchronized with 2026-10-31 Owner Decisions)*
 
-*Logical design only. Types: money is `Decimal(15,2)`, quantity is `Decimal(15,4)`, all times are `Timestamptz`. Every financial entity carries `createdAt`, `updatedAt` and `deletedAt` (the latter only for never-submitted drafts). Audit is mandatory for all of them.*
+*Logical design only. Types: all monetary fields use `Decimal(15,2)` (`OD-07C` item 1), quantity is `Decimal(15,4)`, all times are `Timestamptz`. Every financial entity carries `createdAt`, `updatedAt` and `deletedAt` (the latter only for never-submitted drafts). Audit is mandatory for all of them.*
 
 | Entity | Key fields | Constraints and indexes | Cardinality |
 |---|---|---|---|
-| `SubcontractorNomination` | project, budgetLine (immutable from SUBMITTED), subcontractor, scope, `estimatedAmount` (server Σ), **retention rate, retention cap mode (CAP_AMOUNT or NO_CAP), retention cap amount (empty when NO_CAP)**, status, creator/submitter/approver/rejecter, `resultingCommitmentId` | UNIQUE `resultingCommitmentId`; partial UNIQUE `(project, normalized subcontractor, budgetLine)` where status = SUBMITTED; **rate and cap mode required before SUBMITTED; cap amount required when mode is CAP_AMOUNT and `≥ 0`**; index `(projectId,status)` | 1→N items; 0..1→1 commitment |
+| `Subcontractor` & `SubcontractorLedgerEntry` (`NEW-REQ-01`) | Master subcontractor identity (company-wide); sub-ledger entry per `(project, commitment)`: `paidAt`, `amount` (`Decimal(15,2)`), `movementType` (ADVANCE, ON_ACCOUNT, BILLING_PAYMENT), `cashSource`, `paymentMethod`, `reference`, `receiptAttachmentId`, `paidById`, `recordedById`, `approvedById`, `custodyId` (nullable), `canonicalTransactionId` | Single master identity per subcontractor; isolated sub-ledger per `(projectId, commitmentId)`; UNIQUE `canonicalTransactionId` shared with custody settlement when paid from Engineer custody (`NEW-REQ-01`) | 1 subcontractor → N contracts → N sub-ledger entries |
+| `SubcontractorNomination` | project, budgetLine (immutable from SUBMITTED), subcontractor, scope, `estimatedAmount` (server Σ; BOQ vs override derivation `OPEN`), **`retentionApplicable`, `retentionRatePercent`, `retentionCapMode` (`NO_CAP`, `CAP_AMOUNT`, or dynamic % on `Eff_C`), `retentionCapAmount`**, status, creator/submitter/approver/rejecter, `resultingCommitmentId` | UNIQUE `resultingCommitmentId`; partial UNIQUE `(project, normalized subcontractor, budgetLine)` where status = SUBMITTED; retention terms required before SUBMITTED (`OD-01A..C`); index `(projectId,status)` | 1→N items; 0..1→1 commitment |
 | `SubcontractorNominationItem` | itemNo, description, unit, quantity, unitRate, lineAmount | UNIQUE `(nominationId,itemNo)`; qty > 0, rate ≥ 0 | |
-| `Commitment` (extended) | `nominationId`, **retention rate, cap mode, cap amount (copied from the nomination and fixed at approval)** | UNIQUE `nominationId` (nullable); retention terms immutable after approval | 1→N items |
+| `Commitment` (extended) | `nominationId`, **retention terms copied from nomination and fixed at approval (`OD-01B`)** | UNIQUE `nominationId` (nullable); multiple independent commitments allowed per budget line (`OD-06A-5`); retention terms immutable after approval except by formal amendment (`OD-01B`) | 1→N items |
 | `CommitmentItem` | `sourceType`, source links, itemNo, description, unit, `contractQuantity`, `contractRate`, `lineAmount` | UNIQUE `(commitmentId,itemNo)`; UNIQUE source links; CHECK source consistency; all immutable after approval | |
-| `SubcontractorBilling` (redesigned) | commitment, gross, totalDeductions, net, **retention snapshot: rate applied, calculated amount, cap-limited amount, adjusted amount, adjustment flag, adjustment reason, previously retained amount at audit**, status, audited/approved/rejected by, rejecting role | `net ≥ 0`; **adjusted ≤ cap-limited ≤ calculated; reason required when the flag is set**; index `(commitmentId,status)` | 1→N lines, 1→N deductions |
+| `SubcontractorBilling` & `BillingAuditSnapshot` (`OD-03`) | commitment, `currentAuditSnapshotId`, `currentAuditCycleNo`, status; append-only `BillingAuditSnapshot`: `auditCycleNo`, gross, totalDeductions, net, **retention snapshot (`rateApplied`, `scheduledRetentionThisBill`, `capLimitedRetention`, `adjustedRetention`, `isRetentionAdjusted`, `retentionAdjustmentReason`, `previouslyRetainedSnapshot`)**, `auditedById`, `auditedAt` | `net ≥ 0` (`OD-06A-3`); `adjusted ≤ cap-limited ≤ scheduled`; reason required when adjusted; `BillingAuditSnapshot` is append-only (`@@unique([billingId, auditCycleNo])`) and frozen at `APPROVED` (`OD-03`) | 1→N lines, 1→N snapshots, 1→N deductions |
 | `SubcontractorBillingLine` | `commitmentItemId`, `currentQuantity`, `unitRate` (server), `lineAmount`, informational `cumulativeBeforeQuantity` | UNIQUE `(billingId,commitmentItemId)`; qty > 0 | |
-| `BillingDeduction` | type, amount > 0, reason, `advanceId` (nullable), status ACTIVE or VOIDED | UNIQUE active `(billingId,advanceId)`; no row is created for a zero retention amount | |
-| `CustodySubcontractorAdvance` | custody, commitment, subcontractor, amount, paidAt, receipt attachment (mandatory), status, verifiedBy | amount > 0; index `(commitmentId,status)` | N per custody |
-| `AdvanceRecoveryEntry` | advance, deduction, amount, state, createdAt | append-only; UNIQUE per deduction and state | |
-| `Custody` (extended) | `disbursedAmount`, over-budget exception fields | `0 < disbursed ≤ amount` | |
-| `SiteLaborSheet` / `Line` | project, laborBudgetLine, year, month, total, status; line: worker, trade, days, wage, overtime hrs, overtime rate, total | partial UNIQUE `(project,line,year,month)` excluding CANCELLED/deleted | |
+| `BillingDeduction` (`OD-03`, `OD-06A-3`) | `auditSnapshotId`, type (`ADVANCE_RECOVERY`, `RETENTION`, `PENALTY`, `OTHER`), `amount > 0`, reason, `advanceId` (nullable), status (`ACTIVE`, `SUPERSEDED_BY_REAUDIT`, `VOIDED`), unapplied carry-forward tracking (`OD-06A-3`) | Append-only per audit snapshot (`OD-03`); prior cycle deductions marked `SUPERSEDED_BY_REAUDIT` and never deleted; no row created for `0.00` retention (`OD-01B`) | |
+| `CustodySubcontractorAdvance` & `AdvanceCashReturn` (`OD-06B-1`, `OD-06B-3`) | custody, commitment, subcontractor, amount, paidAt, receipt attachment (mandatory), status (`RECORDED`, `VERIFIED`, `REJECTED`, `PARTIALLY_SETTLED`, `FULLY_RECOVERED`), verifiedBy; cash return: `amount`, `receivedAt`, `receivedById`, `destinationType` (`OPEN_CUSTODY` or `COMPANY_TREASURY`), `targetCustodyId`, `receiptAttachmentId` | `0 < amount ≤ Eff_C − ApprovedBills − OpenAdvances` (`OD-06B-1`); cash return `≤ remainingBalance` (`OD-06B-3`) | N per custody / commitment |
+| `AdvanceRecoveryEntry` | advance, deduction, `auditSnapshotId`, amount, state (`RESERVED`, `CONFIRMED`, `RELEASED`), `priorEntryId`, createdAt | Strictly append-only; UNIQUE per deduction and state | |
+| `Custody` & `CustodyOverrunAuthorization` (`OD-07A`, `OD-07B`) | `disbursedAmount`, `commitmentId` (nullable for dedicated subcontractor custody `7A-1` vs general `SITE_OPERATIONS` custody `7A-2`); append-only `CustodyOverrunAuthorization`: `custodyId`, `sequenceNo`, `authorizedOverrunCap`, `reason`, `authorizedById` (`7B-1`) | `0 < disbursed ≤ amount`; two-stage overrun check at Manager approval and Accountant disbursement (`OD-07B`) | |
+| `SiteLaborSheet` / `Line` (**DEFERRED / OUT OF SCOPE**) | Deferred pending separate written scope override (`CR-04`); worker name normalization applies to in-scope `PayrollEntry` data only (`OD-07C`) | **OUT OF SCOPE / DEFERRED** | |
 | `MaterialReceivingNote` / `MRNItem` | commitment, deliveryNoteRef, supplier, status; item: commitmentItemId, delivered, accepted, rejected | `delivered = accepted + rejected`; UNIQUE `(mrnId,commitmentItemId)` | |
-| `Expense` (extended) | commitmentId, material or equipment lines, over-budget snapshot | lines UNIQUE `(expenseId,commitmentItemId)` | |
-| `Equipment` / `EquipmentContract` | registry, ownership, measurement basis; contract: commitment, project, rate | UNIQUE `(equipment,commitment)` | |
-| `EquipmentTimesheet` | contract, date, times, meters, hours, rate snapshot, total, `meterFailure` flag, status | `end ≥ start`; UNIQUE `(contract,date)` among non-cancelled | |
+| `Expense` (extended, `OD-04 / BD-13`) | `commitmentId` (nullable for custody-funded urgent material purchases under `OD-04`), `custodyId`, material lines, urgent material fields (description, purpose, invoice/receipt attachment, material photo attachment), over-budget snapshot | Custody-funded urgent small material purchases exempt from MRN with no fixed SAR cap (bounded by remaining custody cash, `OD-04`); standard PO expenses require `CommitmentItem` + approved `MRN` | |
+| `Equipment` / `EquipmentContract` / `EquipmentTimesheet` (**DEFERRED / OUT OF SCOPE**) | Deferred pending separate written scope override (`CR-06`) | **OUT OF SCOPE / DEFERRED** | |
 | `BudgetTransfer` | project, source/target line, amount, reason, requester, approver, status, `selfAuthorized` flag | source ≠ target; same project; amount > 0 | |
-| `BudgetLineLineage` (reporting only) | `previousLineId` (nullable), `newLineId` (nullable), `relationType` (CONTINUED, SPLIT, MERGED, REMOVED, ADDED), `lineageGroupId`, revision budget ids | at least one of the two line ids present; UNIQUE `(previousLineId,newLineId)` when both present; same project; new version > previous version; immutable after the revision is approved; index `(lineageGroupId)` | N:M between lines of adjacent revisions |
-| `OwnerBilling` | project, number, amount, status | UNIQUE `(project,number)` | |
-| `OwnerPayment` / `OwnerPaymentAllocation` | payment, amount, bank ref; allocation: payment, billing, amount, state | UNIQUE bank ref per project; append-only allocations | |
-| `CapitalInjection` / `Repayment` | type, amount, source; repayment: amount, bank ref, writeoff entry | UNIQUE `(injection,bankRef)` | |
-| `Attachment` | owner type and id, project, category, file name, storage key, MIME, size, checksum, uploader, supersedes link, void fields | index `(ownerType,ownerId)`; size ≤ 10 MB | |
+| `BudgetLineLineage` (`OD-02A..C`) | `previousLineId` (nullable), `newLineId` (nullable), `relationType` (`CONTINUED`, `SPLIT`, `MERGED`, `REMOVED`, `ADDED`), `lineageGroupId`, revision budget ids | Carries active/pending exposure across revisions via `lineageGroupId` (`OD-02A`; `SPLIT` allocation sub-rule `OPEN`); strictly immutable after revision approval (`OD-02B`); complete fate mapping required at revision approval (`OD-02C`) | N:M between lines of adjacent revisions |
+| `OwnerBilling` | project, number, amount (`netAmount`), milestone/report reference links (optional, `OD-06D-1`), status | UNIQUE `(project,number)`; independent of milestone approval (`OD-06D-1`) | |
+| `OwnerPayment` / `OwnerPaymentAllocation` | payment, amount, collection method, proof attachment, bank ref; allocation: payment, billing, amount, state | UNIQUE reference per project; supports partial collections (`OD-05C`); append-only allocations | |
+| `CapitalInjection` / `Repayment` *(Tech alignment: Temporary Company-to-Project Funding, `OD-05C`)* | project, amount, date, source, reason, Manager approval, transfer ref, expected `OwnerBilling` (optional); repayment: amount, date, Manager approval, transfer ref | Temporary internal company-to-project funding only (no `PERMANENT_EQUITY`, `OD-05C`); repayment requires separate Manager approval (never automatic on Owner collection); schema naming alignment noted prior to coding | |
+| `FinancialCorrectionEntry` (`OD-06E-1`) | `originalRecordType`, `originalRecordId`, `correctionType` (`PARTIAL_ADJUSTMENT`, `FULL_REVERSAL`, `OVERPAYMENT_RECEIVABLE`), `amountDelta`, `reason`, `approvedById`, affected custody/contract links | Append-only non-destructive correction record; prevents circular/duplicate corrections (`OD-06E-1`) | |
+| `Attachment` | owner type and id, project, category, file name, storage key, MIME, size, checksum, uploader, supersedes link, void fields | index `(ownerType,ownerId)`; size ≤ 10 MB; Wave 0 implemented at `7615e91` (production cloud storage provider `OPEN`) | |
 | `ProgressReportMilestone` | report, milestone | PK `(report,milestone)` | N:M |
-| `VariationOrderLine` (extended) | line type, `commitmentItemId` | rate-equality validation | |
+| `VariationOrderLine` (extended, `OD-06C-4`, `OD-07C`) | `lineType` (`QUANTITY_ADJUSTMENT`, `ADDITIONAL_ITEM`), `commitmentItemId`, monetary fields `Decimal(15,2)` | Rate-equality validation; negative VO releases unused capacity only (`OD-06C-4`) | |
+
+### 5.1 Enumeration of Individual Monetary Fields Covered by AUD-09 Normalization (`OD-07C` Scope)
+
+Under **`OD-07C` item 1**, all monetary values across in-scope entities are standardized to exact `Decimal(15,2)` arithmetic (never `Float`, `Double`, or raw JavaScript `number`). The following **40 individual `model.field` properties** constitute the exhaustive list of monetary fields:
+
+1. `BudgetLine.allocatedAmount`
+2. `BudgetTransfer.amount`
+3. `SubcontractorNomination.estimatedAmount`
+4. `SubcontractorNominationItem.unitRate`
+5. `SubcontractorNominationItem.lineAmount`
+6. `Commitment.amount`
+7. `CommitmentItem.contractRate`
+8. `CommitmentItem.lineAmount`
+9. `VariationOrder.amount`
+10. `VariationOrderLine.unitPrice`
+11. `VariationOrderLine.lineAmount`
+12. `SubcontractorBilling.grossAmount`
+13. `SubcontractorBilling.totalDeductions`
+14. `SubcontractorBilling.netAmount`
+15. `SubcontractorBillingLine.unitRate`
+16. `SubcontractorBillingLine.lineAmount`
+17. `BillingAuditSnapshot.grossAmount`
+18. `BillingAuditSnapshot.totalDeductions`
+19. `BillingAuditSnapshot.netAmount`
+20. `BillingAuditSnapshot.scheduledRetentionThisBill`
+21. `BillingAuditSnapshot.capLimitedRetention`
+22. `BillingAuditSnapshot.adjustedRetention`
+23. `BillingAuditSnapshot.previouslyRetainedSnapshot`
+24. `BillingDeduction.amount`
+25. `CustodySubcontractorAdvance.amount`
+26. `AdvanceCashReturn.amount`
+27. `AdvanceRecoveryEntry.amount`
+28. `SubcontractorLedgerEntry.amount` (`SubcontractorCashPayment.amount` under `NEW-REQ-01`)
+29. `Custody.amount`
+30. `Custody.disbursedAmount`
+31. `Custody.cashReturnedAmount`
+32. `CustodyOverrunAuthorization.authorizedOverrunCap`
+33. `Expense.amount`
+34. `PayrollEntry.amount` *(payroll data capture only per `AGENTS.md` §3 and §5.3)*
+35. `OwnerBilling.amount` *(certified billing amount; planned CR-10 model, not in Prisma schema yet)*
+36. `OwnerPayment.amount`
+37. `OwnerPaymentAllocation.amount`
+38. `CapitalInjection.amount` *(temporary internal company-to-project liquidity funding)*
+39. `Repayment.amount` *(repayment of temporary company funding)*
+40. `FinancialCorrectionEntry.amountDelta`
+
+> **Preservation of Quantity Fields Distinction:**
+> Quantity fields—including `VariationOrderLine.quantity`, `CommitmentItem.contractQuantity`, `SubcontractorNominationItem.quantity`, `SubcontractorBillingLine.currentQuantity`, `MRNItem.deliveredQuantity`, `MRNItem.acceptedQuantity`, and `MRNItem.rejectedQuantity`—represent physical counts or measurements, are **not monetary currency fields**, and remain `Decimal(15,4)` (or integer counts) rather than monetary `Decimal(15,2)`.
+
+> **Explicit Scope Boundary Confirmation:**
+> - **Zero CR-04 Fields Modified or Brought Into Scope:** No `SiteLaborSheet`, `SiteLaborSheetLine`, daily labor attendance, working hour, overtime, or worker hourly-rate fields are modified, created, or brought into scope.
+> - **Zero CR-06 Fields Modified or Brought Into Scope:** No `Equipment`, `EquipmentContract`, `EquipmentTimesheet`, equipment operating-hour meter, or machine rental rate fields are modified, created, or brought into scope.
+> - **Mandatory Scope Constraint:** `CR-04` and `CR-06` remain strictly **`OUT OF SCOPE / DEFERRED`** under `AGENTS.md` §3 and §4 unless and until a separate written scope override is formally issued by the Owner.
 
 ---
 
-## 6. Financial Invariants *(UC-1 Owner-approved; BD-11, UC-2, UC-3 PROPOSED)*
+## 6. Financial Invariants *(Synchronized with 2026-10-31 Owner Decisions)*
 
-1. **Money:** Decimal only, server-recomputed, no client totals. Rounding follows R-03 and UC-1 (`ROUND_HALF_UP` to 2 dp via `Decimal` for line amounts and for calculated retention before cumulative cap).
-2. **Commitment:** amount = Σ item line amounts. Items are immutable after approval.
-3. **Billing quantity:** cumulative approved quantity ≤ contract quantity + approved VO adjustments, per item.
-4. **Billing rate:** line rate = item contract rate. The server writes it.
-5. **Billing money:** cumulative approved gross ≤ effective ceiling, which equals Σ(effective qty × rate).
-6. **Net:** `net = gross − Σ deductions ≥ 0`.
-7. **Retention (BD-11 proposed; rounding rule `UC-1` Owner-approved):**
-   - `Calculated = round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal` with `ROUND_HALF_UP` to two decimal places, applied before the remaining cap is evaluated (`UC-1`, Owner-approved).
-   - The rate and the cap come from the subcontract. There is no system default for either.
-   - Basis: the current statement's Gross, before other deductions.
-   - `Actual = min(Calculated, max(Cap − Previously Retained, 0))` when a cap amount exists. `Actual = Calculated` when the contract states no cap.
-   - Previously Retained = Σ retention deductions on APPROVED, non-reversed statements of the same commitment, excluding the current statement.
-   - Cumulative approved retention ≤ the cap amount, whenever one exists.
-   - `Adjusted ≤ Actual` and `Adjusted ≥ 0`. An adjustment is statement-level only and never alters the commitment's rate or cap.
-   - Retention ≤ current Gross.
-   - Retention figures are immutable after `AUDITED`.
-8. **Advance:** `Σ(RESERVED + CONFIRMED) ≤ advance amount`. Recovery needs the same commitment.
-9. **Custody:** liability = `disbursedAmount`. Remaining = disbursed − approved expenses − verified advances − returned ≥ 0. No settlement on a `CLOSED` custody.
-10. **MRN:** delivered = accepted + rejected. Cumulative accepted ≤ ordered. Invoiced ≤ accepted − previously invoiced.
-11. **Equipment:** `meter end ≥ meter start`, hours ≥ 0, `total = hours × contract rate`. Invoiced hours ≤ approved hours.
-12. **Exposure:**
-    - `X(L) = Σ max(Eff_C, AL_C) + Σ approved unlinked expenses + OutstandingCustodies + approved payroll + approved labor sheets`.
-    - `Available = E − X`.
-    - `Projected = Available − P`, with P derived from pre-approval statuses (§4 CR-09).
-    - Every approved expense is counted exactly once.
-    - Billings (including retention), timesheets and MRNs add none.
-    - P is derived and never stored.
-13. **Budget:**
-    - Transfers are zero-sum and stay within one project.
-    - `amount ≤ Projected(source)` under the source line lock, so `E_source ≥ X` always holds after a transfer.
-    - A transfer reversal obeys the same rule.
-    - Direct contingency spend is 0.
-    - Soft limit: over-budget iff `X_after > E(L)`, evaluated under the line lock at approval.
-14. **Revision lineage:** lineage never alters any record's budget line link and never enters any exposure, availability or transfer calculation. The baseline is immutable.
-15. **Cash:** commitment ≠ outflow, billing ≠ payment, injection ≠ revenue. Repayment is not project cost. Allocation totals never exceed their bounds.
-16. **Corrections:** approved records are never edited or deleted. Corrections use reversals only.
+1. **Money (`C-12`, `R-03`, `UC-1`, `OD-07C` — OWNER-APPROVED):** All monetary fields use `Decimal(15,2)`, server-recomputed, with no client-trusted totals. Line amounts and retention use exact `Decimal` arithmetic with `ROUND_HALF_UP` to 2 decimal places.
+2. **Subcontractor Master Identity & Cash Ledger (`NEW-REQ-01` — OWNER-APPROVED):** One company-wide subcontractor identity with isolated per-project, per-contract sub-ledgers. Custody-funded subcontractor payments share a single canonical transaction ID between the subcontractor sub-ledger and the custody settlement and are never counted twice.
+3. **Commitment (`OD-06A-1`, `OD-06A-5` — OWNER-APPROVED; BOQ vs Override `OPEN`):** Created atomically and idempotently upon Manager approval of nomination. Multiple independent commitments may bind to one budget line. Items are immutable after approval.
+4. **Billing quantity & rate:** Cumulative approved quantity ≤ contract quantity + approved VO adjustments per item. Line rate = item contract rate (server-written).
+5. **Billing money & VO ceiling (`OD-06C-4` — OWNER-APPROVED):** Cumulative approved gross ≤ `Eff_C` (`Commitment.amount + Σ APPROVED VO impact`). Negative VOs release only unused capacity and never invalidate executed work, approved billings, or paid advances.
+6. **Billing Net & Deduction Carry-Forward (`OD-06A-3` — OWNER-APPROVED; Priority Order `OPEN`):** `Net = Gross − AppliedDeductions ≥ 0.00`. Applied deductions cannot exceed Gross; unapplied balances carry forward by deduction type/source without expiring or repeating. *(Priority order among deduction categories when exceeding Gross remains `OPEN`.)*
+7. **Retention (`UC-1`, `OD-01A / BD-11`, `OD-01B / UC-2`, `OD-01C / UC-3`, `OD-07C` — ALL OWNER-APPROVED):**
+   - `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` using `Decimal` with `ROUND_HALF_UP` to 2 dp, applied before `min(scheduledRetentionThisBill, remainingRetentionCap)` (`UC-1`, `OD-07C`).
+   - Rate and cap come strictly from the approved subcontract (`OD-01A`). Zero-retention contracts use `retentionApplicable = false`, `retentionRatePercent = 0.00`, `retentionCapMode = NO_CAP`, with no retention deduction row created (`OD-01B`).
+   - Retention terms are immutable after commitment approval except by formal authorized contract amendment (`OD-01B`).
+   - Percentage retention cap is dynamic on `Eff_C` after approved VOs; negative VOs never rewrite historical retention or trigger automatic cash refunds—the new cap applies prospectively and pauses new retention if historical retention ≥ new cap (`OD-01C`).
+   - Accountant may propose a statement-level downward adjustment (`0.00 ≤ Adjusted ≤ Actual`) with a mandatory reason and Manager approval (`OD-01A`).
+   - Each audit cycle creates an append-only `BillingAuditSnapshot`; unchanged-BOQ re-audit returns directly to `SUBMITTED`, marks prior deductions superseded (never deleted), and freezes the snapshot upon final Manager `APPROVED` status (`OD-03`).
+8. **Subcontractor Advances & Partial Cash Return (`OD-06B-1`, `OD-06B-3` — OWNER-APPROVED):**
+   - Requires approved commitment; `advance.amount ≤ Eff_C − ApprovedBills − OpenAdvances`; recoverable from billings only after payout verification (`VERIFIED`).
+   - FIFO applies only to allocate a computed recovery amount across advances with compatible terms; distinct terms keep independent schedules (`OD-06B-1`).
+   - Partial cash return (`OD-06B-3`) links to the original advance, credits an open Engineer custody or company treasury, and keeps the advance `PARTIALLY_SETTLED` until its remaining balance reaches `0.00`.
+9. **Custody & Overrun Authorization (`OD-07A`, `OD-07B` — OWNER-APPROVED):**
+   - Liability = `disbursedAmount`. Remaining = `disbursedAmount − approved expenses − verified advances − cashReturnedAmount ≥ 0.00`. No settlement on a `CLOSED` custody.
+   - Two-stage budget overrun check (`OD-07B`): checked at Manager approval (recording reason, overrun, and approved overrun cap) and re-checked at Accountant disbursement (`issueCustody`); if overrun exceeds the approved cap, disbursement is blocked until the Manager approves an additional cap via an independent action (`authorizeCustodyOverrun`).
+10. **MRN & Custody Urgent Material Purchases (`OD-04 / BD-13`, `BD-05` — OWNER-APPROVED):**
+    - Standard PO material expenses require `APPROVED` MRNs (`delivered = accepted + rejected`, `invoiced ≤ accepted − previously invoiced`).
+    - Urgent small site material purchases funded from Engineer custody are exempt from a separate MRN with **no independent fixed SAR cap** (bounded by actual remaining disbursed custody cash) and require clear invoice/receipt, material photo, description, purpose, amount, project, and custody link.
+11. **Contractual Exposure & Budget Line Exposure (`OD-02A..C`, `OD-06D-3`, `OD-07A` — OWNER-APPROVED; `SPLIT` `OPEN`, `AL_C` `TECH-CLAR`):**
+    - `Exposure_C = max(Eff_C, AL_C)` (and `max(Eff_C, AL_C + OutstandingCustodiesOn(C))` for dedicated commitment-linked custodies under `OD-07A` Path 1). Under `OD-07A` Path 2 (`SITE_OPERATIONS` custody), verifying a subcontractor advance transfers exposure from the general custody to the commitment without double-counting. *(Component/status definition of `AL_C` requires technical normalization before coding per `OD-06D-3`.)*
+    - Project budget-line overruns require a reasoned Manager exception (never raising contract value); contract-ceiling overruns require an approved VO/contract amendment (`OD-06D-3`).
+    - Active and pending exposure carries forward across budget revisions via `lineage group` (`OD-02A`), `BudgetLineLineage` is strictly immutable post-approval (`OD-02B`), and every old line must have an explicit fate before revision approval (`OD-02C`; `SPLIT` exposure allocation sub-rule remains `OPEN`).
+12. **Cash Coverage, Contractual Margin, and Temporary Company Funding (`OD-05A`, `OD-05B`, `OD-05C` — ALL OWNER-APPROVED):**
+    - `NetInflows = ActiveOwnerPayments + ActiveCompanyProjectFunding − ActiveCompanyProjectFundingRepayments`.
+    - `EvidencedCustodyCashOut = SUM(disbursedAmount − cashReturnedAmount)` for `ISSUED`/settled/closed custodies.
+    - `ApprovedDirectPayables = ApprovedDirectExpenses(custodyId IS NULL) + ApprovedPayroll + ApprovedSiteLaborSheets(only if CR-04 is authorized) + ApprovedSubcontractorBilling.netAmount`.
+    - `RecognizedOutflow = EvidencedCustodyCashOut + ApprovedDirectPayables`; `NetCashCoveragePosition = NetInflows − RecognizedOutflow` (labeled **Net Cash Coverage Position After Approved Payables** / **صافي تغطية السيولة بعد المستحقات المعتمدة**, never as reconciled bank cash).
+    - `RecognizedProjectCost = ApprovedDirectExpenses + ApprovedCustodySettledExpenses + ApprovedPayroll + ApprovedSiteLaborSheets(only if CR-04 is authorized) + SUM(ApprovedSubcontractorBilling.grossAmount − ActivePenaltyDeductions)`.
+    - `ProjectContractualMargin = ApprovedOwnerBilling.netAmount − RecognizedProjectCost`.
+    - Temporary company-to-project funding is not revenue/profit/Owner collection; repayment requires separate Manager approval (never automatic on Owner collection), is eliminated in company-wide cash aggregation, and is excluded from contractual margin (`OD-05C`).
+13. **Non-Destructive Financial Corrections (`OD-06E-1` — OWNER-APPROVED):** Approved financial records are never edited in place or deleted. Recording-amount errors with correct actual cash paid use a linked partial corrective entry; wrong transaction/counterparty uses full reversal + re-recording; actual cash overpayments preserve the true cash paid record and book the excess as a recoverable balance due from the subcontractor.
 
 ---
 
-## 7. Transaction & Lock Strategy *(billing rows revised for BD-11; hierarchy unchanged)*
+## 7. Transaction & Lock Strategy *(Completed per `OD-07C` item 3 — OWNER-APPROVED)*
 
-**Canonical lock order** (one strictly ascending hierarchy, extending the existing `budget_lines → commitments → operational entity`):
+**Canonical lock order** (one strictly ascending hierarchy across levels 1–7, with no pre-lock exceptions):
 
 | Level | Rows |
 |---|---|
-| 1 | `budget_lines`, ordered by id |
-| 2 | `commitments`, ordered by id |
-| 3 | `commitment_items`, ordered by id |
-| 4 | `custodies` |
-| 5 | `custody_subcontractor_advances`, ordered by id |
-| 6 | The operational header (nomination, billing, expense, MRN, timesheet, VO) |
-| 7 | Children, then the audit log |
+| 1 | `budget_lines` (all rows in the target `lineage group` / family per `OD-02A`), ordered by `id ASC` |
+| 2 | `commitments`, ordered by `id ASC` |
+| 3 | `commitment_items`, ordered by `id ASC` |
+| 4 | `custodies`, ordered by `id ASC` |
+| 5 | `custody_subcontractor_advances`, ordered by `id ASC` |
+| 6 | The operational header (nomination, billing, expense, payroll, MRN, VO, budget transfer, budget revision) |
+| 7 | Children / snapshots / deductions / recovery entries / overrun authorizations / sub-ledger entries, then `audit_logs` |
 
-Audit is written last, in the same transaction. If the audit write fails, everything rolls back.
+Audit is written last, in the same transaction. If the audit write fails, everything rolls back (`AGENTS.md` §21).
 
 **Rules:**
 1. **No pre-lock exceptions.** Every transaction takes its locks in strictly ascending level. It may skip levels, but it never takes a lower level after a higher one.
-2. **Pre-reads.** A plain non-locking read before the transaction is allowed only to find the lock targets (for example, a nomination's `budgetLineId`). Everything is revalidated after the locks are held. Existing use cases already work this way.
-3. **Stable lock targets.** A key used to find a lock target must not change while it is needed. This is why `nomination.budgetLineId` is immutable from SUBMITTED.
-4. **Same level, many rows:** always ordered by id.
-5. **Disjoint domains.** The owner-cash and capital domains (owner billings, owner payments, capital injections) use their own small orders (below). No workflow takes a lock from both those domains and the budget hierarchy, so they cannot form a cycle with it.
+2. **Pre-reads.** A plain non-locking read before the transaction is allowed only to find the lock targets (for example, a nomination's `budgetLineId` or lineage group). Everything is revalidated after the locks are held.
+3. **Stable lock targets.** Keys used to resolve lock targets (`nomination.budgetLineId`, approved `BudgetLineLineage`) are immutable once active.
+4. **Same level, many rows:** always ordered by `id ASC`.
+5. **Owner-Cash & Company-Funding Domain Locks (`OD-07C` item 3):** Operations on Owner billings, Owner payments, and temporary company-to-project funding lock `owner_billings (id ASC) → owner_payments (id ASC) → company_project_funding / capital_injections (id ASC) → INSERT allocations / repayments / audit_logs`.
 
-**Why the nomination lock is not an exception.** The nomination row is an operational header, so it sits at level 6.
-- The only workflow that holds a lower-level lock while taking it is nomination approval (budget line → nomination).
-- Nomination submit, reject and cancel lock only the nomination row, and nothing locks a nomination and then asks for a budget line.
-- A deadlock needs one transaction to hold level 6 and wait for a lower level. No such transaction exists.
-- Idempotency does not need the nomination first. All approvals on one line queue on the level-1 lock, and the second one sees the committed result.
-
-| Workflow | Locks (in order) | Key checks |
+| Workflow | Canonical Locks (in order) | Key Checks & Actions (`OD-07C` item 3) |
 |---|---|---|
-| Nomination submit | nomination only | The partial UNIQUE constraint blocks a duplicate open nomination. No budget-line lock is needed. Retention terms are present. |
-| **Nomination approval** | **budget line (level 1) → nomination (level 6)** | Revalidate status is SUBMITTED. If already APPROVED with a commitment, return it. Soft-limit check. Create the commitment and its items, copying the retention terms. Set both links. |
-| Billing submit | none for the write; advisory read | Advisory quantity check |
-| Billing audit | commitment → advances → billing | Reserve recoveries. Calculate retention and apply the cap from approved history. Record any Accountant reduction with its reason. `Σ deductions ≤ gross`. |
-| Billing approval | budget line (existing behaviour) → commitment → items → advances → billing | Authoritative quantity and money check on approved history. **Recompute Previously Retained and refuse approval if retention exceeds the remaining cap.** Confirm reservations. |
-| Billing reject / cancel / reverse | commitment → advances → billing | Release reservations by compensating entries. Voided retention deductions stop counting as Previously Retained. |
-| MRN approval | commitment → items → MRN | Cumulative accepted ≤ ordered |
-| Expense approval (materials, equipment) | budget line → commitment → items → expense | Gate, relief rule, soft limit |
-| VO approval | budget line → commitment → items → VO | Existing locks plus item locks. Quantity floor check. Soft limit. |
-| Budget transfer (and reversal) | both lines in id order → transfer | Availability `E − X − P` under the source line lock. Same project. |
-| Over-budget approval | the operation's normal locks | Evaluated after the lock, never before |
-| Owner payment allocation | payment → billings in id order | Both bounds |
-| Capital repayment | injection | Repayment ≤ outstanding |
+| Nomination submit | `nomination (6)` | Partial UNIQUE constraint blocks duplicate open nomination; retention terms present (`OD-01A..C`). |
+| **Nomination approval (`OD-06A-1`)** | **`budget_lines (1) → nomination (6) → INSERT commitment (2) & items (3) → audit (7)`** | Idempotent: if already `APPROVED` with commitment, return it. Check budget (`OD-06D-3`), create commitment & items atomically, copy retention terms (`OD-01B`). |
+| Custody approval (`OD-07B`) | `budget_lines (1) → [commitments (2) if linked 7A-1] → custodies (4) → [overrun auth (7)] → audit (7)` | Check available capacity (`OD-07A`, `OD-07B`); if over budget, Manager records reason, overrun amount, and `authorizedOverrunCap` (`7B-1`). |
+| Custody disbursement (`issueCustody`, `OD-07B`) | `budget_lines (1) → [commitments (2) if linked 7A-1] → custodies (4) → audit (7)` | Accountant re-checks overrun against `authorizedOverrunCap`; if within cap, set `disbursedAmount` and `ISSUED`; if overrun > cap, block until Manager runs `authorizeCustodyOverrun` (`7B-1`). |
+| Custody overrun cap increase (`authorizeCustodyOverrun`, `OD-07B`) | `budget_lines (1) → [commitments (2)] → custodies (4) → INSERT overrun auth (7) → audit (7)` | Manager-only independent action on approved custody recording additional `authorizedOverrunCap` and mandatory reason (`7B-1`). |
+| Subcontractor advance verify / reverse (`OD-06B-1`, `OD-07A`) | `budget_lines (1) → commitments (2) → custodies (4) → advances (5) → sub-ledger (7) → audit (7)` | Check `advance.amount ≤ Eff_C − ApprovedBills − OpenAdvances` and custody balance; transfer exposure from general custody to commitment (`7A-2`); write single-ID linked sub-ledger & custody entry (`NEW-REQ-01`). |
+| Subcontractor advance partial cash return (`OD-06B-3`) | `budget_lines (1) → commitments (2) → [custodies (4) if returned to open custody] → advances (5) → sub-ledger (7) → audit (7)` | Verify `returnAmount ≤ remainingAdvanceBalance`; credit open Engineer custody or company treasury; set `PARTIALLY_SETTLED` (or closed if zero). |
+| Billing submit | `billing (6)` (advisory read) | Advisory quantity and evidence check. |
+| Billing audit (`OD-03`, `OD-06A-3`) | `commitments (2) → advances (5, id ASC) → billing (6) → INSERT snapshot, deductions, RESERVED entries (7)` | Append new `BillingAuditSnapshot`; reserve advance recoveries (`OD-06B-1`); calculate retention (`UC-1`) & dynamic cap (`OD-01C`); enforce `Net ≥ 0` (`OD-06A-3`). |
+| Billing return for re-audit (`AUDITED → SUBMITTED`, `OD-03`) | `commitments (2) → advances (5, id ASC) → billing (6) → INSERT RELEASED entries & supersede prior deductions (7)` | Direct return to `SUBMITTED` when BOQ quantities are unchanged; mark prior cycle deductions `SUPERSEDED_BY_REAUDIT` (never delete); append `RELEASED` recovery entries (`OD-03`). |
+| Billing approval | `budget_lines (1) → commitments (2) → items (3, id ASC) → advances (5, id ASC) → billing (6) → confirm entries (7)` | Authoritative quantity, ceiling (`Eff_C`), and dynamic retention cap check (`OD-01C`). If cap/advance exhausted concurrently while BOQ is unchanged, return to `SUBMITTED` for re-audit (`OD-03`); otherwise confirm recoveries and freeze snapshot. |
+| Billing reject / cancel / reverse | `commitments (2) → advances (5, id ASC) → billing (6) → INSERT RELEASED entries (7)` | Append `RELEASED` recovery entries; voided/reversed retention stops counting in `PreviouslyRetained`. |
+| MRN approval / reversal (`BD-05`) | `commitments (2) → items (3, id ASC) → MRN (6) → audit (7)` | Cumulative accepted ≤ ordered; reversal blocked if any approved expense consumed quantity. |
+| Expense approval (PO material or urgent custody material, `OD-04`) | `budget_lines (1) → [commitments (2) → items (3, id ASC)] → [custodies (4) if custody-funded] → expense (6) → audit (7)` | Standard PO expense: verify approved MRN quantity gate (`CR-05`). Custody urgent material purchase (`OD-04`): verify remaining custody cash (`disbursedAmount` balance) and mandatory receipt/photo/purpose evidence without MRN. |
+| Payroll approval (`OD-07C`) | `budget_lines (1) → payroll_entry (6) → audit (7)` | Normalize worker names / check duplicate rules (`OD-07C` item 2); evaluate budget line soft-limit check (`OD-06D-3`). |
+| Variation Order approval (`OD-06C-4`, `OD-07C`) | `budget_lines (1) → commitments (2) → items (3, id ASC) → variation_order (6) → audit (7)` | Verify contractual cover and budget line capacity; for negative VO, ensure reduction only releases unused capacity and respects billed quantities, paid advances, and prospective retention cap (`OD-01C`, `OD-06C-4`). |
+| Budget transfer (and reversal, `BD-15`) | `budget_lines (1, both lines & lineage groups in id ASC) → transfer (6) → audit (7)` | Check `amount ≤ Projected(source)` under lock; same project. |
+| Budget revision approval (`OD-02A..C`) | `budget_lines (1, all project lines in id ASC) → budget (6) → INSERT immutable lineage (7) → audit (7)` | Verify every old line has explicit fate (`CONTINUED`, `SPLIT`, `MERGED`, `REMOVED`), no encumbered line removed without handling, freeze `BudgetLineLineage` (`OD-02B`). |
+| Owner payment collection, allocation & reversal (`OD-05C`) | `owner_billings (id ASC) → owner_payments (id ASC) → INSERT allocations / compensating entries → audit` | Verify allocation bounds (`≤ payment` and `≤ billing`); atomic compensating allocations on payment reversal. |
+| Temporary company project funding & repayment (`OD-05C`) | `company_project_funding / capital_injections (id ASC) → INSERT repayment → audit` | Separate Manager-approved repayment (never automatic on Owner collection); verify `repayment ≤ outstandingFunding` and `≤ availableProjectLiquidity`. |
+| Non-destructive financial correction (`OD-06E-1`) | Target domain locks (levels 1–6 as applicable) `→ INSERT corrective/reversal/receivable entry (7) → audit (7)` | Preserve original record untouched; link partial adjustment, full reversal + re-entry, or overpayment receivable (`OD-06E-1`). |
 
 The retention checks reuse the commitment lock that billing audit and approval already take. No lock was added and the order is unchanged.
 
@@ -651,37 +672,36 @@ Read consistency uses `READ COMMITTED` plus these row locks. Stored cumulative v
 
 ---
 
-## 8. SOD Matrix
+## 8. SOD Matrix *(Synchronized with 2026-10-31 Owner Decisions)*
 
-E = Engineer, P = Purchasing, A = Accountant, M = Manager. A dash means not permitted. All cells are proposed (not Owner-approved).
+E = Engineer, P = Purchasing, A = Accountant, M = Manager. A dash means not permitted.
 
-| Record | Create | Submit | Audit | Approve | Reject | Modify | Cancel | Reverse |
+| Record | Create | Submit | Audit | Approve | Reject | Modify | Cancel | Reverse / Correct |
 |---|---|---|---|---|---|---|---|---|
-| Nomination | E | E | – | M (≠ creator) | M | E (draft) | E (draft), M | – |
-| Billing | E | E | A | M | A (at audit), M (at approval) | E (draft), A (deductions, retention reduction) | E, M | M |
-| Custody advance | E (custodian) | E | A verifies | – | A | E (draft) | E (draft) | M |
-| Labor sheet | E | E | A | M | A, M | E (draft) | E, M | M |
-| MRN | E | E | – | **M (≠ creator, BD-05)** | M | E (draft) | E, M | M |
-| Equipment registry and rate | P | – | – | – | – | P | P | – |
-| Equipment timesheet | E | E | A (invoice match) | M | M | E (draft) | E, M | M |
-| Expense | E, A | E, A | – | M (≠ submitter) | M | submitter (draft) | submitter, M | M |
-| Variation Order | E | E | – | M (≠ creator) | M | E (draft) | E, M | M |
-| Budget transfer | A, M | A, M | – | M | M | – | requester, M | M |
-| Over-budget exception | – | – | A flags only | **M only** | – | – | – | – |
-| Milestone completion | – | – | – | M (needs approved evidence) | – | – | – | M |
-| Owner billing | A | A | – | M | M | A (draft) | A (draft), M | M |
-| Owner payment | A | – | – | – | – | A (before allocation) | – | M |
-| Capital injection | M | – | – | – | – | – | – | M |
-| Capital repayment | A | – | – | – | – | – | – | M |
+| Nomination (`OD-06A-1`) | E | E | – | M (≠ creator; auto-creates commitment) | M | E (draft) | E (draft), M | – |
+| Billing (`OD-03`, `OD-01A`) | E | E | A (new snapshot) | M (freezes snapshot) | A (at audit), M (returns to `SUBMITTED` if BOQ unchanged, or `REJECTED`) | E (draft), A (deductions, retention reduction during audit) | E, M | M (`OD-06E-1`) |
+| Custody advance (`OD-06B-1`, `OD-07A`) | E (custodian) | E | A verifies (`VERIFIED`) | – | A | E (draft) | E (draft) | M (`OD-06E-1`) |
+| Advance partial cash return (`OD-06B-3`) | A, E | – | A | M (if treasury/custody adjustment requires) | – | – | – | M (`OD-06E-1`) |
+| Labor sheet (`CR-04`) | **OUT OF SCOPE / DEFERRED** (Requires separate written scope override) | – | – | – | – | – | – | – |
+| MRN (`BD-05`) | E | E | – | **M (≠ creator)** | M | E (draft) | E, M | M |
+| Equipment registry / timesheet (`CR-06`) | **OUT OF SCOPE / DEFERRED** (Requires separate written scope override) | – | – | – | – | – | – | – |
+| Expense (PO or custody urgent material, `OD-04`) | E, A | E, A | A (custody settlement review) | M (≠ submitter) | M | submitter (draft) | submitter, M | M (`OD-06E-1`) |
+| Variation Order (`OD-06C-4`) | E | E | – | M (≠ creator) | M | E (draft) | E, M | M |
+| Budget transfer (`BD-15`) | A, M | A, M | – | M | M | – | requester, M | M |
+| Over-budget / Custody overrun cap (`OD-06D-3`, `OD-07B`) | – | – | A checks at disbursement (`issueCustody`) | **M only** (at approval or via `authorizeCustodyOverrun`) | – | – | – | – |
+| Milestone completion (`OD-06D-1`, `BD-17`) | – | – | – | M (needs approved evidence; independent of Owner billing) | – | – | – | M |
+| Owner billing (`OD-05B`, `OD-06D-1`) | A | A | – | M | M | A (draft) | A (draft), M | M (`OD-06E-1`) |
+| Owner payment (`OD-05C`) | A | – | – | – | – | A (before allocation) | – | M (`OD-06E-1`) |
+| Temporary company project funding (`OD-05C`) | M | – | – | M | – | – | – | M (`OD-06E-1`) |
+| Company funding repayment (`OD-05C`) | A, M | A | – | **M (mandatory; never automatic)** | M | – | – | M (`OD-06E-1`) |
+| Financial correction entry (`OD-06E-1`) | A, M | A | – | **M only** | M | – | – | M |
 | Attachment upload | all, on their own records | | | | | uploader (draft only) | | – |
-
-The only change from the previous revision is a clarification of the existing "Billing / Modify / A" cell: the Accountant's modification right covers deductions, including the retention reduction. No role gained or lost any permission.
 
 **Standing rules:**
 - Creator and submitter can never be the final approver of the same record.
-- Where the Manager is the only top authority and self-authorizes (transfers, reversals), the action is flagged and a reason is mandatory.
+- Where the Manager is the only top authority and self-authorizes (transfers, reversals, corrections), the action is flagged and a reason is mandatory.
 - Purchasing has no approval authority and no payroll access.
-- The Accountant never gives final approval.
+- The Accountant never gives final approval and **cannot approve a budget overrun** (`OD-07B`).
 
 ---
 
@@ -691,8 +711,8 @@ The only change from the previous revision is a clarification of the existing "B
 
 - An `Attachment` is **evidence only** and never a financial source.
 - It belongs to one business record (owner type and id) and carries the project for access control.
-- Storage goes through a provider abstraction (`upload`, `get link`, `remove`). No cloud vendor is chosen, since the repository establishes none.
-- MIME types allowed: JPEG, PNG, WebP, PDF. The server verifies file content (magic bytes), not the client's header. Maximum file size: 10 MB (PROPOSED; NEW-OD-04 pending Owner confirmation).
+- Storage goes through a provider abstraction (`upload`, `get link`, `remove`). **Wave 0 attachment infrastructure is implemented at commit `7615e91`, but the production cloud object-storage provider has not yet been selected (`OPEN`)**; production cloud storage must not be marked enabled until a provider is selected and configured.
+- MIME types allowed: JPEG, PNG, WebP, PDF. The server verifies file content (magic bytes), not the client's header. Maximum file size: 10 MB.
 - Storage keys are server-generated with no user-controlled path parts.
 - Access: the user must be authorized for the parent record (object-level), never just authenticated.
 - Audit events: `ATTACHMENT_UPLOADED`, `ATTACHMENT_VOIDED`, `ATTACHMENT_REPLACED`.
@@ -704,7 +724,7 @@ The state of an attachment is **derived from the status of its parent record**. 
 | Parent status | Attachment behavior |
 |---|---|
 | `DRAFT` | Uploader may upload and void. Replacement creates a new row linked to the old one. |
-| `SUBMITTED`, `AUDITED` | **LOCKED.** No void, no replacement. The Accountant may add audit evidence. |
+| `SUBMITTED`, `AUDITED` | **LOCKED.** No void, no replacement (preserved across `AUDITED → SUBMITTED` re-audit under `OD-03`). The Accountant may add audit evidence. |
 | `REJECTED` / reopened to `DRAFT` | Unlocked. Voiding keeps the old row visible as `VOIDED`. |
 | `APPROVED` | **IMMUTABLE ARCHIVE.** Never voided or replaced. |
 | `CANCELLED` | Retained, read-only. |
@@ -719,230 +739,210 @@ The state of an attachment is **derived from the status of its parent record**. 
 | Record | Minimum evidence |
 |---|---|
 | Billing | At least one execution evidence |
-| Custody advance | Signed receipt, at creation |
-| Labor sheet | Attendance or timesheet |
+| Subcontractor cash payment / advance (`NEW-REQ-01`, `OD-06B-1`) | Signed receipt / acknowledgment attachment |
+| Advance partial cash return (`OD-06B-3`) | Receipt / voucher attachment |
+| Custody-funded urgent material purchase (`OD-04 / BD-13`) | Clear tax invoice or field receipt **plus** material photo / field proof |
 | MRN | Signed delivery note |
-| Equipment timesheet | Signed field ticket (driver and engineer) |
-| Expense (new submissions) | At least one photo or document (C-11) |
-| Progress report | None to submit. At least one photo is needed for the milestone gate. |
+| Expense (standard submissions) | At least one photo or document (`C-11`) |
+| Progress report | None to submit. At least one photo is needed for the milestone gate (`OD-06D-1`, `BD-17`). |
 | VO | Optional. No source requires it. |
+| Labor sheet (`CR-04`) / Equipment timesheet (`CR-06`) | **OUT OF SCOPE / DEFERRED** until separate written scope override |
 
 ---
 
-## 10. Lifecycle & Reversal Rules
-
-Only the states that are actually needed exist.
+## 10. Lifecycle & Non-Destructive Financial Correction Rules (`OD-03`, `OD-06E-1` — OWNER-APPROVED)
 
 | Entity | States | Rules |
 |---|---|---|
-| Nomination | DRAFT → SUBMITTED → APPROVED / REJECTED; CANCELLED from DRAFT | APPROVED is terminal. A rejected nomination is not reopened, and the Engineer creates a new one. |
-| Commitment | existing (DRAFT, SUBMITTED, APPROVED, REJECTED) | Created `APPROVED` by nomination. Never edited after approval. |
-| Billing | DRAFT → SUBMITTED → AUDITED → APPROVED; REJECTED → DRAFT; CANCELLED; REVERSED | See R-07 and §4. |
-| Billing deduction | ACTIVE / VOIDED | Voided only when the billing is rejected, cancelled or reversed. |
-| Advance | RECORDED → VERIFIED / REJECTED; UNRECOVERED → PARTIALLY → FULLY_RECOVERED (derived from the ledger) | Reversal compensates the ledger. |
-| Custody | existing 9 states | Adds `disbursedAmount` at ISSUED. |
-| Labor sheet | DRAFT → SUBMITTED → AUDITED → APPROVED; REJECTED → DRAFT; CANCELLED; REVERSED | |
-| MRN | DRAFT → SUBMITTED → APPROVED / REJECTED; REJECTED → DRAFT; CANCELLED; REVERSED | Reversal is allowed only if no approved expense consumed its quantity. |
-| Equipment timesheet | DRAFT → SUBMITTED → APPROVED / REJECTED; CANCELLED; REVERSED | |
-| Budget transfer | REQUESTED → APPROVED → EXECUTED; REJECTED; CANCELLED; REVERSED | |
-| Budget revision | existing Budget statuses (DRAFT, SUBMITTED, APPROVED, REJECTED, SUPERSEDED) | Lineage records follow §4 CR-09. |
-| Owner billing | DRAFT → SUBMITTED → APPROVED; CANCELLED; REVERSED | Reversal only with no live allocations. |
-| Owner payment | RECORDED → (allocation derived); REVERSED | |
-| Capital injection | per BD-09 | |
+| Nomination (`OD-06A-1`) | `DRAFT → SUBMITTED → APPROVED / REJECTED`; `CANCELLED` from `DRAFT` | `APPROVED` is terminal and atomically creates the `Commitment`. A rejected nomination is not reopened. |
+| Commitment | existing (`DRAFT, SUBMITTED, APPROVED, REJECTED`) | Created `APPROVED` by nomination. Retention terms immutable after approval except by formal amendment (`OD-01B`). Adjusted by approved VOs (`OD-06C-4`). |
+| Billing (`OD-03`) | `DRAFT → SUBMITTED → AUDITED → APPROVED`; **`AUDITED → SUBMITTED` (when BOQ unchanged)**; `REJECTED → DRAFT` (when BOQ changes); `CANCELLED`; `REVERSED` | Unchanged-BOQ re-audit returns directly to `SUBMITTED` (`OD-03`); each audit cycle writes an append-only `BillingAuditSnapshot`; final `APPROVED` freezes the snapshot. |
+| Billing deduction (`OD-03`, `OD-06A-3`) | `ACTIVE / SUPERSEDED_BY_REAUDIT / VOIDED` | Scoped to `BillingAuditSnapshot`. Marked `SUPERSEDED_BY_REAUDIT` on re-audit (never deleted); `VOIDED` on reject/cancel/reverse. Unapplied balances carry forward (`OD-06A-3`). |
+| Advance (`OD-06B-1`, `OD-06B-3`) | `RECORDED → VERIFIED / REJECTED`; settlement derived: `UNRECOVERED → PARTIALLY_SETTLED → FULLY_RECOVERED / CLOSED` | Recoverable from billings only when `VERIFIED` (`OD-06B-1`). Partial cash return keeps status `PARTIALLY_SETTLED` until balance is `0.00` (`OD-06B-3`). |
+| Custody (`OD-07A`, `OD-07B`) | existing 9 states | Adds `disbursedAmount` at `ISSUED`; supports dedicated commitment custody (`7A-1`) and general `SITE_OPERATIONS` custody (`7A-2`); overrun cap checked at approval and disbursement (`7B-1`). |
+| MRN | `DRAFT → SUBMITTED → APPROVED / REJECTED`; `REJECTED → DRAFT`; `CANCELLED`; `REVERSED` | Reversal allowed only if no approved expense consumed its quantity. |
+| Budget transfer | `REQUESTED → APPROVED → EXECUTED`; `REJECTED`; `CANCELLED`; `REVERSED` | |
+| Budget revision (`OD-02A..C`) | existing Budget statuses (`DRAFT, SUBMITTED, APPROVED, REJECTED, SUPERSEDED`) | Requires explicit fate for every old line (`OD-02C`); `BudgetLineLineage` strictly immutable after approval (`OD-02B`); carries exposure across `lineage group` (`OD-02A`). |
+| Owner billing (`OD-05B`, `OD-06D-1`) | `DRAFT → SUBMITTED → APPROVED`; `CANCELLED`; `REVERSED` | Independent of milestone completion (`OD-06D-1`); reversal only with no live allocations. |
+| Owner payment (`OD-05C`) | `RECORDED → (allocation derived)`; `REVERSED` | Supports partial collection of `OwnerBilling` (`OD-05C`). |
+| Temporary company project funding (`OD-05C`) | `ACTIVE → PARTIALLY_REPAID → REPAID`; `REVERSED` | Temporary internal transfer only; repayment requires separate Manager approval (never automatic on Owner collection). |
+| Labor sheet (`CR-04`) / Equipment timesheet (`CR-06`) | **OUT OF SCOPE / DEFERRED** | Requires separate written scope override. |
 
-**Correction rules (all financial records):**
-- Before approval: amend (DRAFT or REJECTED only) or cancel.
-- After approval: **reversal only**, using a compensating entry and R-04. Never delete and never edit.
-- A reversal reverses its dependent effects (ledger releases, allocations) in the same transaction.
-- Every transition writes an audit event with the actor, the previous status and the reason.
+### Non-Destructive Correction of Approved Financial Transactions (`OD-06E-1 / R-06, R-07` — OWNER-APPROVED)
+
+Every approved financial transaction, its history, and its original supporting documents are permanently preserved (no in-place edit, no deletion):
+
+1. **Partial Corrective Entry (`تصحيح جزئي`):**
+   - Used when the actual physical cash payment was right, but the recorded amount contained an entry error.
+   - Creates a linked corrective entry referencing the original transaction without mutating the original record.
+2. **Full Reversal and Re-Recording (`عكس كامل وإعادة تسجيل`):**
+   - Used when the transaction itself or the subcontractor, contract, or counterparty was wrong.
+   - Reverses the full effect of the original transaction via a compensating entry and records the new correct transaction.
+3. **Actual Cash Overpayment (`دفع فعلي زائد`):**
+   - When actual cash paid to a subcontractor/counterparty exceeded the amount due, the historical payment record **must never be rewritten** as if less cash had been paid.
+   - The full actual cash paid remains recorded as paid, and the excess difference is recorded as a **recoverable balance due from the subcontractor/counterparty**, never as a mutation of the payment date or payment amount.
+4. **Audit & Anti-Duplication Controls:**
+   - Every correction records the mandatory reason, actor, timestamp, Manager approval, and explicit links to affected subcontractor sub-ledgers, custodies, and budget lines.
+   - Duplicate and circular corrections are blocked.
 
 ---
 
-## 11. Slice Impact
+## 11. Slice Impact *(Synchronized 2026-10-31)*
 
 | Slice | Impact | Breaking? | Reopen? | Reason |
 |---|---|---|---|---|
-| 3 Budget | REOPEN | No | Yes | Soft limit, transfers, revisions (activates SUPERSEDED) with reporting lineage, contingency rules, new exposure definition (§4 CR-09). |
-| 4 Expenses | EXTEND (behavioural) | No | No | Commitment link, material and equipment lines, gate, soft limit, evidence required. |
-| 5 Commitments | EXTEND | No | No | `CommitmentItem`, `nominationId`, retention terms (rate, cap mode, cap amount), relief rule, block on SUBCONTRACTOR lines for Purchasing. |
-| 6 Custody | REOPEN | Yes (logic) | Yes | Liability and exposure use `disbursedAmount`. Advances. Issuance exception (BD-20). |
-| 7 Billing | REOPEN (redesign) | **Yes** | Yes | Authorship moves to the Engineer, BOQ lines, AUDITED, deductions (including retention), REVERSED. Minimum reopening: new aggregate and state machine. Legacy flat billings stay as read-only history (BD-14). |
-| 8 Payroll | EXTEND | No | No | Soft-limit exception on approval. Coexists with the labor sheet. |
-| 10 Progress Reports | EXTEND | No | No | Attachments and milestone links. |
-| 12 Milestones | EXTEND (behavioural) | No | No | Evidence gate on completion. |
-| 20 Variation Orders | **EXTEND** | No | No | Line types, item links, rate-equality rule, soft limit. *This differs from the earlier "NO IMPACT" because F2 shows the ceiling functions are unused and VO lines have no item link.* |
-| 9, 13, 15 (dashboards, approvals hub) | EXTEND | No | No | New metrics and queues. |
+| Wave 0 (`7615e91`) | DELIVERED (Local/Dev) | No | No | Universal attachment infrastructure implemented at `7615e91`; production cloud storage provider remains `OPEN`. |
+| 3 Budget | REOPEN | No | Yes | Budget vs contract overrun separation (`OD-06D-3`), transfers, revisions with `lineage group` exposure continuity (`OD-02A`), strict lineage immutability (`OD-02B`), fate gate (`OD-02C`, `SPLIT` sub-rule `OPEN`). |
+| 4 Expenses | EXTEND (behavioural) | No | No | Standard PO/MRN gate plus `OD-04 / BD-13` custody-funded urgent material purchase exception (no fixed SAR cap; bounded by remaining custody cash). |
+| 5 Commitments | EXTEND | No | No | Subcontractor master identity & sub-ledger (`NEW-REQ-01`), `CommitmentItem`, `nominationId`, multiple commitments per line (`OD-06A-5`), retention terms (`OD-01A..C`), `Exposure_C = max(Eff_C, AL_C)` (`OD-06D-3`). |
+| 6 Custody | REOPEN | Yes (logic) | Yes | `disbursedAmount`, dual custody paths (`7A-1` & `7A-2`, `OD-07A`), advance ceiling & recovery (`OD-06B-1`), partial cash advance return (`OD-06B-3`), two-stage overrun check & `authorizeCustodyOverrun` (`OD-07B`). |
+| 7 Billing | REOPEN (redesign) | **Yes** | Yes | BOQ lines, append-only `BillingAuditSnapshot`, direct return to `SUBMITTED` when BOQ unchanged (`OD-03`), dynamic retention cap on `Eff_C` (`OD-01C`), non-negative net & deduction carry-forward (`OD-06A-3`; priority `OPEN`). |
+| 8 Payroll | EXTEND | No | No | Worker name normalization & duplicate prevention for in-scope payroll data (`OD-07C`), budget overrun exception (`OD-06D-3`). (`CR-04` labor sheets remain `OUT OF SCOPE`). |
+| 10 Progress Reports & 12 Milestones | EXTEND | No | No | Visual evidence gate (`BD-17`) and independence of field milestones from Owner billing with optional reference linking (`OD-06D-1`). |
+| 20 Variation Orders | **EXTEND** | No | No | Line types, item links, unused-only negative VO reduction (`OD-06C-4`), prospective dynamic retention cap interaction (`OD-01C`). |
+| 9, 13, 15 (Dashboards, Cash Flow) | EXTEND | No | No | **Net Cash Coverage Position After Approved Payables** (`OD-05A`), **Project Contractual Margin** (`OD-05B`), Owner collections & temporary company-to-project funding (`OD-05C`). |
 
 ---
 
-## 12. Dependency Graph
+## 12. Dependency Graph *(Synchronized 2026-10-31; `CR-04` & `CR-06` Deferred Out of Scope)*
 
 ```
-Slice 21  Attachment infrastructure
+Wave 0 (7615e91)  Attachment infrastructure (Merged; prod cloud storage provider OPEN)
    │
-   ├─► Slice 22  CR-01  Nomination + CommitmentItem
-   │      ├─► Slice 23  CR-03  Custody + advances
+   ├─► Slice 22  CR-01 + NEW-REQ-01  Subcontractor master identity, sub-ledger, Nomination + CommitmentItem (BOQ vs override OPEN)
+   │      ├─► Slice 23  CR-03  Custody (7A-1 & 7A-2), subcontractor advances (OD-06B-1), partial cash return (OD-06B-3), overrun cap (OD-07B)
    │      │        │
-   │      └────────┴─► Slice 24  CR-02  Billing + retention + recovery
-   │                         (also needs Slice 20 extension, in scope of Slice 24)
+   │      └────────┴─► Slice 24  CR-02 + CR-07 (Slice 20 ext)  Billing, append-only re-audit (OD-03), dynamic retention (OD-01A..C), recovery (Deduction priority OPEN)
    │
-   ├─► Slice 26  CR-05  Purchasing item lines + MRN + expense gate (needs Slice 22 for CommitmentItem)
-   │      └─► Slice 27  CR-06  Equipment (reuses the expense gate)
+   ├─► Slice 26  CR-05  Purchasing item lines + MRN + expense gate + custody urgent material exception (OD-04 / BD-13)
+   │      └─► [Slice 27 / CR-06  Equipment — OUT OF SCOPE / DEFERRED until separate written scope override]
    │
-   ├─► Slice 25  CR-04  Labor
-   └─► Slice 28  CR-08  Visual progress
+   ├─► [Slice 25 / CR-04  Site Labor Sheet — OUT OF SCOPE / DEFERRED until separate written scope override]
+   └─► Slice 28  CR-08  Visual progress & milestone independence from Owner billing (OD-06D-1)
 
-Slice 29  CR-09  Budget governance   (after 22, 23, 25, 26, 27 and the Slice 20 extension)
-Slice 30  CR-10  Cash flow           (after 24, 25, 26, 27; needs BD-10; does not depend on 29)
+Slice 29  CR-09  Budget governance, lineage exposure continuity (OD-02A..C; SPLIT sub-rule OPEN; AL_C normalization TECH-CLAR)
+Slice 30  CR-10  Cash coverage (OD-05A), contractual margin (OD-05B), Owner collections & temporary company funding (OD-05C; model naming TECH-ALIGN)
 ```
 
-Slice numbers are unique, 21 to 30. The order of 21–30 is unchanged from the previous plan. Real dependencies changed in three places:
-- 27 now depends on 26.
-- 30 no longer depends on 29. Soft limits do not affect cash.
-- The Slice 20 extension is explicitly part of Slice 24.
-
 ---
 
-## 13. Implementation Waves
+## 13. Implementation Waves *(Synchronized 2026-10-31)*
 
-| Wave | Slice | Scope | Prerequisites | Acceptance gate |
+| Wave | Slice | Scope | Status / Prerequisites & Gates | Acceptance Gate |
 |---|---|---|---|---|
-| 0 | 21 | Attachment entity, storage abstraction, validation, lifecycle | none | Upload, MIME and size rejection, lock by parent status, access control |
-| 1 | 22 | CR-01 | 21, BD-11, BD-14 | Idempotent single-commitment approval under the canonical lock order, items match the nomination, retention terms copied and fixed, soft-limit hook |
-| 1 | 23 | CR-03 | 21, 22, BD-18 | Disbursed split, advance verified, balances correct |
-| 1 | 24 | CR-02 and Slice 20 extension | 20, 21, 22, 23, BD-11, BD-12, BD-14 | Concurrent approvals cannot exceed quantity, advance or retention cap, reversal restores ledger |
-| 2 | 25 | CR-04 | 21, BD-03, BD-19 | Duplicate sheet blocked, overtime exact |
-| 2 | 26 | CR-05 | 21, 22, BD-05, BD-13 | No material expense without MRN, quantity gate holds under concurrency |
-| 2 | 27 | CR-06 | 21, 26, BD-16 | Hours and rate exact, invoice matching gate |
-| 2 | 28 | CR-08 | 21, BD-17 | Milestone cannot complete without evidence |
-| 3 | 29 | CR-09 | 22, 25, 26, 27, BD-15, BD-20 | Soft limit identical in every operation, exposure counts each record once, transfer atomic and respects pending, revision lineage reporting-only |
-| 3 | 30 | CR-10 | 24, 25, 26, 27, BD-09, BD-10, BD-21 | Liquidity and margin reconcile, allocation bounds hold |
-
-Each wave also needs: its schema work, the domain rules, use cases, policies, audit events, unit and integration tests, and a regression run of the closed slices it touches.
+| 0 | `Wave 0` (`7615e91`) | Attachment entity, storage abstraction, validation, lifecycle | **Implemented in repo (`7615e91`)**; production cloud object-storage provider selection remains **`OPEN`**. | Upload, MIME/magic-byte and 10 MB rejection, lock by parent status, access control |
+| 1 | 22 | `CR-01` + `NEW-REQ-01` | Owner-approved (`OD-06A-1`, `OD-06A-5`, `OD-01B`, `NEW-REQ-01`). **Open detail:** BOQ sum vs contract override derivation (`OD-06A`). | Unified subcontractor master identity & sub-ledger; atomic/idempotent commitment creation; multiple commitments per line |
+| 1 | 23 | `CR-03` | Owner-approved (`OD-06B-1`, `OD-06B-3`, `OD-07A`, `OD-07B`, `NEW-REQ-01`). | Dual custody paths (`7A-1`, `7A-2`), advance ceiling & verification, partial cash return, single-ID custody/sub-ledger link, two-stage overrun cap |
+| 1 | 24 | `CR-02` + `CR-07` (Slice 20 ext) | Owner-approved (`UC-1`, `OD-01A..C`, `OD-03`, `OD-06A-3`, `OD-06C-4`). **Open sub-rule:** Deduction priority order when exceeding gross (`OD-06A-3`). | Dynamic retention cap on `Eff_C`, prospective negative VO handling, direct `AUDITED → SUBMITTED` re-audit with append-only snapshots, non-negative net & carry-forward |
+| 2 | 25 | `CR-04` | **OUT OF SCOPE / DEFERRED** (`AGENTS.md` §3–§4). In-scope payroll worker name normalization is covered under `OD-07C`. | Blocked until separate written scope override |
+| 2 | 26 | `CR-05` | Owner-approved (`OD-04 / BD-13`, `BD-05`). | Standard PO/MRN quantity gate + custody-funded urgent material purchase exception (no fixed SAR cap; bounded by remaining custody cash + mandatory receipt/photo/purpose) |
+| 2 | 27 | `CR-06` | **OUT OF SCOPE / DEFERRED** (`AGENTS.md` §3–§4). | Blocked until separate written scope override |
+| 2 | 28 | `CR-08` | Owner-approved (`OD-06D-1`, `BD-17`). | Milestone completion gated by approved visual report; independent of Owner billing with optional reference link |
+| 3 | 29 | `CR-09` | Owner-approved (`OD-02A..C`, `OD-06D-3`, `OD-07B`). **Open sub-rule:** `SPLIT` exposure allocation (`OD-02A/02C`). **Tech clarification:** `AL_C` normalization (`OD-06D-3`). | Lineage-group exposure carry-forward, strict lineage immutability, per-line fate gate, budget vs contract overrun separation |
+| 3 | 30 | `CR-10` | Owner-approved (`OD-05A`, `OD-05B`, `OD-05C`, `OD-06E-1`). **Tech alignment:** Reconcile `CapitalInjection` naming with temporary company-to-project funding (`OD-05C`). | Net Cash Coverage Position After Approved Payables, Project Contractual Margin, non-automatic Manager-approved company funding repayment, company-level elimination |
 
 ---
 
-## 14. Test Strategy (design only) *(BD-11 & UC-1..UC-3 cases specified; only UC-1 Owner-approved)*
+## 14. Test Strategy (design only) *(Synchronized with 2026-10-31 Owner Decisions)*
 
-- **Unit:** rounding, quantity and rate checks, retention cap, deduction totals, recovery ledger arithmetic, overtime, hours, margin and liquidity formulas, every state transition, and rejection of invalid ones. Exposure formulas with linked, unlinked and custody-paid expenses, and the linked-expense overflow in P. Lineage grouping for the five cases in §4 CR-09. Retention cases:
-  - Retention rounding (UC-1): `ROUND_HALF_UP` to 2 decimal places using `Decimal` (third decimal digit ≥ 5 rounds up, < 5 rounds down; exact Decimal precision; zero floating-point usage), applied to `Gross × Rate ÷ 100` before cap evaluation.
-  - Gross as the basis, with other deductions present and absent.
-  - The cap formula: remaining cap above, equal to and below the calculated amount, and cap already exhausted.
-  - A cap of `0.00` versus an explicit no-cap contract.
-  - A zero rate, and no deduction row for a zero amount.
-  - Accountant reduction: within range, to zero, above the cap-limited amount (rejected), and without a reason (rejected).
-  - Previously Retained excludes the current statement, pending statements and reversed statements.
-- **Integration:** nomination approval retry, concurrent billing approvals on one item, concurrent recoveries on one advance, MRN and expense gate, VO quantity floor, transfer atomicity, audit written in the same transaction. Lock-order conformance for every workflow in §7. Revision approval leaves every transaction's `budgetLineId` unchanged. Retention:
-  - Two statements audited concurrently against the same remaining cap: the second approval is refused.
-  - A reversed statement frees cap.
-  - The commitment's retention terms cannot change after approval.
-  - A reduction does not change any other statement.
-- **Concurrency:**
-  - two billings fighting for the last quantity
-  - two billings fighting for one advance
-  - two billings fighting for the last of the retention cap
-  - two transfers draining one line
-  - a transfer racing an approval on the same line
-  - two repayments on one injection
-  - two approvals of the same nomination, and approvals of two nominations on one line
-  - a mixed set of workflows on the same line and commitment, run to confirm there is no deadlock
-- **Authorization:** each role-by-action denial in §8, inactive users, wrong project, self-approval, Purchasing blocked from SUBCONTRACTOR commitments. Retention: the Engineer and the Manager cannot enter a statement-level reduction, and only the Accountant can.
-- **Financial invariants:** every item in §6 as a named test, with negative cases. In particular: an approved linked expense is counted once, a transfer cannot take funds needed by a SUBMITTED record at execution time, lineage never changes any exposure figure, and cumulative approved retention never exceeds the cap.
-- **Evidence:** mandatory evidence at submit, lock on submit, unlock on reject, immutability on approval, no void after approval.
-- **E2E:**
-  - nomination to commitment
-  - billing with retention and advance recovery
-  - material PO to MRN to expense
-  - VO then billing
-  - transfer
-  - over-budget exception
-  - budget revision with lineage in each of the five cases
-  - owner billing then payment and allocation
-  - capital injection and repayment
-  - liquidity view
-- **Regression of closed slices:** budget exposure for existing data, commitment approval, expense approval, custody flow, payroll, progress reports, milestones, and VO flows. Existing figures must not change for records created before cutover.
+- **Unit:**
+  - `UC-1` & `OD-07C`: `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` via `Decimal` (`ROUND_HALF_UP` to 2 dp, zero floating-point) before `min(scheduledRetentionThisBill, remainingRetentionCap)`.
+  - `OD-01A..C`: Contractual retention rate/cap, zero-retention representation (`retentionApplicable = false`, `retentionRatePercent = 0.00`, `retentionCapMode = NO_CAP`, no deduction row), post-approval term immutability, Accountant downward adjustment with mandatory reason, and dynamic percentage cap on `Eff_C` across positive and negative VOs (prospective pause when `PreviouslyRetained ≥ newCap`, no historical rewrite or auto-refund).
+  - `OD-03` & `OD-06A-3`: Direct `AUDITED → SUBMITTED` re-audit when BOQ quantities are unchanged, append-only `BillingAuditSnapshot`, prior deductions marked `SUPERSEDED_BY_REAUDIT`, non-negative net (`Net ≥ 0`), and carry-forward of unapplied deduction balances.
+  - `OD-06B-1`, `OD-06B-3`, `OD-07A`, `NEW-REQ-01`: Advance ceiling (`≤ Eff_C − ApprovedBills − OpenAdvances`), `VERIFIED`-only recovery, FIFO limited to compatible terms, partial cash advance return (to open custody or company treasury), dual custody exposure paths (`7A-1` & `7A-2`), and single-ID deduplication between subcontractor sub-ledger and custody settlement.
+  - `OD-04 / BD-13`: Custody-funded urgent material purchases allowed without MRN up to actual remaining disbursed custody cash (no fixed SAR cap), rejecting missing invoice/receipt, material photo, description, or purpose; standard PO expenses still blocked without approved MRN.
+  - `OD-02A..C`, `OD-06D-3`, `OD-07B`: Lineage-group exposure carry-forward, post-approval lineage immutability, per-line fate gate, separation of project budget overrun vs contract ceiling overrun (`Exposure_C = max(Eff_C, AL_C)`), and two-stage custody overrun cap check (`7B-1`).
+  - `OD-05A..C` & `OD-06E-1`: `EvidencedCustodyCashOut`, `ApprovedDirectPayables`, `RecognizedOutflow`, `NetCashCoveragePosition`, `RecognizedProjectCost` (`grossAmount − ActivePenaltyDeductions`), `ProjectContractualMargin`, non-automatic company funding repayment, company-level internal transfer elimination, and non-destructive financial corrections (partial adjustment, full reversal + re-entry, actual cash overpayment receivable).
+- **Integration, Concurrency, Authorization & E2E:** Lock-order conformance for all workflows in §7; negative tests for unauthorized roles (e.g., Accountant attempting to approve a custody overrun or auto-repaying company funding without Manager approval).
 
 ---
 
-## 15. Acceptance Matrix *(Owner Decisions Pending)*
+## 15. Acceptance Matrix *(Synchronized 2026-10-31)*
 
-Only `UC-1` is Owner-approved. All other business decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), retention rules `UC-2`/`UC-3`, and CR-09 lineage boundary points are proposals. No CR is ready for implementation wave execution; see the Owner Decision Brief and the Specification Closure Gate Report for open blockers.
+> **Note:** An Owner decision approval records the normative requirement in the specification; it does **not** mean the code is implemented and does **not** authorize coding without an explicit implementation task brief.
 
-| CR | Business design | Data model | Authorization | Financial rules | Tests | Status | Proposed Decisions Applied (only UC-1 is Owner-approved) |
+| CR | Business Design | Data Model | Authorization | Financial Rules | Tests | Specification Readiness Status (2026-10-31) | Approved Decisions & Open Gates |
 |---|---|---|---|---|---|---|---|
-| CR-01 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-11, BD-14, UC-2, UC-3 |
-| CR-02 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-11, BD-12, BD-14, UC-1, UC-2, UC-3 |
-| CR-03 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-18 |
-| CR-04 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-03, BD-19 |
-| CR-05 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-05, BD-13 |
-| CR-06 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-16 |
-| CR-07 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-12 |
-| CR-08 | Complete | Complete | Complete | n/a | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-17 |
-| CR-09 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-15, BD-20, Lineage Rules 1–3 |
-| CR-10 | Complete | Complete | Complete | Complete | Specified | **NOT READY — OWNER DECISIONS PENDING** | BD-09, BD-10, BD-21 |
-
-Open Owner decisions and unresolved audit findings (e.g. `AUD-02`, `AUD-04`, `AUD-07`) block implementation of the affected CRs; see the Owner Decision Brief.
+| `NEW-REQ-01` | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — READY FOR SLICE DESIGN** | `NEW-REQ-01` (Master subcontractor identity, per-contract sub-ledger, single-ID custody link) |
+| CR-01 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — 1 OPEN DETAIL** | Approved: `OD-06A-1`, `OD-06A-5`, `OD-01B`. **OPEN:** Initial commitment value derivation if BOQ sum differs from explicit contract/override value (`OD-06A`). |
+| CR-02 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — 1 OPEN SUB-RULE** | Approved: `UC-1`, `OD-01A..C`, `OD-03`, `OD-06A-3`, `OD-07C`. **OPEN:** Priority order of deduction categories when total deductions exceed bill gross amount (`OD-06A-3`). |
+| CR-03 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — READY FOR SLICE DESIGN** | Approved: `OD-06B-1`, `OD-06B-3`, `OD-07A` (`7A-1` & `7A-2`), `OD-07B` (`7B-1`), `NEW-REQ-01`. |
+| CR-04 | Deferred | Deferred | Deferred | Deferred | Deferred | **OUT OF SCOPE / DEFERRED** | Attendance, timesheets, overtime, and site labor sheets are **out of scope** (`AGENTS.md` §3–§4) until a separate written scope override. (`OD-07C` worker name normalization applies to in-scope data only.) |
+| CR-05 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — READY FOR SLICE DESIGN** | Approved: `OD-04 / BD-13` (custody urgent material exception with no independent fixed SAR cap; bounded by remaining custody cash), `BD-05`. |
+| CR-06 | Deferred | Deferred | Deferred | Deferred | Deferred | **OUT OF SCOPE / DEFERRED** | Equipment operating-hour / timesheet workflow is **out of scope** (`AGENTS.md` §3–§4) until a separate written scope override. |
+| CR-07 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — READY FOR SLICE DESIGN** | Approved: `OD-06C-4` (VO commitment rules, unused-only reduction), `OD-01C` (prospective dynamic retention cap), `OD-07C` (`Decimal(15,2)`). |
+| CR-08 | Approved | Specified | Specified | n/a | Specified | **SPEC APPROVED — READY FOR SLICE DESIGN** | Approved: `OD-06D-1` (milestone independence from Owner billing with optional reference link), `BD-17`. |
+| CR-09 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — 1 OPEN SUB-RULE & 1 TECH CLARIFICATION** | Approved: `OD-02A..C`, `OD-06D-3`, `OD-07A`, `OD-07B`. **OPEN:** `SPLIT` exposure allocation sub-rule (`OD-02A/02C`). **TECH CLARIFICATION:** Normalize `AL_C` components/statuses (`OD-06D-3`). |
+| CR-10 | Approved | Specified | Specified | Approved | Specified | **SPEC APPROVED — 1 TECH ALIGNMENT** | Approved: `OD-05A`, `OD-05B`, `OD-05C`, `OD-06E-1`. **TECH ALIGNMENT:** Reconcile `CapitalInjection` schema/model naming with temporary company-to-project funding semantics (`OD-05C`). |
 
 ---
 
-## 16. Business Decisions Register *(Only `UC-1` Owner-approved; all others PROPOSED)*
+## 16. Business Decisions Register *(Synchronized with `OWNER_DECISION_REGISTER_2026-10-31.md`)*
 
-| Decision | Status | Proposed Rule (v1 specification draft) | Target Slice(s) |
+| Register ID / Addendum ID | Status (2026-10-31) | Approved Normative Rule & Open Details | Target Slice(s) |
 |---|---|---|---|
-| **BD-03** Overtime rate rule | **PROPOSED — NOT OWNER-APPROVED** | `1.50×` of `(dailyWage ÷ standardWorkingHours)`, where `standardWorkingHours` defaults to `8` hours/day (project-configurable), rounded half-up to 2 dp via `Decimal`. Internal control metric only. | Slice 25 |
-| **BD-05** MRN approval authority | **PROPOSED — NOT OWNER-APPROVED** | Engineer creates and submits MRN; Manager approves (`creator ≠ approver`). | Slice 26 |
-| **BD-09** Capital classification | **PROPOSED — NOT OWNER-APPROVED** | `PERMANENT_EQUITY` (no balance, no repayment) vs `TEMPORARY_FINANCING` (outstanding balance tracked via append-only repayment ledger; Manager write-off with reason). | Slice 30 |
-| **BD-10** Recognized Outflow basis | **PROPOSED — NOT OWNER-APPROVED** | Approved-basis proxy (§4 CR-10): direct approved expenses + custody disbursed (net of returned cash) + approved payroll + approved site labor sheets + approved subcontractor net payable. | Slice 30 |
-| **BD-11** Retention policy (`UC-1..UC-3`) | **`UC-1` OWNER-APPROVED; `BD-11`, `UC-2`, `UC-3` PROPOSED — NOT OWNER-APPROVED** | Contract-defined rate and cap mode (`CAP_AMOUNT` in SAR or `NO_CAP`) with no universal default; proposed snapshot immutable at Commitment approval (`UC-2`, `UC-3`); `Calculated = round_half_up(Gross × Rate ÷ 100, 2)` via `Decimal` (`UC-1`, Owner-approved); `Actual = min(Calculated, max(Cap − Previously Retained, 0))`; Accountant may reduce statement retention (`0.00..Actual`) at audit with mandatory reason; Manager final approval unchanged; release out of v1 scope. | Slices 22, 24 |
-| **BD-12** VO rate and item model | **PROPOSED — NOT OWNER-APPROVED** | Never mutate an existing item's rate. VOs either adjust quantity at the existing contract rate (`QUANTITY_ADJUSTMENT`) or add a new `CommitmentItem` with its own rate (`ADDITIONAL_ITEM`). | Slice 24 |
-| **BD-13** Material gate scope & relief | **PROPOSED — NOT OWNER-APPROVED** | Applies to every `MATERIALS` expense (no petty-cash bypass). Requires `CommitmentItem` link and approved `MRN`. Commitment exposure relieved via `max(Eff_C, AL_C)` (R-02). | Slice 26 |
-| **BD-14** Legacy data policy | **PROPOSED — NOT OWNER-APPROVED** | Pre-cutover flat commitments, billings, and VOs remain immutable read-only history. Post-cutover subcontractor commitments must originate from Nominations with items; Purchasing is blocked from `SUBCONTRACTOR` commitments. | Slices 22, 24 |
-| **BD-15** Transfer & contingency actors | **PROPOSED — NOT OWNER-APPROVED** | Accountant or Manager requests transfer; Manager approves (Manager self-authorization is flagged with mandatory reason). One dedicated `CONTINGENCY` line per budget, consumed only via transfer. | Slice 29 |
-| **BD-16** Equipment scope & meter failure | **PROPOSED — NOT OWNER-APPROVED** | Rented/supplier equipment under an `EquipmentContract` commitment only. Meter failure permits clock-time entry only with `meterFailure = true`, mandatory reason, and incident attachment. | Slice 27 |
-| **BD-17** Milestone completion authority | **PROPOSED — NOT OWNER-APPROVED** | Manager-only completion, gated server-side by at least one linked `APPROVED` `ProgressReport` with active visual evidence attachment(s). | Slice 28 |
-| **BD-18** Advance verification | **PROPOSED — NOT OWNER-APPROVED** | Engineer records advance with signed receipt attachment; Accountant verifies (`VERIFIED`). Custody and subcontract commitment must share the same `budgetLineId`. | Slice 23 |
-| **BD-19** Labor sheet key & payroll | **PROPOSED — NOT OWNER-APPROVED** | One active sheet per `(projectId, laborBudgetLineId, periodYear, periodMonth)`. Strictly segregated from salaried `PayrollEntry` for any worker-period. | Slice 25 |
-| **BD-20** Custody over-budget mechanics | **PROPOSED — NOT OWNER-APPROVED** | Accountant issuance over budget is blocked unless Manager records an explicit over-budget exception and `authorizedOverrunCap` on the custody, verified under lock at issuance. | Slice 29 |
-| **BD-21** Owner billing recognition | **PROPOSED — NOT OWNER-APPROVED** | Recognized in Certified Billing Receivable and Contractual Margin upon Manager `APPROVED` status. | Slice 30 |
+| **`UC-1`** Retention rounding | **OWNER-APPROVED** | `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` using `Decimal` (`ROUND_HALF_UP` to 2 dp) before applying `min(scheduledRetentionThisBill, remainingRetentionCap)`. | Slice 24 |
+| **`OD-01A / BD-11`** Contractual retention policy | **OWNER-APPROVED** | Rate & cap from approved subcontract; auto-calculated; Accountant statement-level downward adjustment with mandatory reason within contract bounds; Manager approves bill & adjustment; segregated from advance recovery/penalties; no retroactive mutation. | Slices 22, 24 |
+| **`OD-01B / UC-2`** Zero-retention contracts & term immutability | **OWNER-APPROVED** | Zero-retention allowed (`retentionApplicable=false`, `retentionRatePercent=0.00`, `retentionCapMode=NO_CAP`, no deduction row); commitment retention terms immutable after approval except by formal authorized amendment. | Slices 22, 24 |
+| **`OD-01C / UC-3`** Retention cap with Variation Orders | **OWNER-APPROVED** | Percentage cap is dynamic on effective contract value (`Eff_C`) after approved VOs. Negative VOs do not rewrite historical retention or auto-refund cash; new cap applies prospectively and pauses new retention while historical retention ≥ new cap. | Slices 22, 24 |
+| **`OD-02A`** Exposure continuity across budget revisions | **OWNER-APPROVED WITH OPEN SUB-RULE** | Carry forward prior financial exposure across `lineage group` so new revision lines do not restart capacity at zero; historical transactions remain bound to original lines. **OPEN:** `SPLIT` exposure allocation (`allocationSharePercent` vs unencumbered-only restriction). | Slice 29 |
+| **`OD-02B`** Lineage immutability | **OWNER-APPROVED** | `BudgetLineLineage` records are strictly immutable after budget revision approval; later structural changes require a new budget revision. | Slice 29 |
+| **`OD-02C`** Budget revision approval gate | **OWNER-APPROVED WITH OPEN SUB-RULE** | Every old budget line must receive an explicit fate (`CONTINUED`, `SPLIT`, `MERGED`, `REMOVED`; plus `ADDED` for new lines); lines with active exposure/commitments cannot be removed without explicit handling. **OPEN:** `SPLIT` sub-rule. | Slice 29 |
+| **`OD-03`** Subcontractor billing re-audit | **OWNER-APPROVED** | If only deductions/caps change and BOQ quantities are unchanged, return bill directly to `SUBMITTED` (`AUDITED → SUBMITTED`) for Accountant re-audit; preserve append-only snapshot per audit cycle and mark prior deductions superseded (never deleted); if BOQ changes, Engineer corrects and resubmits; final approval freezes snapshot. | Slice 24 |
+| **`OD-04 / BD-13`** Urgent material purchases from custody | **OWNER-APPROVED** | Small urgent site materials funded from Engineer custody are exempt from creating a separate MRN with **no independent fixed SAR cap** (natural limit = actual remaining disbursed custody cash); requires clear receipt/invoice, material photo, description, purpose, amount, project, and custody link. Standard POs follow normal PO/MRN path (`BD-05`). | Slice 26 |
+| **`OD-05A / BD-09 [Reg] / BD-10 [Add]`** Cash coverage after approved payables | **OWNER-APPROVED** | `EvidencedCustodyCashOut = issued/closed custody (disbursedAmount - cashReturnedAmount)`; `ApprovedDirectPayables = direct expenses (custodyId IS NULL) + approved payroll + approved labor sheets (if CR-04 enters scope) + approved subcontractor billing netAmount`; `RecognizedOutflow = EvidencedCustodyCashOut + ApprovedDirectPayables`; displayed as **Net Cash Coverage Position After Approved Payables** (`صافي تغطية السيولة بعد المستحقات المعتمدة`), never as reconciled bank cash; no double-counting of custody-settled expenses. | Slice 30 |
+| **`OD-05B / BD-10 [Reg] / BD-21 [Add]`** Project contractual margin | **OWNER-APPROVED** | `ProjectContractualMargin = ApprovedOwnerBilling.netAmount - RecognizedProjectCost`, where `RecognizedProjectCost = ApprovedDirectExpenses + ApprovedCustodySettledExpenses + ApprovedPayroll + ApprovedSiteLaborSheets(if CR-04 enters scope) + SUM(ApprovedSubcontractorBilling.grossAmount - ActivePenaltyDeductions)`. Excludes company funding/repayments; retention and advance recovery do not reduce project cost. | Slice 30 |
+| **`OD-05C / BD-21 [Reg] / BD-09 [Add]`** Project liquidity sources & company funding | **OWNER-APPROVED (TECH ALIGNMENT NOTED)** | Two paths: (1) Owner billing collections linked to `OwnerBilling` (partial supported); (2) Temporary company-to-project liquidity funding. Company funding is not revenue/profit/Owner collection; repayment is a separate Manager-approved transaction (partial/full), **never automatic** upon Owner billing collection; eliminated at company-level aggregation; excluded from margin; no permanent equity category. *(Reconcile `CapitalInjection` naming before coding.)* | Slice 30 |
+| **`OD-06A-1 / BD-03 [Reg]`** Nomination to commitment conversion | **OWNER-APPROVED (1 DETAIL OPEN)** | Manager approval of subcontractor nomination atomically and idempotently creates the `Commitment` and reserves budget line capacity; no commitment before approval; links preserved. **OPEN:** Initial commitment value derivation if BOQ sum differs from explicit contract/override value. | Slice 22 |
+| **`OD-06A-3 / BD-12 [Reg]`** Billing deduction cap & carry-forward | **OWNER-APPROVED WITH OPEN SUB-RULE** | Billing net ≥ 0; applied deductions ≤ bill gross work value; unapplied deduction balances carry forward by type/source without expiring or repeating. **OPEN:** Exact priority order of deduction categories when total deductions exceed bill gross amount. | Slice 24 |
+| **`OD-06A-5 / R-01 [Reg]`** Multiple commitments per budget line | **OWNER-APPROVED** | Multiple independent subcontractor commitments/contracts allowed on one budget line; isolated per-contract accounts with aggregated exposure check against shared budget line capacity. | Slice 22 |
+| **`OD-06B-1 / BD-16, BD-17 [Reg] / BD-18 [Add]`** Subcontractor advance ceiling & recovery | **OWNER-APPROVED** | Requires approved commitment; within `Eff_C - ApprovedBills - OpenAdvances`; recoverable from billings only after payout verification (`VERIFIED`); contract governs recovery terms; Accountant sets recovery within remaining verified balance and post-retention bill capacity; FIFO only across compatible terms; distinct terms keep separate schedules. | Slices 23, 24 |
+| **`OD-06B-3 / R-02 [Reg]`** Partial cash return of subcontractor advance | **OWNER-APPROVED** | Partial cash return allowed, linked to original advance, reducing balance (`PARTIALLY_SETTLED` until zero, then closed); destination recorded (open Engineer custody or company treasury) with receipt, date, and receiver; ≤ remaining balance; no double-counting. | Slice 23 |
+| **`OD-06C-4 / R-05 [Reg] / BD-12 [Add]`** Variation Orders on subcontractor commitment | **OWNER-APPROVED** | No commitment impact before VO approval; approved VO adjusts the same commitment after budget and contract ceiling checks; negative VO releases unused capacity only and never touches executed work, approved billings, or paid advances; full history preserved. | Slice 24 |
+| **`OD-06D-1 / R-04 [Reg] / BD-17 [Add]`** Milestone independence from Owner billing | **OWNER-APPROVED** | Field milestones/completion operate independently of Owner billing with optional reference link; milestone approval does not auto-create an Owner billing or financial approval. | Slice 28 |
+| **`OD-06D-3 / BD-19, BD-20 [Reg] / R-02 [Add]`** Contractual exposure & budget control | **OWNER-APPROVED WITH TECH CLARIFICATION** | `Exposure_C = max(Eff_C, AL_C)`. Separates project budget overrun (stops approval until reasoned Manager exception; never raises contract value) from contract ceiling overrun (stops approval until approved VO/addendum). **TECH CLARIFICATION:** Normalize `AL_C` components/statuses before coding. | Slice 29 |
+| **`OD-06E-1 / R-06, R-07 [Reg]`** Correction of approved financial transactions | **OWNER-APPROVED** | No in-place edit or delete; partial corrective entry for recording-amount errors with right actual cash paid; full reversal + new entry for wrong transaction/counterparty; actual cash overpayment preserves true cash paid and records excess as recoverable from subcontractor; full audit/account links preserved. | All Financial Slices |
+| **`OD-07A / BD-18`** Custody & advance exposure non-duplication | **OWNER-APPROVED** | Both paths approved: (1) Dedicated commitment-linked custody (`7A-1`) inside `max(Eff_C, AL_C + OutstandingCustodiesOn(C))`; (2) General `SITE_OPERATIONS` custody (`7A-2`) transferring exposure to commitment upon advance verification without double-counting, preserving Engineer cash accountability. | Slices 23, 29 |
+| **`OD-07B / BD-20`** Custody budget overrun between approval & issue | **OWNER-APPROVED** | Check available budget at Manager approval (recording reason, overrun, and approved overrun cap); Accountant re-checks at disbursement (`issueCustody`); allow if ≤ cap, block if > cap until Manager approves additional cap via independent action (`7B-1`); Accountant cannot approve overruns. | Slices 23, 29 |
+| **`OD-07C / AUD-09..AUD-12`** Technical/documentation corrections | **OWNER-APPROVED WITH SCOPE CONSTRAINT** | (1) `Decimal(15,2)` monetary precision; (2) worker name normalization/deduplication for in-scope data; (3) complete canonical lock-order table; (4) synchronize `UC-1` rounding formula text before cap. Does **not** authorize CR-04 or CR-06. | All Slices |
+| **`NEW-REQ-01`** Subcontractor master identity & cash payment sub-ledger | **OWNER-APPROVED** | Single company-wide subcontractor identity with isolated per-project, per-contract sub-ledgers; mandatory cash payment fields; single shared transaction ID linking custody-funded subcontractor payments to custody settlement to prevent double-counting. | Slices 22, 23, 24 |
+| **`CR-04` (`BD-03`, `BD-19` labor sheets)** | **OUT OF SCOPE / DEFERRED** | Worker attendance, timesheets, overtime, and site labor sheets remain out of scope (`AGENTS.md` §3–§4) until a separate written scope override. | Deferred |
+| **`CR-06` (`BD-16` equipment timesheets)** | **OUT OF SCOPE / DEFERRED** | Equipment operating-hour / timesheet workflows remain out of scope (`AGENTS.md` §3–§4) until a separate written scope override. | Deferred |
 
 ---
 
-## 17. Preconditions for Implementation Execution
+## 17. Preconditions for Implementation Execution *(Synchronized 2026-10-31)*
 
-1. **Business Decisions:** Only `UC-1` is Owner-approved. All other Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), Retention rules (`UC-2`, `UC-3`), Design Defaults (`R-01`–`R-07`), and CR-09 lineage boundary rules require explicit Owner decisions before implementation (see Owner Decision Brief).
-2. **Baseline verification:** Before any implementation, re-establish the repository baseline (the design was written against commit `c9f0e28`; HEAD has since advanced to later commits, including the `slice-21` concurrency-hardening commit) and confirm its unit and integration test suites pass. Slice numbering must also be reconciled (this document numbers Attachment Infrastructure "Slice 21"; `CR_Impact_Architecture_Review.md` numbers it "Slice 18"; the repository already has commits named `slice-18` to `slice-21` for other work). **Proposed canonical work identity (pending Owner confirmation): `Attachment Infrastructure — Wave 0`.** Numbers such as "Slice 18" or "Slice 21" are logical roadmap labels that differ between documents; Git branch names and commit subjects (`slice-NN`) are historical labels of already-delivered work and are not renumbered by this document.
-3. **Cutover handling (BD-14):** Any in-flight `DRAFT` or `SUBMITTED` flat billings from Slice 7 at deployment cutover must be settled or cancelled before switching to BOQ-line billing.
-4. **Wave discipline:** Execute Slices 21 → 30 strictly in wave and dependency order (§12, §13). No slice starts before its prerequisite slices pass all unit, integration, concurrency, and authorization tests.
-5. **Engineering contract compliance:** Full adherence to `AGENTS.md v1.2.0` (Decimal-only arithmetic, append-only financial records, no hard deletes, transactional audit logs, server-side RBAC + object-level authorization, Arabic/RTL-first UI with logical CSS properties).
+1. **Resolution of Remaining Open Sub-Rules & Technical Clarifications:**
+   - Before implementing `CR-09` budget line splitting, obtain Owner selection on the `OD-02A/02C` `SPLIT` exposure allocation sub-rule (`allocationSharePercent` summing to 100% vs restricting `SPLIT` to unencumbered lines).
+   - Before implementing `CR-02` billing deduction auto-truncation when deductions exceed gross, obtain Owner selection on the `OD-06A-3` deduction category priority order.
+   - Before implementing `CR-01` nomination approval if a contract override distinct from Σ BOQ lines is desired, resolve the `OD-06A` BOQ sum vs override detail.
+   - Before implementing `CR-09` exposure calculations, complete the technical normalization of `AL_C` components/statuses (`OD-06D-3`).
+   - Before implementing `CR-10` company-to-project funding, reconcile existing `CapitalInjection` model/field naming with the approved temporary company funding semantics (`OD-05C`).
+   - Before enabling production cloud attachment storage, select and configure the production object-storage provider.
+2. **Scope Protection (`CR-04` & `CR-06`):** Do not implement CR-04 attendance/timesheets/overtime/labor sheets or CR-06 equipment operating-hour timesheets without a separate written scope override.
+3. **Cutover handling (`BD-14`):** Any in-flight `DRAFT` or `SUBMITTED` flat billings from Slice 7 at deployment cutover must be settled or cancelled before switching to BOQ-line billing.
+4. **Wave discipline & Engineering Contract:** Execute authorized slices strictly in dependency order (§12, §13) with full adherence to `AGENTS.md v1.2.0` (`Decimal(15,2)` arithmetic, append-only financial records, no hard deletes, transactional audit logs, server-side RBAC + object-level authorization, Arabic/RTL-first UI with logical CSS properties).
 
 ---
 
-## 18. Final Consistency Audit *(BD-11 checks added)*
+## 18. Final Consistency Audit & Changelog *(v2.0 — 2026-10-31)*
 
 | Area | Check | Result |
 |---|---|---|
-| **1. Lock hierarchy** | One ascending hierarchy (levels 1–7), with five rules and no pre-lock exceptions. Nomination approval is `budget line → nomination`, which is ascending. Nomination submit, reject and cancel take only the nomination lock. The duplicate-nomination rule uses a partial UNIQUE constraint, so it adds no lock. The retention checks reuse locks the billing workflows already take. | Consistent |
-| **2. Exposure, pending, availability** | One definition set (§4 CR-09). An approved expense is counted once. P is derived and never stored or reserved. Transfers use `Projected = E − X − P` under the source line lock. Retention is a deduction inside a billing and adds no exposure. | No contradiction, no double count |
-| **3. Revision lineage** | `BudgetLineLineage` covers the five cases, is reporting-only, requires complete mapping of prior lines at approval, is immutable after approval, and never re-binds any record. Superseded lines are closed to new commitments/unlinked expenses while existing commitments/custodies settle within their ceilings. Reporting-only lineage leaves exposure continuity across revisions unresolved (`AUD-02`, `OD-02`, open). | Proposed; open finding |
-| **4. BD-11 & UC-1..UC-3** | CR-02 (§4), the logical model (§5), the invariant (§6.7), the lock table (§7), the SOD cell (§8), the tests (§14), the acceptance matrix (§15) and the decision register (§16) use identical BD-11 and UC-1..UC-3 wording. Textual consistency only; `UC-2`/`UC-3` remain unapproved, and "immutable after `AUDITED`" (A:180, 193, 575) conflicts with re-audit (`AUD-04`, open). | Consistent wording; decisions pending |
-| **5. Contract terms vs adjustment** | The contract-defined rate and SAR cap are stored on the immutable commitment (`UC-2`, `UC-3`). The Accountant's reduction is stored on the statement only and never touches the commitment. | Distinct |
-| **6. Cap without double counting** | Previously Retained = approved, non-reversed retention deductions of the same commitment, excluding the current statement. Pending statements do not count. The approval check recomputes it under lock, so concurrent audits cannot exceed the cap. | Consistent |
-| **7. Gross basis & UC-1 rounding** | Retention is calculated on the current statement's Gross via `round_half_up(Gross × Rate ÷ 100, 2)` using `Decimal` before other deductions and before the cumulative cap (`UC-1`, Owner-approved). | Consistent & Owner-approved (`UC-1`) |
-| **8. Manager approval** | The Manager's final approval authority over the statement is unchanged. The adjustment is flagged, not separately approved. | Unchanged |
-| **9. Retention release** | Out of v1 scope. The held amount is a derived figure only. | Explicitly out of v1 scope |
-| **10. Decision Lock Status** | Only `UC-1` is Owner-approved. All other Business Decisions (`BD-03`, `BD-05`, `BD-09`–`BD-21`), `UC-2`, `UC-3`, and `R-01`–`R-07` are proposals pending Owner decision. | Pending |
-| **11. Other scope** | CR-01 to CR-10, the waves, the lock hierarchy and the SOD matrix are aligned with no contradictions. | Consistent |
-| Terminology | One name per concept. "Recognized Outflow", not "actual outflow". "Margin", not "profit". | Consistent |
-| MRN authority | Engineer creates/submits → Manager approves (`creator ≠ approver`, BD-05 proposed). | Consistent; decision pending |
-| Rate source | Billing rate is a server snapshot of the item rate. A VO never changes an existing rate. | Consistent |
-| Over-budget | One rule for every operation, evaluated at approval under the line lock. Manager only. | Consistent |
-| Roles | Four roles only, none added. | Consistent |
-| Waves | Unique numbers 21–30. Dependencies unchanged. | Consistent |
-| Wording | "Specifies", "requires", "defines". No CR is described as done. | Consistent |
+| **1. Lock hierarchy (`OD-07C`)** | One ascending hierarchy (levels 1–7) with complete rows for nomination, custody approval/disbursement/overrun, advance verify/return, billing audit/re-audit/approval, MRN, expense, payroll, VO, budget transfer/revision, Owner collections, temporary company funding, and financial corrections. | Consistent & Owner-approved (`OD-07C`) |
+| **2. Exposure, custody & advance non-duplication (`OD-07A`, `NEW-REQ-01`)** | Both dedicated commitment-linked custodies (`7A-1`) and general `SITE_OPERATIONS` custodies (`7A-2`) prevent double-counting. Custody-funded subcontractor payments share one canonical transaction ID across the subcontractor sub-ledger and custody settlement (`NEW-REQ-01`). | Consistent & Owner-approved |
+| **3. Revision lineage (`OD-02A..C`)** | Exposure carries forward across `lineage group` (`OD-02A`), `BudgetLineLineage` is strictly immutable post-approval (`OD-02B`), and every old line requires an explicit fate (`OD-02C`). `SPLIT` exposure allocation sub-rule is explicitly preserved as `OPEN`. | Consistent; `SPLIT` sub-rule `OPEN` |
+| **4. Retention & VO interaction (`UC-1`, `OD-01A..C`, `OD-07C`)** | `scheduledRetentionThisBill = round_half_up(grossAmount * retentionRatePercent / 100, 2)` via `Decimal` before cap (`UC-1`); contractual rate/cap and Accountant statement reduction (`OD-01A`); zero-retention and post-approval term immutability (`OD-01B`); dynamic percentage cap on `Eff_C` with prospective-only handling on negative VOs (`OD-01C`). | Consistent & Owner-approved |
+| **5. Billing re-audit & deductions (`OD-03`, `OD-06A-3`)** | Direct return to `SUBMITTED` when BOQ quantities are unchanged, append-only `BillingAuditSnapshot`, superseded prior deductions never deleted (`OD-03`). Non-negative net and carry-forward of unapplied deductions (`OD-06A-3`), with deduction priority order preserved as `OPEN`. | Consistent; priority order `OPEN` |
+| **6. Urgent custody material purchases (`OD-04 / BD-13`)** | Urgent small site material purchases funded from Engineer custody are exempt from MRN with no independent fixed SAR cap (bounded by actual remaining disbursed custody cash) and mandatory receipt/photo/purpose evidence. | Consistent & Owner-approved |
+| **7. Cash coverage, margin & company funding (`OD-05A..C`)** | Metric titled **Net Cash Coverage Position After Approved Payables** (`صافي تغطية السيولة بعد المستحقات المعتمدة`), never labeled as reconciled bank cash (`OD-05A`). Margin uses `grossAmount − ActivePenaltyDeductions` for subcontractors (`OD-05B`). Company funding repayment requires separate Manager approval (never automatic on Owner collection) and is eliminated at company-level aggregation (`OD-05C`). | Consistent & Owner-approved |
+| **8. Non-destructive financial corrections (`OD-06E-1`)** | Partial adjustment, full reversal + re-entry, and actual cash overpayment receivable rules integrated with full audit trail. | Consistent & Owner-approved |
+| **9. Scope Exclusions (`CR-04`, `CR-06`)** | CR-04 attendance/timesheets/overtime/labor sheets and CR-06 equipment operating-hour timesheets explicitly marked `OUT OF SCOPE / DEFERRED`. | Strictly enforced |
 
-**Explicitly deferred out of v1 scope (not needed forSlices 21–30):**
-- Retention release workflow (held retention is tracked as a derived balance in v1)
-- Post-approval in-place mutation of commitment retention terms (handled via statement-level Accountant reduction under UC-2)
-- Physical purge policy for archived attachments (indefinite retention in v1)
+### Changelog
 
-DESIGN PROPOSAL — NOT READY FOR IMPLEMENTATION APPROVAL (Owner decisions pending; only `UC-1` Owner-approved)
+- **v2.0 (2026-10-31):** Synchronized specification in place with `OWNER_DECISION_REGISTER_2026-10-31.md` and `REQUIREMENTS_AMENDMENT_2026-10-31.md`. Integrated `NEW-REQ-01`, `UC-1`, `OD-01A..C`, `OD-02A..C`, `OD-03`, `OD-04 / BD-13`, `OD-05A..C`, `OD-06A-1/3/5`, `OD-06B-1/3`, `OD-06C-4`, `OD-06D-1/3`, `OD-06E-1`, `OD-07A`, `OD-07B`, and `OD-07C`, while preserving all open sub-rules, technical clarifications, and `CR-04`/`CR-06` scope exclusions.
+- **v1.1 (2026-10-29):** Specification closure-gate update recording `UC-1`, `BD-11`, and `UC-2` approvals.
+
+OWNER DECISIONS SYNCHRONIZED (2026-10-31) — DOCUMENTATION-ONLY UPDATE — OPEN SUB-RULES, TECHNICAL CLARIFICATIONS & SCOPE EXCLUSIONS EXPLICITLY GATED
