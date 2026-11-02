@@ -1,5 +1,12 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus, MilestoneStatus } from '@prisma/client';
+import {
+  Role,
+  ProjectStatus,
+  MilestoneStatus,
+  ProgressReportStatus,
+  AttachmentOwnerType,
+  AttachmentCategory,
+} from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
   createMilestone,
@@ -58,6 +65,18 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
   afterEach(async () => {
     vi.restoreAllMocks();
 
+    if (cleanupProjectIds.length > 0) {
+      await prisma.progressReportMilestone.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+      await prisma.attachment.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+      await prisma.progressReport.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+    }
+
     if (cleanupMilestoneIds.length > 0) {
       await prisma.auditLog.deleteMany({
         where: {
@@ -108,6 +127,49 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
     cleanupUserIds.length = 0;
   });
 
+  async function attachVisualEvidenceToMilestone(
+    projectId: string,
+    milestoneId: string,
+    actorId: string,
+  ) {
+    const report = await prisma.progressReport.create({
+      data: {
+        projectId,
+        reportDate: new Date('2026-10-10'),
+        title: 'تقرير إثبات المحطة',
+        workDescription: 'أعمال منجزة ومعتمدة',
+        status: ProgressReportStatus.APPROVED,
+        createdById: actorId,
+        approvedById: actorId,
+        approvedAt: new Date(),
+      },
+    });
+
+    await prisma.attachment.create({
+      data: {
+        projectId,
+        ownerType: AttachmentOwnerType.PROGRESS_REPORT,
+        ownerId: report.id,
+        category: AttachmentCategory.PROGRESS_PHOTO,
+        originalFileName: 'photo.jpg',
+        storageKey: `test/photo/${Date.now()}-${Math.random()}.jpg`,
+        mimeType: 'image/jpeg',
+        sizeBytes: 2048,
+        checksumSha256: 'a'.repeat(64),
+        uploadedById: actorId,
+      },
+    });
+
+    await prisma.progressReportMilestone.create({
+      data: {
+        projectId,
+        reportId: report.id,
+        milestoneId,
+        linkedById: actorId,
+      },
+    });
+  }
+
   it('progresses: PLANNED -> IN_PROGRESS -> COMPLETED and locks the milestone', async () => {
     // 1. Create in PLANNED
     const milestone = await createMilestone({
@@ -125,6 +187,9 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
     // 2.1 IN_PROGRESS cannot be soft-deleted (BD-12-05)
     await expect(deleteMilestone(milestone.id)).rejects.toThrow(AppError);
 
+    // Attach required visual evidence for completion (CR-08 / BD-17)
+    await attachVisualEvidenceToMilestone(testProject.id, milestone.id, testManager.id);
+
     // 3. Complete milestone -> COMPLETED
     const completed = await completeMilestone(milestone.id);
     expect(completed.status).toBe(MilestoneStatus.COMPLETED);
@@ -140,7 +205,11 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
 
     // 3.4 Verify AuditLog entries
     const logStarted = await prisma.auditLog.findFirst({
-      where: { entityType: 'PROJECT_MILESTONE', entityId: milestone.id, action: 'MILESTONE_STARTED' },
+      where: {
+        entityType: 'PROJECT_MILESTONE',
+        entityId: milestone.id,
+        action: 'MILESTONE_STARTED',
+      },
     });
     expect(logStarted).not.toBeNull();
     expect(logStarted?.entityType).toBe('PROJECT_MILESTONE');
@@ -150,7 +219,11 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
     expect(metaStarted['newStatus']).toBe('IN_PROGRESS');
 
     const logCompleted = await prisma.auditLog.findFirst({
-      where: { entityType: 'PROJECT_MILESTONE', entityId: milestone.id, action: 'MILESTONE_COMPLETED' },
+      where: {
+        entityType: 'PROJECT_MILESTONE',
+        entityId: milestone.id,
+        action: 'MILESTONE_COMPLETED',
+      },
     });
     expect(logCompleted).not.toBeNull();
     expect(logCompleted?.entityType).toBe('PROJECT_MILESTONE');
@@ -178,7 +251,11 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
 
     // 2.1 Verify AuditLog entry for cancellation
     const logCancelled = await prisma.auditLog.findFirst({
-      where: { entityType: 'PROJECT_MILESTONE', entityId: milestone.id, action: 'MILESTONE_CANCELLED' },
+      where: {
+        entityType: 'PROJECT_MILESTONE',
+        entityId: milestone.id,
+        action: 'MILESTONE_CANCELLED',
+      },
     });
     expect(logCancelled).not.toBeNull();
     expect(logCancelled?.entityType).toBe('PROJECT_MILESTONE');
@@ -189,9 +266,9 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
     expect(metaCancelled['reason']).toBe('تم استبعاد هذا البند من العقد الرئيسي');
 
     // 3. CANCELLED is terminal immutable (BD-12-16)
-    await expect(
-      updateMilestone(milestone.id, { title: 'محاولة تعديل' }),
-    ).rejects.toThrow(AppError);
+    await expect(updateMilestone(milestone.id, { title: 'محاولة تعديل' })).rejects.toThrow(
+      AppError,
+    );
 
     await expect(deleteMilestone(milestone.id)).rejects.toThrow(AppError);
     await expect(startMilestone(milestone.id)).rejects.toThrow(AppError);
@@ -210,6 +287,9 @@ describe('Milestone Status Lifecycle & Terminal Locking (Live PostgreSQL Integra
       targetDate: '2026-10-01',
     });
     cleanupMilestoneIds.push(milestone.id);
+
+    // Attach required visual evidence for completion (CR-08 / BD-17)
+    await attachVisualEvidenceToMilestone(testProject.id, milestone.id, testManager.id);
 
     const completed = await completeMilestone(milestone.id);
     expect(completed.status).toBe(MilestoneStatus.COMPLETED);

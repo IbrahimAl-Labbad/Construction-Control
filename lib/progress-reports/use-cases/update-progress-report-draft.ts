@@ -26,7 +26,8 @@ import {
   updateProgressReportDraftSchema,
 } from '@/lib/validation/schemas/progress-report';
 import { formatReportDateString } from '../calculations';
-import { PROGRESS_REPORT_INCLUDE, toProgressReportDetailDTO } from '../mappers';
+import { PROGRESS_REPORT_DETAIL_INCLUDE, toProgressReportDetailDTO } from '../mappers';
+import { acquireMilestoneLinkageLocks, syncReportMilestoneLinkages } from '@/lib/milestones';
 import type { ProgressReportDetailDTO, UpdateProgressReportInput } from '../types';
 
 export async function updateProgressReportDraft(
@@ -50,6 +51,102 @@ export async function updateProgressReportDraft(
   const data = validation.data;
 
   const updated = await prisma.$transaction(async (tx) => {
+    // -------------------------------------------------------------------------
+    // Path A: milestoneIds is defined -> Synchronize milestone linkages (§6.3.2)
+    // -------------------------------------------------------------------------
+    if (data.milestoneIds !== undefined) {
+      // 1. Verify report existence, ownership (IDOR), and DRAFT status
+      const existing = await tx.progressReport.findFirst({
+        where: {
+          id: reportId,
+          deletedAt: null,
+        },
+        select: { id: true, projectId: true, status: true, createdById: true },
+      });
+
+      if (!existing || existing.createdById !== actor.id) {
+        throw new AppError('NOT_FOUND', 'تقرير التقدم غير موجود');
+      }
+
+      if (existing.status !== ProgressReportStatus.DRAFT) {
+        throw new AppError(
+          'INVALID_STATE_TRANSITION',
+          `لا يمكن تعديل التقرير إلا في حالة المسودة (الحالة الحالية: ${existing.status})`,
+        );
+      }
+
+      // 2. Step 1: Acquire locks once via lock coordinator in canonical order:
+      //    Level 5: Project -> Level 6: ProgressReport -> Level 6: Milestones (id ASC)
+      const lockedContext = await acquireMilestoneLinkageLocks(tx, {
+        projectId: existing.projectId,
+        reportId,
+        targetMilestoneIds: data.milestoneIds,
+      });
+
+      // 3. Step 2: Delegate to syncReportMilestoneLinkages to validate and synchronize
+      await syncReportMilestoneLinkages(tx, {
+        actor,
+        projectId: existing.projectId,
+        reportId,
+        targetMilestoneIds: data.milestoneIds,
+        lockedContext,
+      });
+
+      // 4. Step 3: Update report text fields
+      const hasTextFields =
+        data.title !== undefined ||
+        data.workDescription !== undefined ||
+        data.progressPercentage !== undefined ||
+        data.blockers !== undefined ||
+        data.nextPeriodPlan !== undefined ||
+        data.weatherCondition !== undefined;
+
+      await tx.progressReport.update({
+        where: { id: reportId },
+        data: {
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.workDescription !== undefined ? { workDescription: data.workDescription } : {}),
+          ...(data.progressPercentage !== undefined
+            ? { progressPercentage: data.progressPercentage }
+            : {}),
+          ...(data.blockers !== undefined ? { blockers: data.blockers } : {}),
+          ...(data.nextPeriodPlan !== undefined ? { nextPeriodPlan: data.nextPeriodPlan } : {}),
+          ...(data.weatherCondition !== undefined
+            ? { weatherCondition: data.weatherCondition }
+            : {}),
+          ...(!hasTextFields ? { updatedAt: new Date() } : {}),
+        },
+      });
+
+      // 5. Fetch updated report with relations including linked milestones
+      const report = await tx.progressReport.findUniqueOrThrow({
+        where: { id: reportId },
+        include: PROGRESS_REPORT_DETAIL_INCLUDE,
+      });
+
+      // 6. Write PROGRESS_REPORT_UPDATED AuditLog in SAME transaction
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'PROGRESS_REPORT_UPDATED',
+          entityType: 'PROGRESS_REPORT',
+          entityId: report.id,
+          metadata: {
+            projectId: report.projectId,
+            reportDate: formatReportDateString(report.reportDate),
+            title: report.title,
+            status: report.status,
+            createdById: report.createdById,
+          },
+        },
+      });
+
+      return report;
+    }
+
+    // -------------------------------------------------------------------------
+    // Path B: milestoneIds is undefined -> Fast-path concurrency guard (§6.3.2)
+    // -------------------------------------------------------------------------
     // 1. Atomic compare-and-set update
     const result = await tx.progressReport.updateMany({
       where: {
@@ -61,10 +158,14 @@ export async function updateProgressReportDraft(
       data: {
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.workDescription !== undefined ? { workDescription: data.workDescription } : {}),
-        ...(data.progressPercentage !== undefined ? { progressPercentage: data.progressPercentage } : {}),
+        ...(data.progressPercentage !== undefined
+          ? { progressPercentage: data.progressPercentage }
+          : {}),
         ...(data.blockers !== undefined ? { blockers: data.blockers } : {}),
         ...(data.nextPeriodPlan !== undefined ? { nextPeriodPlan: data.nextPeriodPlan } : {}),
-        ...(data.weatherCondition !== undefined ? { weatherCondition: data.weatherCondition } : {}),
+        ...(data.weatherCondition !== undefined
+          ? { weatherCondition: data.weatherCondition }
+          : {}),
       },
     });
 
@@ -92,7 +193,7 @@ export async function updateProgressReportDraft(
     // Fetch the updated report with relations
     const report = await tx.progressReport.findUniqueOrThrow({
       where: { id: reportId },
-      include: PROGRESS_REPORT_INCLUDE,
+      include: PROGRESS_REPORT_DETAIL_INCLUDE,
     });
 
     // 2. Write PROGRESS_REPORT_UPDATED AuditLog in SAME transaction

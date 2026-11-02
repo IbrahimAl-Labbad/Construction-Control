@@ -28,34 +28,65 @@ describe('Project Lifecycle Milestone Freeze (Live PostgreSQL Integration)', () 
       },
     });
     cleanupUserIds.push(mgr.id);
-    testManager = { id: mgr.id, name: mgr.name, email: mgr.email, role: Role.MANAGER, isActive: true };
+    testManager = {
+      id: mgr.id,
+      name: mgr.name,
+      email: mgr.email,
+      role: Role.MANAGER,
+      isActive: true,
+    };
 
     const pPlanned = await prisma.project.create({
-      data: { code: `PRJ-FZ-PL-${Date.now().toString().slice(-4)}`, name: 'مشروع مخطط', status: ProjectStatus.PLANNED, managerId: mgr.id },
+      data: {
+        code: `PRJ-FZ-PL-${Date.now().toString().slice(-4)}`,
+        name: 'مشروع مخطط',
+        status: ProjectStatus.PLANNED,
+        managerId: mgr.id,
+      },
     });
     plannedProject = { id: pPlanned.id };
     cleanupProjectIds.push(pPlanned.id);
 
     const pActive = await prisma.project.create({
-      data: { code: `PRJ-FZ-AC-${Date.now().toString().slice(-4)}`, name: 'مشروع نشط', status: ProjectStatus.ACTIVE, managerId: mgr.id },
+      data: {
+        code: `PRJ-FZ-AC-${Date.now().toString().slice(-4)}`,
+        name: 'مشروع نشط',
+        status: ProjectStatus.ACTIVE,
+        managerId: mgr.id,
+      },
     });
     activeProject = { id: pActive.id };
     cleanupProjectIds.push(pActive.id);
 
     const pOnHold = await prisma.project.create({
-      data: { code: `PRJ-FZ-OH-${Date.now().toString().slice(-4)}`, name: 'مشروع معلق', status: ProjectStatus.ON_HOLD, managerId: mgr.id },
+      data: {
+        code: `PRJ-FZ-OH-${Date.now().toString().slice(-4)}`,
+        name: 'مشروع معلق',
+        status: ProjectStatus.ON_HOLD,
+        managerId: mgr.id,
+      },
     });
     onHoldProject = { id: pOnHold.id };
     cleanupProjectIds.push(pOnHold.id);
 
     const pCompleted = await prisma.project.create({
-      data: { code: `PRJ-FZ-CO-${Date.now().toString().slice(-4)}`, name: 'مشروع مكتمل', status: ProjectStatus.COMPLETED, managerId: mgr.id },
+      data: {
+        code: `PRJ-FZ-CO-${Date.now().toString().slice(-4)}`,
+        name: 'مشروع مكتمل',
+        status: ProjectStatus.COMPLETED,
+        managerId: mgr.id,
+      },
     });
     completedProject = { id: pCompleted.id };
     cleanupProjectIds.push(pCompleted.id);
 
     const pCancelled = await prisma.project.create({
-      data: { code: `PRJ-FZ-CA-${Date.now().toString().slice(-4)}`, name: 'مشروع ملغى', status: ProjectStatus.CANCELLED, managerId: mgr.id },
+      data: {
+        code: `PRJ-FZ-CA-${Date.now().toString().slice(-4)}`,
+        name: 'مشروع ملغى',
+        status: ProjectStatus.CANCELLED,
+        managerId: mgr.id,
+      },
     });
     cancelledProject = { id: pCancelled.id };
     cleanupProjectIds.push(pCancelled.id);

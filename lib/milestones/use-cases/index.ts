@@ -9,3 +9,6 @@ export { completeMilestone } from './complete-milestone';
 export { cancelMilestone } from './cancel-milestone';
 export { deleteMilestone } from './delete-milestone';
 export { reorderProjectMilestones } from './reorder-milestones';
+export { linkProgressReportToMilestone, linkProgressReport } from './link-progress-report';
+export { unlinkProgressReportFromMilestone, unlinkProgressReport } from './unlink-progress-report';
+export { acquireMilestoneLinkageLocks, syncReportMilestoneLinkages } from './internal-linkage';

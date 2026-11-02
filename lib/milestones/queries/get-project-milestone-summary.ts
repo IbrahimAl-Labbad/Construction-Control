@@ -111,11 +111,7 @@ export async function getProjectMilestoneSummary(
         status: { in: [MilestoneStatus.PLANNED, MilestoneStatus.IN_PROGRESS] },
         targetDate: { gte: businessTodayDate },
       },
-      orderBy: [
-        { targetDate: 'asc' },
-        { orderIndex: 'asc' },
-        { createdAt: 'asc' },
-      ],
+      orderBy: [{ targetDate: 'asc' }, { orderIndex: 'asc' }, { createdAt: 'asc' }],
       select: {
         id: true,
         title: true,

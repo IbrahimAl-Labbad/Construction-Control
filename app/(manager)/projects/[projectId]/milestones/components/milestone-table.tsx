@@ -6,13 +6,16 @@
  * Interactive data table for project milestones.
  * Features:
  * - Status badges + overdue indicator
+ * - Evidence status badge (CR-08 / BD-17)
  * - Target date display + BD-12-15 visual warning if outside project range
  * - Achieved date display
  * - Reorder controls (up/down) with optimistic/server action call
+ * - Evidence-Gated Completion Dialog (CompleteMilestoneDialog)
  * - Lifecycle action triggers: Start, Complete, Edit, Cancel, Soft Delete
  * - Strict role and frozen project checks
  *
  * Vertical Slice 12 — Project Planning & Milestones.
+ * CR-08 / BD-17 Visual Progress & Milestone Evidence Linkage.
  */
 
 import { useState } from 'react';
@@ -30,11 +33,12 @@ import {
 } from 'lucide-react';
 import type { ProjectMilestoneDTO } from '@/lib/milestones';
 import { MilestoneStatusBadge } from './milestone-status-badge';
+import { MilestoneEvidenceBadge } from './milestone-evidence-badge';
+import { CompleteMilestoneDialog } from './complete-milestone-dialog';
 import { EditMilestoneDialog } from './edit-milestone-dialog';
 import { CancelMilestoneDialog } from './cancel-milestone-dialog';
 import {
   startMilestoneAction,
-  completeMilestoneAction,
   deleteMilestoneAction,
   reorderMilestonesAction,
 } from '../actions';
@@ -63,6 +67,7 @@ export function MilestoneTable({
   // Soft delete confirmation dialog state
   const [deleteConfirmMilestone, setDeleteConfirmMilestone] =
     useState<ProjectMilestoneDTO | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canMutate = canManage && !isProjectFrozen;
 
@@ -124,31 +129,20 @@ export function MilestoneTable({
     router.refresh();
   }
 
-  // Handle Complete
-  async function handleComplete(milestoneId: string) {
-    setBusyMilestoneId(milestoneId);
-    setActionError(null);
-    const result = await completeMilestoneAction(projectId, milestoneId);
-    setBusyMilestoneId(null);
-    if (!result.success) {
-      setActionError(result.error);
-      return;
-    }
-    router.refresh();
-  }
-
   // Handle Delete (PLANNED only)
   async function handleDeleteConfirm() {
     if (!deleteConfirmMilestone) return;
     setBusyMilestoneId(deleteConfirmMilestone.id);
     setActionError(null);
+    setDeleteError(null);
     const result = await deleteMilestoneAction(projectId, deleteConfirmMilestone.id);
     setBusyMilestoneId(null);
-    setDeleteConfirmMilestone(null);
     if (!result.success) {
+      setDeleteError(result.error);
       setActionError(result.error);
       return;
     }
+    setDeleteConfirmMilestone(null);
     router.refresh();
   }
 
@@ -231,212 +225,214 @@ export function MilestoneTable({
           </p>
         </div>
       ) : (
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+          <table className="w-full text-start text-sm">
+            <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
+              <tr>
+                {canMutate && <th className="px-3 py-3 text-center w-16">الترتيب</th>}
+                <th className="px-4 py-3 text-start">عنوان المعلم والوصف</th>
+                <th className="px-3 py-3 text-start w-32">الحالة</th>
+                <th className="px-3 py-3 text-start w-48">الأدلة البصرية</th>
+                <th className="px-4 py-3 text-start w-36">التاريخ المستهدف</th>
+                <th className="px-4 py-3 text-start w-36">تاريخ الإنجاز الفعلي</th>
+                <th className="px-3 py-3 text-start w-28">المنشئ</th>
+                <th className="px-4 py-3 text-center w-52">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {milestones.map((m, index) => {
+                const warning = getDateWarning(m.targetDate);
+                const isBusy = busyMilestoneId === m.id;
+                const isTerminal = m.status === 'COMPLETED' || m.status === 'CANCELLED';
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-        <table className="w-full text-start text-sm">
-          <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
-            <tr>
-              {canMutate && <th className="px-3 py-3 text-center w-16">الترتيب</th>}
-              <th className="px-4 py-3 text-start">عنوان المعلم والوصف</th>
-              <th className="px-3 py-3 text-start w-32">الحالة</th>
-              <th className="px-4 py-3 text-start w-40">التاريخ المستهدف</th>
-              <th className="px-4 py-3 text-start w-40">تاريخ الإنجاز الفعلي</th>
-              <th className="px-3 py-3 text-start w-32">المنشئ</th>
-              <th className="px-4 py-3 text-center w-52">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {milestones.map((m, index) => {
-              const warning = getDateWarning(m.targetDate);
-              const isBusy = busyMilestoneId === m.id;
-              const isTerminal = m.status === 'COMPLETED' || m.status === 'CANCELLED';
+                return (
+                  <tr
+                    key={m.id}
+                    className="hover:bg-muted/20 transition-colors"
+                    data-testid={`milestone-row-${m.id}`}
+                  >
+                    {/* Reorder Buttons */}
+                    {canMutate && (
+                      <td className="px-3 py-3 text-center">
+                        <div className="inline-flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveUp(index)}
+                            disabled={index === 0 || isBusy}
+                            title="نقل لأعلى"
+                            aria-label="نقل لأعلى"
+                            className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ArrowUp className="size-3.5" />
+                          </button>
+                          <span className="font-mono text-xs text-muted-foreground min-w-[1.2rem] text-center">
+                            {m.orderIndex + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveDown(index)}
+                            disabled={index === milestones.length - 1 || isBusy}
+                            title="نقل لأسفل"
+                            aria-label="نقل لأسفل"
+                            className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ArrowDown className="size-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
 
-              return (
-                <tr
-                  key={m.id}
-                  className="hover:bg-muted/20 transition-colors"
-                  data-testid={`milestone-row-${m.id}`}
-                >
-                  {/* Reorder Buttons */}
-                  {canMutate && (
-                    <td className="px-3 py-3 text-center">
-                      <div className="inline-flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveUp(index)}
-                          disabled={index === 0 || isBusy}
-                          title="نقل لأعلى"
-                          aria-label="نقل لأعلى"
-                          className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    {/* Title & Description */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col">
+                        <span
+                          className={`font-semibold text-foreground ${
+                            m.status === 'CANCELLED' ? 'line-through text-muted-foreground' : ''
+                          }`}
+                          data-testid="milestone-title"
                         >
-                          <ArrowUp className="size-3.5" />
-                        </button>
-                        <span className="font-mono text-xs text-muted-foreground min-w-[1.2rem] text-center">
-                          {m.orderIndex + 1}
+                          {m.title}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveDown(index)}
-                          disabled={index === milestones.length - 1 || isBusy}
-                          title="نقل لأسفل"
-                          aria-label="نقل لأسفل"
-                          className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <ArrowDown className="size-3.5" />
-                        </button>
+                        {m.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-2 mt-0.5 whitespace-pre-wrap">
+                            {m.description}
+                          </span>
+                        )}
                       </div>
                     </td>
-                  )}
 
-                  {/* Title & Description */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col">
-                      <span
-                        className={`font-semibold text-foreground ${
-                          m.status === 'CANCELLED' ? 'line-through text-muted-foreground' : ''
-                        }`}
-                        data-testid="milestone-title"
-                      >
-                        {m.title}
-                      </span>
-                      {m.description && (
-                        <span className="text-xs text-muted-foreground line-clamp-2 mt-0.5 whitespace-pre-wrap">
-                          {m.description}
-                        </span>
-                      )}
-                    </div>
-                  </td>
+                    {/* Status */}
+                    <td className="px-3 py-3">
+                      <MilestoneStatusBadge
+                        status={m.status}
+                        isOverdue={m.isOverdue}
+                      />
+                    </td>
 
-                  {/* Status */}
-                  <td className="px-3 py-3">
-                    <MilestoneStatusBadge
-                      status={m.status}
-                      isOverdue={m.isOverdue}
-                    />
-                  </td>
+                    {/* Visual Evidence Badge (CR-08 / BD-17) */}
+                    <td className="px-3 py-3">
+                      <MilestoneEvidenceBadge milestone={m} />
+                    </td>
 
-                  {/* Target Date + BD-12-15 warning */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span
-                        className="font-mono text-xs text-foreground inline-flex items-center gap-1"
-                        data-testid="milestone-target-date"
-                      >
-                        <Calendar className="size-3.5 text-muted-foreground" />
-                        <span>{m.targetDate}</span>
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {formatDate(m.targetDate)}
-                      </span>
-                      {warning && (
+                    {/* Target Date + BD-12-15 warning */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
                         <span
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-0.5"
-                          title={warning}
-                          data-testid="target-date-range-warning"
+                          className="font-mono text-xs text-foreground inline-flex items-center gap-1"
+                          data-testid="milestone-target-date"
                         >
-                          <AlertTriangle className="size-3 shrink-0" />
-                          <span>{warning}</span>
+                          <Calendar className="size-3.5 text-muted-foreground" />
+                          <span>{m.targetDate}</span>
                         </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatDate(m.targetDate)}
+                        </span>
+                        {warning && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-0.5"
+                            title={warning}
+                            data-testid="target-date-range-warning"
+                          >
+                            <AlertTriangle className="size-3 shrink-0" />
+                            <span>{warning}</span>
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Achieved Date */}
+                    <td className="px-4 py-3">
+                      {m.achievedAt ? (
+                        <div className="flex flex-col text-xs text-emerald-700 font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            <CheckCircle className="size-3.5 text-emerald-600" />
+                            <span>{formatTimestamp(m.achievedAt)}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Achieved Date */}
-                  <td className="px-4 py-3">
-                    {m.achievedAt ? (
-                      <div className="flex flex-col text-xs text-emerald-700 font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          <CheckCircle className="size-3.5 text-emerald-600" />
-                          <span>{formatTimestamp(m.achievedAt)}</span>
+                    {/* Creator */}
+                    <td className="px-3 py-3">
+                      <span className="text-xs text-muted-foreground">
+                        {m.creatorName}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3 text-center">
+                      {!canMutate ? (
+                        <span className="text-xs text-muted-foreground italic">
+                          {isProjectFrozen ? 'مشروع مجمد' : 'عرض فقط'}
                         </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
+                      ) : isTerminal ? (
+                        <span className="text-xs text-muted-foreground italic">
+                          حالة نهائية
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          {/* Start (PLANNED only) */}
+                          {m.status === 'PLANNED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleStart(m.id)}
+                              disabled={isBusy}
+                              title="بدء المعلم"
+                              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 border border-blue-200 transition-colors disabled:opacity-50"
+                              data-testid={`start-milestone-${m.id}`}
+                            >
+                              <Play className="size-3" />
+                              <span>بدء</span>
+                            </button>
+                          )}
 
-                  {/* Creator */}
-                  <td className="px-3 py-3">
-                    <span className="text-xs text-muted-foreground">
-                      {m.creatorName}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3 text-center">
-                    {!canMutate ? (
-                      <span className="text-xs text-muted-foreground italic">
-                        {isProjectFrozen ? 'مشروع مجمد' : 'عرض فقط'}
-                      </span>
-                    ) : isTerminal ? (
-                      <span className="text-xs text-muted-foreground italic">
-                        حالة نهائية
-                      </span>
-                    ) : (
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        {/* Start (PLANNED only) */}
-                        {m.status === 'PLANNED' && (
-                          <button
-                            type="button"
-                            onClick={() => handleStart(m.id)}
+                          {/* Complete (PLANNED or IN_PROGRESS) with Evidence Gate Modal */}
+                          <CompleteMilestoneDialog
+                            projectId={projectId}
+                            milestone={m}
                             disabled={isBusy}
-                            title="بدء المعلم"
-                            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 border border-blue-200 transition-colors disabled:opacity-50"
-                            data-testid={`start-milestone-${m.id}`}
-                          >
-                            <Play className="size-3" />
-                            <span>بدء</span>
-                          </button>
-                        )}
+                          />
 
-                        {/* Complete (PLANNED or IN_PROGRESS) */}
-                        <button
-                          type="button"
-                          onClick={() => handleComplete(m.id)}
-                          disabled={isBusy}
-                          title="إنجاز المعلم"
-                          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors disabled:opacity-50"
-                          data-testid={`complete-milestone-${m.id}`}
-                        >
-                          <CheckCircle className="size-3" />
-                          <span>إنجاز</span>
-                        </button>
+                          {/* Edit metadata */}
+                          <EditMilestoneDialog
+                            projectId={projectId}
+                            milestone={m}
+                          />
 
-                        {/* Edit metadata */}
-                        <EditMilestoneDialog
-                          projectId={projectId}
-                          milestone={m}
-                        />
-
-                        {/* Cancel */}
-                        <CancelMilestoneDialog
-                          projectId={projectId}
-                          milestone={m}
-                          disabled={isBusy}
-                        />
-
-                        {/* Soft Delete (PLANNED only) */}
-                        {m.status === 'PLANNED' && (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmMilestone(m)}
+                          {/* Cancel */}
+                          <CancelMilestoneDialog
+                            projectId={projectId}
+                            milestone={m}
                             disabled={isBusy}
-                            title="حذف المعلم (مسودة)"
-                            className="p-1 rounded text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50"
-                            data-testid={`delete-milestone-${m.id}`}
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                          />
+
+                          {/* Soft Delete (PLANNED only) */}
+                          {m.status === 'PLANNED' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteError(null);
+                                setDeleteConfirmMilestone(m);
+                              }}
+                              disabled={isBusy}
+                              title="حذف المعلم (مسودة)"
+                              className="p-1 rounded text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50"
+                              data-testid={`delete-milestone-${m.id}`}
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Soft Delete Confirmation Modal */}
@@ -466,10 +462,20 @@ export function MilestoneTable({
               التدقيق.
             </p>
 
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setDeleteConfirmMilestone(null)}
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteConfirmMilestone(null);
+                }}
                 className="px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 إلغاء

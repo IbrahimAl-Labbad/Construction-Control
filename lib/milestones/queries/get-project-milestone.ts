@@ -13,12 +13,10 @@
 import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { validate } from '@/lib/validation';
-import {
-  milestoneIdSchema,
-  projectIdSchema,
-} from '@/lib/validation/schemas/milestone';
+import { milestoneIdSchema, projectIdSchema } from '@/lib/validation/schemas/milestone';
 import { getBusinessTodayDateString } from '../calculations';
 import { MILESTONE_INCLUDE, toProjectMilestoneDTO } from '../mappers';
+import { fetchSingleMilestoneEvidenceMetrics } from '../evidence-metrics';
 import type { ProjectMilestoneDTO } from '../types';
 import { assertCanViewProjectMilestones } from './query-auth';
 
@@ -62,5 +60,8 @@ export async function getProjectMilestone(
     throw new AppError('NOT_FOUND', 'المحطة غير موجودة');
   }
 
-  return toProjectMilestoneDTO(milestone, businessToday);
+  // 5. Query live visual progress evidence metrics
+  const evidenceMetrics = await fetchSingleMilestoneEvidenceMetrics(prisma, projectId, milestoneId);
+
+  return toProjectMilestoneDTO(milestone, businessToday, evidenceMetrics);
 }

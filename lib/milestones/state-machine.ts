@@ -32,10 +32,7 @@ export const ALLOWED_MILESTONE_TRANSITIONS: Readonly<
     MilestoneStatus.COMPLETED,
     MilestoneStatus.CANCELLED,
   ],
-  [MilestoneStatus.IN_PROGRESS]: [
-    MilestoneStatus.COMPLETED,
-    MilestoneStatus.CANCELLED,
-  ],
+  [MilestoneStatus.IN_PROGRESS]: [MilestoneStatus.COMPLETED, MilestoneStatus.CANCELLED],
   [MilestoneStatus.COMPLETED]: [], // Terminal — strictly immutable
   [MilestoneStatus.CANCELLED]: [], // Terminal — strictly immutable
 } as const;
@@ -47,13 +44,8 @@ export const ALLOWED_MILESTONE_TRANSITIONS: Readonly<
 /**
  * Returns true if the given milestone status transition is allowed.
  */
-export function canTransitionMilestoneStatus(
-  from: MilestoneStatus,
-  to: MilestoneStatus,
-): boolean {
-  return (
-    ALLOWED_MILESTONE_TRANSITIONS[from] as readonly MilestoneStatus[]
-  ).includes(to);
+export function canTransitionMilestoneStatus(from: MilestoneStatus, to: MilestoneStatus): boolean {
+  return (ALLOWED_MILESTONE_TRANSITIONS[from] as readonly MilestoneStatus[]).includes(to);
 }
 
 /**
@@ -86,10 +78,7 @@ export function getAllowedNextMilestoneStatuses(
  * Invariant: only PLANNED and IN_PROGRESS records can have their metadata modified (BD-12-08).
  */
 export function isEditableMilestoneStatus(status: MilestoneStatus): boolean {
-  return (
-    status === MilestoneStatus.PLANNED ||
-    status === MilestoneStatus.IN_PROGRESS
-  );
+  return status === MilestoneStatus.PLANNED || status === MilestoneStatus.IN_PROGRESS;
 }
 
 /**
@@ -97,10 +86,7 @@ export function isEditableMilestoneStatus(status: MilestoneStatus): boolean {
  * Invariant: COMPLETED and CANCELLED are terminal states (BD-12-16).
  */
 export function isTerminalMilestoneStatus(status: MilestoneStatus): boolean {
-  return (
-    status === MilestoneStatus.COMPLETED ||
-    status === MilestoneStatus.CANCELLED
-  );
+  return status === MilestoneStatus.COMPLETED || status === MilestoneStatus.CANCELLED;
 }
 
 /**

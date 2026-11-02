@@ -29,7 +29,13 @@ describe('Milestone Concurrency Races (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(mgr.id);
-    testManager = { id: mgr.id, name: mgr.name, email: mgr.email, role: Role.MANAGER, isActive: true };
+    testManager = {
+      id: mgr.id,
+      name: mgr.name,
+      email: mgr.email,
+      role: Role.MANAGER,
+      isActive: true,
+    };
 
     const p = await prisma.project.create({
       data: {

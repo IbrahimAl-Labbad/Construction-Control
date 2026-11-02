@@ -5,19 +5,44 @@
  *
  * Reusable form for creating and editing Site Engineer Progress Reports.
  * Displays field inputs with Arabic labels, character hints, validation feedback,
- * and the locked BD-21 Privacy compliance banner.
+ * locked BD-21 Privacy compliance banner, and CR-08 milestone tagging.
+ *
+ * RTL & Arabic first, CSS logical properties.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import type { ActiveProjectOptionDTO, ProgressReportDetailDTO } from '@/lib/progress-reports/types';
-import { AlertCircle, ShieldAlert, Save, ArrowRight } from 'lucide-react';
+import {
+  AlertCircle,
+  ShieldAlert,
+  Save,
+  ArrowRight,
+  Flag,
+  Info,
+  Lock,
+} from 'lucide-react';
 import Link from 'next/link';
+
+export interface MilestoneOptionDTO {
+  id: string;
+  title: string;
+  orderIndex: number;
+  status: string;
+}
+
+function areMilestoneSetsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const setA = new Set(a);
+  return b.every((id) => setA.has(id));
+}
 
 interface ProgressReportFormProps {
   initialData?: ProgressReportDetailDTO;
   projects?: ActiveProjectOptionDTO[];
+  availableMilestones?: MilestoneOptionDTO[];
+  milestonesByProject?: Record<string, MilestoneOptionDTO[]>;
   onSubmit: (formData: FormData) => Promise<{ success: boolean; error?: string; id?: string }>;
   isEdit?: boolean;
 }
@@ -25,6 +50,8 @@ interface ProgressReportFormProps {
 export function ProgressReportForm({
   initialData,
   projects = [],
+  availableMilestones,
+  milestonesByProject,
   onSubmit,
   isEdit = false,
 }: ProgressReportFormProps) {
@@ -44,8 +71,36 @@ export function ProgressReportForm({
   const [nextPeriodPlan, setNextPeriodPlan] = useState(initialData?.nextPeriodPlan ?? '');
   const [weatherCondition, setWeatherCondition] = useState(initialData?.weatherCondition ?? '');
 
+  // Milestone tagging state (CR-08 / BD-17)
+  const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<string[]>(
+    () => initialData?.milestones?.map((m) => m.id) ?? [],
+  );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Compute active milestones for the currently selected project
+  const currentMilestones: MilestoneOptionDTO[] = isEdit
+    ? (availableMilestones ?? [])
+    : (milestonesByProject?.[projectId] ?? availableMilestones ?? []);
+
+  // Whether milestone input capability is enabled for this form
+  const hasMilestoneCapability =
+    availableMilestones !== undefined || milestonesByProject !== undefined;
+
+  function handleProjectChange(newProjectId: string) {
+    setProjectId(newProjectId);
+    // Reset milestone selections when changing projects in creation flow
+    setSelectedMilestoneIds([]);
+  }
+
+  function handleMilestoneToggle(milestoneId: string) {
+    setSelectedMilestoneIds((prev) =>
+      prev.includes(milestoneId)
+        ? prev.filter((id) => id !== milestoneId)
+        : [...prev, milestoneId],
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +125,20 @@ export function ProgressReportForm({
     }
     if (weatherCondition.trim() !== '') {
       formData.append('weatherCondition', weatherCondition.trim());
+    }
+
+    // Milestone selection synchronization (CR-08 / BD-17)
+    // In EDIT mode, omit milestone inputs when the selected set is unchanged, preserving the fast path
+    const initialMilestoneIds = initialData?.milestones?.map((m) => m.id) ?? [];
+    const shouldSubmitMilestones = isEdit
+      ? hasMilestoneCapability && !areMilestoneSetsEqual(selectedMilestoneIds, initialMilestoneIds)
+      : hasMilestoneCapability;
+
+    if (shouldSubmitMilestones) {
+      formData.append('_hasMilestoneInput', 'true');
+      for (const mid of selectedMilestoneIds) {
+        formData.append('milestoneIds', mid);
+      }
     }
 
     try {
@@ -128,7 +197,7 @@ export function ProgressReportForm({
               <select
                 id="project-select"
                 value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                onChange={(e) => handleProjectChange(e.target.value)}
                 required
                 className="mt-1.5 w-full rounded-md border border-input bg-background p-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 data-testid="project-select"
@@ -189,6 +258,99 @@ export function ProgressReportForm({
             <span>{title.length}/150</span>
           </div>
         </div>
+
+        {/* Milestone Tagging Section (CR-08 / BD-17) */}
+        {hasMilestoneCapability && (
+          <div
+            className="rounded-xl border border-border bg-muted/20 p-4 space-y-3"
+            data-testid="milestones-selection-section"
+          >
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-2">
+                <Flag className="size-4 text-primary" aria-hidden="true" />
+                <span className="text-xs font-bold text-foreground">
+                  المحطات التخطيطية المستهدفة بالتقرير
+                </span>
+              </div>
+              <span
+                className="text-[11px] font-mono text-muted-foreground"
+                data-testid="selected-milestones-count"
+              >
+                {selectedMilestoneIds.length} محطات محددة
+              </span>
+            </div>
+
+            {/* Authoritative Callout Note (§6.4) */}
+            <div className="flex items-start gap-2.5 rounded-lg border border-blue-500/20 bg-blue-500/10 p-2.5 text-xs text-blue-800 dark:text-blue-300">
+              <Info className="size-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" aria-hidden="true" />
+              <p className="leading-relaxed">
+                الصور المرفقة بالتقرير تؤهل المحطات المرتبطة للاعتماد فقط بعد مراجعة التقرير واعتماده من قبل المدير.
+              </p>
+            </div>
+
+            {currentMilestones.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic text-center py-2">
+                لا توجد معالم نشطة مسجلة لهذا المشروع حالياً.
+              </p>
+            ) : (
+              <div
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pe-1"
+                data-testid="milestones-checkbox-list"
+              >
+                {currentMilestones.map((m) => {
+                  const isChecked = selectedMilestoneIds.includes(m.id);
+                  const isPreviouslyLinked = Boolean(
+                    initialData?.milestones?.some((linked) => linked.id === m.id),
+                  );
+                  const isCompleted = m.status === 'COMPLETED';
+                  const isCancelled = m.status === 'CANCELLED';
+                  const isImmutable = isPreviouslyLinked && (isCompleted || isCancelled);
+
+                  return (
+                    <label
+                      key={m.id}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                        isChecked
+                          ? 'border-primary/50 bg-primary/5 text-foreground'
+                          : 'border-border bg-card text-muted-foreground hover:bg-muted/40'
+                      } ${isImmutable ? 'opacity-80 bg-muted/60 cursor-not-allowed' : ''}`}
+                      data-testid={`milestone-option-${m.id}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={isImmutable}
+                        onChange={() => handleMilestoneToggle(m.id)}
+                        className="mt-0.5 rounded border-input text-primary focus:ring-primary"
+                        data-testid={`milestone-checkbox-${m.id}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-semibold text-foreground truncate">
+                            {m.title}
+                          </span>
+                          <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                            #{m.orderIndex + 1}
+                          </span>
+                        </div>
+                        {isImmutable && (
+                          <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                            <Lock className="size-2.5 shrink-0" />
+                            <span>
+                              {isCompleted
+                                ? 'محطة مكتملة (ارتباط ثابت)'
+                                : 'محطة ملغاة (ارتباط ثابت)'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Work Description */}
         <div>

@@ -116,9 +116,7 @@ export const updateMilestoneMetadataSchema = z
   })
   .refine(
     (data) =>
-      data.title !== undefined ||
-      data.description !== undefined ||
-      data.targetDate !== undefined,
+      data.title !== undefined || data.description !== undefined || data.targetDate !== undefined,
     {
       message: 'يجب تقديم حقل واحد على الأقل للتحديث',
     },
@@ -143,3 +141,34 @@ export const reorderMilestonesSchema = z.object({
 });
 
 export type ReorderMilestonesInput = z.infer<typeof reorderMilestonesSchema>;
+
+// ---------------------------------------------------------------------------
+// Linkage Schemas (CR-08 / BD-17)
+// ---------------------------------------------------------------------------
+
+export const reportIdSchema = z
+  .string()
+  .min(1, 'معرّف تقرير التقدم مطلوب')
+  .cuid('معرّف تقرير التقدم غير صالح');
+
+export const reportMilestoneIdsSchema = z
+  .array(milestoneIdSchema)
+  .refine((items) => new Set(items).size === items.length, {
+    message: 'لا يجوز تكرار معرفات المحطات المرتبطة',
+  });
+
+export const linkProgressReportSchema = z.object({
+  projectId: projectIdSchema.optional(),
+  milestoneId: milestoneIdSchema,
+  reportId: reportIdSchema,
+});
+
+export type LinkProgressReportInput = z.infer<typeof linkProgressReportSchema>;
+
+export const unlinkProgressReportSchema = z.object({
+  projectId: projectIdSchema.optional(),
+  milestoneId: milestoneIdSchema,
+  reportId: reportIdSchema,
+});
+
+export type UnlinkProgressReportInput = z.infer<typeof unlinkProgressReportSchema>;

@@ -16,17 +16,25 @@ export interface ProjectMilestoneDTO {
   projectId: string;
   title: string;
   description: string | null;
-  targetDate: string;           // "YYYY-MM-DD"
-  achievedAt: string | null;     // ISO-8601 string or null
+  targetDate: string; // "YYYY-MM-DD"
+  achievedAt: string | null; // ISO-8601 string or null
   status: MilestoneStatus;
-  isOverdue: boolean;           // Derived property
+  isOverdue: boolean; // Derived property
   orderIndex: number;
   createdById: string;
   creatorName: string;
   updatedById: string | null;
   updaterName: string | null;
-  createdAt: string;            // ISO-8601 string
-  updatedAt: string;            // ISO-8601 string
+  createdAt: string; // ISO-8601 string
+  updatedAt: string; // ISO-8601 string
+
+  // CR-08 / BD-17 Evidence metrics
+  linkedReportsCount: number;
+  approvedReportsCount: number;
+  visualAttachmentsCount: number;
+  hasSufficientEvidence: boolean;
+  pendingReportsCount?: number;
+  rejectedReportsCount?: number;
 }
 
 export interface ProjectMilestoneSummaryDTO {
@@ -39,6 +47,6 @@ export interface ProjectMilestoneSummaryDTO {
   nextUpcomingMilestone: {
     id: string;
     title: string;
-    targetDate: string;         // "YYYY-MM-DD"
+    targetDate: string; // "YYYY-MM-DD"
   } | null;
 }

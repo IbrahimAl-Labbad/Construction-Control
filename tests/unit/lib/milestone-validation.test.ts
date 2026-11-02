@@ -8,12 +8,16 @@ import {
   milestoneDescriptionSchema,
   milestoneTargetDateSchema,
   milestoneCancellationReasonSchema,
+  reportMilestoneIdsSchema,
+  linkProgressReportSchema,
+  unlinkProgressReportSchema,
 } from '@/lib/validation/schemas/milestone';
 
 describe('Milestone Validation Schemas (Unit Tests)', () => {
   const validProjectId = 'cjld2cjxh0000qzrmn831i7rn';
   const validMilestoneId = 'cjld2cjxh0001qzrmn831i7rn';
   const validMilestoneId2 = 'cjld2cjxh0002qzrmn831i7rn';
+  const validReportId = 'cjld2cjxh0003qzrmn831i7rn';
 
   describe('milestoneTitleSchema', () => {
     it('accepts valid titles between 2 and 150 chars', () => {
@@ -166,6 +170,125 @@ describe('Milestone Validation Schemas (Unit Tests)', () => {
         milestoneIds: [],
       });
       expect(res.success).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // CR-08 / BD-17 Linkage Schemas
+  // ---------------------------------------------------------------------------
+
+  describe('reportMilestoneIdsSchema', () => {
+    it('accepts an empty array of milestone IDs', () => {
+      const result = reportMilestoneIdsSchema.safeParse([]);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual([]);
+      }
+    });
+
+    it('accepts an array of distinct valid CUID milestone IDs', () => {
+      const result = reportMilestoneIdsSchema.safeParse([
+        validMilestoneId,
+        validMilestoneId2,
+      ]);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual([validMilestoneId, validMilestoneId2]);
+      }
+    });
+
+    it('rejects an array with duplicate milestone IDs', () => {
+      const result = reportMilestoneIdsSchema.safeParse([
+        validMilestoneId,
+        validMilestoneId,
+      ]);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('لا يجوز تكرار معرفات المحطات المرتبطة');
+      }
+    });
+
+    it('rejects an array containing non-CUID strings', () => {
+      const result = reportMilestoneIdsSchema.safeParse(['invalid-id-format']);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('غير صالح');
+      }
+    });
+  });
+
+  describe('linkProgressReportSchema', () => {
+    it('accepts valid payload with milestoneId and reportId (projectId omitted)', () => {
+      const result = linkProgressReportSchema.safeParse({
+        milestoneId: validMilestoneId,
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.milestoneId).toBe(validMilestoneId);
+        expect(result.data.reportId).toBe(validReportId);
+        expect(result.data.projectId).toBeUndefined();
+      }
+    });
+
+    it('accepts valid payload including optional projectId', () => {
+      const result = linkProgressReportSchema.safeParse({
+        projectId: validProjectId,
+        milestoneId: validMilestoneId,
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.projectId).toBe(validProjectId);
+      }
+    });
+
+    it('rejects payload missing milestoneId', () => {
+      const result = linkProgressReportSchema.safeParse({
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects payload missing reportId', () => {
+      const result = linkProgressReportSchema.safeParse({
+        milestoneId: validMilestoneId,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects payload with invalid CUID format', () => {
+      const result = linkProgressReportSchema.safeParse({
+        milestoneId: 'not-a-cuid',
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('unlinkProgressReportSchema', () => {
+    it('accepts valid payload with milestoneId and reportId', () => {
+      const result = unlinkProgressReportSchema.safeParse({
+        milestoneId: validMilestoneId,
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts valid payload including optional projectId', () => {
+      const result = unlinkProgressReportSchema.safeParse({
+        projectId: validProjectId,
+        milestoneId: validMilestoneId,
+        reportId: validReportId,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects payload missing reportId', () => {
+      const result = unlinkProgressReportSchema.safeParse({
+        milestoneId: validMilestoneId,
+      });
+      expect(result.success).toBe(false);
     });
   });
 });

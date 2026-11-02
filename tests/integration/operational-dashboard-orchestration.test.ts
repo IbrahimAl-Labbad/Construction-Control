@@ -158,7 +158,7 @@ describe('Operational Project Dashboard — Orchestration Integration', () => {
       data: {
         projectId: testProjectId,
         title: 'أعمدة الدور الأرضي',
-        targetDate: new Date('2026-10-30'),
+        targetDate: new Date(Date.now() + 30 * 86_400_000), // Deterministic future date (+30 days)
         status: MilestoneStatus.IN_PROGRESS,
         orderIndex: 1,
         createdById: testManager.id,

@@ -1,5 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { Role, ProjectStatus } from '@prisma/client';
+import {
+  Role,
+  ProjectStatus,
+  ProgressReportStatus,
+  AttachmentOwnerType,
+  AttachmentCategory,
+} from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
   createMilestone,
@@ -31,7 +37,13 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(mgr.id);
-    testManager = { id: mgr.id, name: mgr.name, email: mgr.email, role: Role.MANAGER, isActive: true };
+    testManager = {
+      id: mgr.id,
+      name: mgr.name,
+      email: mgr.email,
+      role: Role.MANAGER,
+      isActive: true,
+    };
 
     const p = await prisma.project.create({
       data: {
@@ -50,6 +62,18 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+
+    if (cleanupProjectIds.length > 0) {
+      await prisma.progressReportMilestone.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+      await prisma.attachment.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+      await prisma.progressReport.deleteMany({
+        where: { projectId: { in: cleanupProjectIds } },
+      });
+    }
 
     if (cleanupMilestoneIds.length > 0) {
       await prisma.auditLog.deleteMany({
@@ -84,6 +108,49 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
       });
     }
   });
+
+  async function attachVisualEvidenceToMilestone(
+    projectId: string,
+    milestoneId: string,
+    actorId: string,
+  ) {
+    const report = await prisma.progressReport.create({
+      data: {
+        projectId,
+        reportDate: new Date('2026-10-10'),
+        title: 'تقرير إثبات المحطة للتدقيق',
+        workDescription: 'أعمال منجزة ومعتمدة',
+        status: ProgressReportStatus.APPROVED,
+        createdById: actorId,
+        approvedById: actorId,
+        approvedAt: new Date(),
+      },
+    });
+
+    await prisma.attachment.create({
+      data: {
+        projectId,
+        ownerType: AttachmentOwnerType.PROGRESS_REPORT,
+        ownerId: report.id,
+        category: AttachmentCategory.PROGRESS_PHOTO,
+        originalFileName: 'photo.jpg',
+        storageKey: `test/photo/${Date.now()}-${Math.random()}.jpg`,
+        mimeType: 'image/jpeg',
+        sizeBytes: 2048,
+        checksumSha256: 'a'.repeat(64),
+        uploadedById: actorId,
+      },
+    });
+
+    await prisma.progressReportMilestone.create({
+      data: {
+        projectId,
+        reportId: report.id,
+        milestoneId,
+        linkedById: actorId,
+      },
+    });
+  }
 
   it('records all 7 audit actions in the same transaction', async () => {
     // 1. MILESTONE_CREATED
@@ -139,6 +206,7 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
     expect(meta3['newStatus']).toBe('IN_PROGRESS');
 
     // 4. MILESTONE_COMPLETED
+    await attachVisualEvidenceToMilestone(testProject.id, m1.id, testManager.id);
     await completeMilestone(m1.id);
     const log4 = await prisma.auditLog.findFirst({
       where: { entityType: 'PROJECT_MILESTONE', entityId: m1.id, action: 'MILESTONE_COMPLETED' },
@@ -147,7 +215,15 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
     expect(log4?.actorId).toBe(testManager.id); // BD-12-06 completion actor authority
     expect(log4?.entityType).toBe('PROJECT_MILESTONE');
     const meta4 = log4?.metadata as Record<string, unknown>;
-    expect(Object.keys(meta4).sort()).toEqual(['achievedAt', 'newStatus', 'previousStatus', 'projectId']);
+    expect(Object.keys(meta4).sort()).toEqual([
+      'achievedAt',
+      'newStatus',
+      'previousStatus',
+      'projectId',
+      'verifiedAttachmentCount',
+      'verifiedAttachmentIds',
+      'verifiedReportIds',
+    ]);
     expect(meta4['projectId']).toBe(testProject.id);
     expect(meta4['previousStatus']).toBe('IN_PROGRESS');
     expect(meta4['newStatus']).toBe('COMPLETED');
@@ -176,7 +252,12 @@ describe('Milestone Audit Atomicity (Live PostgreSQL Integration)', () => {
     expect(log5).not.toBeNull();
     expect(log5?.entityType).toBe('PROJECT_MILESTONE');
     const meta5 = log5?.metadata as Record<string, unknown>;
-    expect(Object.keys(meta5).sort()).toEqual(['newStatus', 'previousStatus', 'projectId', 'reason']);
+    expect(Object.keys(meta5).sort()).toEqual([
+      'newStatus',
+      'previousStatus',
+      'projectId',
+      'reason',
+    ]);
     expect(meta5['projectId']).toBe(testProject.id);
     expect(meta5['previousStatus']).toBe('PLANNED');
     expect(meta5['newStatus']).toBe('CANCELLED');

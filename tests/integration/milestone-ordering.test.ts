@@ -1,11 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { Role, ProjectStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import {
-  createMilestone,
-  reorderProjectMilestones,
-  getProjectMilestones,
-} from '@/lib/milestones';
+import { createMilestone, reorderProjectMilestones, getProjectMilestones } from '@/lib/milestones';
 import * as permissions from '@/lib/permissions';
 import type { AuthenticatedUser } from '@/lib/auth/types';
 import { AppError } from '@/lib/errors';
@@ -28,7 +24,13 @@ describe('Milestone Ordering & Reordering (Live PostgreSQL Integration)', () => 
       },
     });
     cleanupUserIds.push(mgr.id);
-    testManager = { id: mgr.id, name: mgr.name, email: mgr.email, role: Role.MANAGER, isActive: true };
+    testManager = {
+      id: mgr.id,
+      name: mgr.name,
+      email: mgr.email,
+      role: Role.MANAGER,
+      isActive: true,
+    };
 
     const p = await prisma.project.create({
       data: {
@@ -100,15 +102,27 @@ describe('Milestone Ordering & Reordering (Live PostgreSQL Integration)', () => 
 
   it('assigns orderIndex sequentially and allows atomic reordering', async () => {
     // 1. Create 3 milestones
-    const m0 = await createMilestone({ projectId: testProject.id, title: 'محطة 0', targetDate: '2026-11-01' });
+    const m0 = await createMilestone({
+      projectId: testProject.id,
+      title: 'محطة 0',
+      targetDate: '2026-11-01',
+    });
     cleanupMilestoneIds.push(m0.id);
     expect(m0.orderIndex).toBe(0);
 
-    const m1 = await createMilestone({ projectId: testProject.id, title: 'محطة 1', targetDate: '2026-11-05' });
+    const m1 = await createMilestone({
+      projectId: testProject.id,
+      title: 'محطة 1',
+      targetDate: '2026-11-05',
+    });
     cleanupMilestoneIds.push(m1.id);
     expect(m1.orderIndex).toBe(1);
 
-    const m2 = await createMilestone({ projectId: testProject.id, title: 'محطة 2', targetDate: '2026-11-10' });
+    const m2 = await createMilestone({
+      projectId: testProject.id,
+      title: 'محطة 2',
+      targetDate: '2026-11-10',
+    });
     cleanupMilestoneIds.push(m2.id);
     expect(m2.orderIndex).toBe(2);
 
@@ -144,8 +158,16 @@ describe('Milestone Ordering & Reordering (Live PostgreSQL Integration)', () => 
   });
 
   it('rejects reordering when IDs are incomplete or contain foreign ID', async () => {
-    const m0 = await createMilestone({ projectId: testProject.id, title: 'محطة أ', targetDate: '2026-11-01' });
-    const m1 = await createMilestone({ projectId: testProject.id, title: 'محطة ب', targetDate: '2026-11-05' });
+    const m0 = await createMilestone({
+      projectId: testProject.id,
+      title: 'محطة أ',
+      targetDate: '2026-11-01',
+    });
+    const m1 = await createMilestone({
+      projectId: testProject.id,
+      title: 'محطة ب',
+      targetDate: '2026-11-05',
+    });
     cleanupMilestoneIds.push(m0.id, m1.id);
 
     // Incomplete array (only 1 of 2)

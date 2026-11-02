@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProgressReport } from '@/lib/progress-reports';
-import { ProgressReportStatusBadge } from '@/components/progress-reports';
+import {
+  ProgressReportStatusBadge,
+  LinkedMilestonesCard,
+} from '@/components/progress-reports';
 import { EngineerReportActions } from './components/engineer-report-actions';
 import { AppError } from '@/lib/errors';
 import {
@@ -181,6 +184,9 @@ export default async function EngineerReportDetailPage({ params }: EngineerRepor
           </div>
         )}
       </div>
+
+      {/* Linked Milestones Section (CR-08 / BD-17) */}
+      <LinkedMilestonesCard milestones={report.milestones} />
 
       {/* Audit & Tracking Info Card */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 rounded-xl border border-border bg-card/60 p-4 text-xs text-muted-foreground">

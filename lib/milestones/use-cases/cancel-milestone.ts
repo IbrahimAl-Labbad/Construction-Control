@@ -19,10 +19,7 @@ import { prisma } from '@/lib/db/prisma';
 import { AppError, ValidationError } from '@/lib/errors';
 import { requireManager } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
-import {
-  milestoneIdSchema,
-  cancelMilestoneSchema,
-} from '@/lib/validation/schemas/milestone';
+import { milestoneIdSchema, cancelMilestoneSchema } from '@/lib/validation/schemas/milestone';
 import { MILESTONE_INCLUDE, toProjectMilestoneDTO } from '../mappers';
 import { assertCanTransitionMilestoneStatus } from '../state-machine';
 import type { ProjectMilestoneDTO } from '../types';

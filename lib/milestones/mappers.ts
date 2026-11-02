@@ -40,9 +40,19 @@ export type ProjectMilestoneWithRelations = Prisma.ProjectMilestoneGetPayload<{
   include: typeof MILESTONE_INCLUDE;
 }>;
 
+export interface MilestoneEvidenceMetrics {
+  linkedReportsCount: number;
+  approvedReportsCount: number;
+  visualAttachmentsCount: number;
+  hasSufficientEvidence: boolean;
+  pendingReportsCount?: number;
+  rejectedReportsCount?: number;
+}
+
 export function toProjectMilestoneDTO(
   entity: ProjectMilestoneWithRelations,
   businessToday: string = getBusinessTodayDateString(),
+  evidence?: MilestoneEvidenceMetrics,
 ): ProjectMilestoneDTO {
   const targetDateStr = formatMilestoneDateString(entity.targetDate);
   const overdue = isMilestoneOverdue(targetDateStr, entity.status, businessToday);
@@ -63,5 +73,13 @@ export function toProjectMilestoneDTO(
     updaterName: entity.updatedBy?.name ?? null,
     createdAt: entity.createdAt.toISOString(),
     updatedAt: entity.updatedAt.toISOString(),
+
+    // Evidence metrics (CR-08 / BD-17)
+    linkedReportsCount: evidence?.linkedReportsCount ?? 0,
+    approvedReportsCount: evidence?.approvedReportsCount ?? 0,
+    visualAttachmentsCount: evidence?.visualAttachmentsCount ?? 0,
+    hasSufficientEvidence: evidence?.hasSufficientEvidence ?? false,
+    pendingReportsCount: evidence?.pendingReportsCount ?? 0,
+    rejectedReportsCount: evidence?.rejectedReportsCount ?? 0,
   };
 }

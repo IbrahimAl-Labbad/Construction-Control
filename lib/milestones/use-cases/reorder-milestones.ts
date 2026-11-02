@@ -24,9 +24,7 @@ import { MILESTONE_INCLUDE, toProjectMilestoneDTO } from '../mappers';
 import type { ProjectMilestoneDTO } from '../types';
 import { lockProjectForMilestoneMutation } from './internal-lock';
 
-export async function reorderProjectMilestones(
-  rawInput: unknown,
-): Promise<ProjectMilestoneDTO[]> {
+export async function reorderProjectMilestones(rawInput: unknown): Promise<ProjectMilestoneDTO[]> {
   // 1. Authorization
   const actor = await requireManager();
 

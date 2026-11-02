@@ -73,15 +73,8 @@ describe('Milestone State Machine (Unit Tests)', () => {
 
   describe('getAllowedNextMilestoneStatuses helper', () => {
     it('returns valid arrays for each state', () => {
-      expect(getAllowedNextMilestoneStatuses(PLANNED)).toEqual([
-        IN_PROGRESS,
-        COMPLETED,
-        CANCELLED,
-      ]);
-      expect(getAllowedNextMilestoneStatuses(IN_PROGRESS)).toEqual([
-        COMPLETED,
-        CANCELLED,
-      ]);
+      expect(getAllowedNextMilestoneStatuses(PLANNED)).toEqual([IN_PROGRESS, COMPLETED, CANCELLED]);
+      expect(getAllowedNextMilestoneStatuses(IN_PROGRESS)).toEqual([COMPLETED, CANCELLED]);
       expect(getAllowedNextMilestoneStatuses(COMPLETED)).toEqual([]);
       expect(getAllowedNextMilestoneStatuses(CANCELLED)).toEqual([]);
     });

@@ -38,7 +38,13 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(mgr.id);
-    managerUser = { id: mgr.id, name: mgr.name, email: mgr.email, role: Role.MANAGER, isActive: true };
+    managerUser = {
+      id: mgr.id,
+      name: mgr.name,
+      email: mgr.email,
+      role: Role.MANAGER,
+      isActive: true,
+    };
 
     // 2. Assigned Engineer
     const eng1 = await prisma.user.create({
@@ -50,7 +56,13 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(eng1.id);
-    assignedEngineer = { id: eng1.id, name: eng1.name, email: eng1.email, role: Role.ENGINEER, isActive: true };
+    assignedEngineer = {
+      id: eng1.id,
+      name: eng1.name,
+      email: eng1.email,
+      role: Role.ENGINEER,
+      isActive: true,
+    };
 
     // 3. Unassigned Engineer
     const eng2 = await prisma.user.create({
@@ -62,7 +74,13 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(eng2.id);
-    unassignedEngineer = { id: eng2.id, name: eng2.name, email: eng2.email, role: Role.ENGINEER, isActive: true };
+    unassignedEngineer = {
+      id: eng2.id,
+      name: eng2.name,
+      email: eng2.email,
+      role: Role.ENGINEER,
+      isActive: true,
+    };
 
     // 4. Accountant
     const acc = await prisma.user.create({
@@ -74,7 +92,13 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(acc.id);
-    accountantUser = { id: acc.id, name: acc.name, email: acc.email, role: Role.ACCOUNTANT, isActive: true };
+    accountantUser = {
+      id: acc.id,
+      name: acc.name,
+      email: acc.email,
+      role: Role.ACCOUNTANT,
+      isActive: true,
+    };
 
     // 5. Purchasing
     const pur = await prisma.user.create({
@@ -86,7 +110,13 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       },
     });
     cleanupUserIds.push(pur.id);
-    purchasingUser = { id: pur.id, name: pur.name, email: pur.email, role: Role.PURCHASING, isActive: true };
+    purchasingUser = {
+      id: pur.id,
+      name: pur.name,
+      email: pur.email,
+      role: Role.PURCHASING,
+      isActive: true,
+    };
 
     // 6. Project
     const p = await prisma.project.create({
@@ -196,7 +226,9 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       vi.spyOn(permissions, 'requireAuth').mockResolvedValue(unassignedEngineer);
 
       await expect(getProjectMilestones(testProject.id)).rejects.toThrow(PermissionError);
-      await expect(getProjectMilestone(testProject.id, testMilestoneId)).rejects.toThrow(PermissionError);
+      await expect(getProjectMilestone(testProject.id, testMilestoneId)).rejects.toThrow(
+        PermissionError,
+      );
       await expect(getProjectMilestoneSummary(testProject.id)).rejects.toThrow(PermissionError);
     });
 
@@ -206,12 +238,16 @@ describe('Milestone Authorization Matrix (Live PostgreSQL Integration)', () => {
       );
 
       await expect(
-        createMilestone({ projectId: testProject.id, title: 'محاولة مهندس', targetDate: '2026-11-01' }),
+        createMilestone({
+          projectId: testProject.id,
+          title: 'محاولة مهندس',
+          targetDate: '2026-11-01',
+        }),
       ).rejects.toThrow(PermissionError);
 
-      await expect(
-        updateMilestone(testMilestoneId, { title: 'محاولة مهندس' }),
-      ).rejects.toThrow(PermissionError);
+      await expect(updateMilestone(testMilestoneId, { title: 'محاولة مهندس' })).rejects.toThrow(
+        PermissionError,
+      );
 
       await expect(completeMilestone(testMilestoneId)).rejects.toThrow(PermissionError);
       await expect(deleteMilestone(testMilestoneId)).rejects.toThrow(PermissionError);

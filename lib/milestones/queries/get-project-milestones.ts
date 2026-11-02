@@ -17,6 +17,7 @@ import { validate } from '@/lib/validation';
 import { projectIdSchema } from '@/lib/validation/schemas/milestone';
 import { getBusinessTodayDateString } from '../calculations';
 import { MILESTONE_INCLUDE, toProjectMilestoneDTO } from '../mappers';
+import { fetchMilestoneEvidenceMetricsMap } from '../evidence-metrics';
 import type { ProjectMilestoneDTO } from '../types';
 import { assertCanViewProjectMilestones } from './query-auth';
 
@@ -46,11 +47,18 @@ export async function getProjectMilestones(
       },
     },
     include: MILESTONE_INCLUDE,
-    orderBy: [
-      { orderIndex: 'asc' },
-      { createdAt: 'asc' },
-    ],
+    orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
   });
 
-  return milestones.map((m) => toProjectMilestoneDTO(m, businessToday));
+  // 5. Query live visual progress evidence metrics
+  const milestoneIds = milestones.map((m) => m.id);
+  const evidenceMetricsMap = await fetchMilestoneEvidenceMetricsMap(
+    prisma,
+    projectId,
+    milestoneIds,
+  );
+
+  return milestones.map((m) =>
+    toProjectMilestoneDTO(m, businessToday, evidenceMetricsMap.get(m.id)),
+  );
 }

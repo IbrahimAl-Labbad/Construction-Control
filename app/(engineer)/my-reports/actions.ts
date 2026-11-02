@@ -5,6 +5,7 @@
  *
  * Server Actions for Site Engineer Progress Report operations.
  * Vertical Slice 10 — Progress Reports by Site Engineer.
+ * CR-08 / BD-17 Visual Progress & Milestone Linkage Integration.
  */
 
 import { revalidatePath } from 'next/cache';
@@ -37,6 +38,11 @@ export async function createProgressReportDraftAction(formData: FormData): Promi
     const nextPeriodPlan = formData.get('nextPeriodPlan') as string | null;
     const weatherCondition = formData.get('weatherCondition') as string | null;
 
+    const hasMilestoneInput = formData.has('_hasMilestoneInput');
+    const milestoneIds = hasMilestoneInput
+      ? (formData.getAll('milestoneIds').filter(Boolean) as string[])
+      : undefined;
+
     const report = await createProgressReportDraft({
       projectId,
       reportDate,
@@ -46,6 +52,7 @@ export async function createProgressReportDraftAction(formData: FormData): Promi
       blockers: blockers || null,
       nextPeriodPlan: nextPeriodPlan || null,
       weatherCondition: weatherCondition || null,
+      ...(hasMilestoneInput ? { milestoneIds } : {}),
     });
 
     revalidatePath('/my-reports');
@@ -71,6 +78,11 @@ export async function updateProgressReportDraftAction(
     const nextPeriodPlan = formData.get('nextPeriodPlan') as string | null;
     const weatherCondition = formData.get('weatherCondition') as string | null;
 
+    const hasMilestoneInput = formData.has('_hasMilestoneInput');
+    const milestoneIds = hasMilestoneInput
+      ? (formData.getAll('milestoneIds').filter(Boolean) as string[])
+      : undefined;
+
     const report = await updateProgressReportDraft(id, {
       title,
       workDescription,
@@ -78,6 +90,7 @@ export async function updateProgressReportDraftAction(
       blockers: blockers || null,
       nextPeriodPlan: nextPeriodPlan || null,
       weatherCondition: weatherCondition || null,
+      ...(hasMilestoneInput ? { milestoneIds } : {}),
     });
 
     revalidatePath('/my-reports');

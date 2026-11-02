@@ -63,6 +63,33 @@ export type ProgressReportWithRelations = Prisma.ProgressReportGetPayload<{
   include: typeof PROGRESS_REPORT_INCLUDE;
 }>;
 
+export const PROGRESS_REPORT_DETAIL_INCLUDE = {
+  ...PROGRESS_REPORT_INCLUDE,
+  milestones: {
+    include: {
+      milestone: {
+        select: {
+          id: true,
+          title: true,
+          targetDate: true,
+          status: true,
+          orderIndex: true,
+          deletedAt: true,
+        },
+      },
+    },
+    orderBy: {
+      milestone: {
+        orderIndex: 'asc' as const,
+      },
+    },
+  },
+} as const;
+
+export type ProgressReportDetailWithRelations = Prisma.ProgressReportGetPayload<{
+  include: typeof PROGRESS_REPORT_DETAIL_INCLUDE;
+}>;
+
 // ---------------------------------------------------------------------------
 // Helper: Map User to ReportActorInfo (Privacy Safe)
 // ---------------------------------------------------------------------------
@@ -80,7 +107,18 @@ function toActorInfo(user?: { id: string; name: string } | null): ReportActorInf
 // ---------------------------------------------------------------------------
 
 export function toProgressReportDetailDTO(
-  entity: ProgressReportWithRelations,
+  entity: ProgressReportWithRelations & {
+    milestones?: Array<{
+      milestone: {
+        id: string;
+        title: string;
+        targetDate: Date | string;
+        status: string;
+        orderIndex: number;
+        deletedAt?: Date | null;
+      };
+    }>;
+  },
 ): ProgressReportDetailDTO {
   return {
     id: entity.id,
@@ -122,6 +160,24 @@ export function toProgressReportDetailDTO(
 
     createdAt: entity.createdAt.toISOString(),
     updatedAt: entity.updatedAt.toISOString(),
+
+    // CR-08 / BD-17 Linked Milestones
+    milestones: entity.milestones
+      ? entity.milestones
+          .filter(
+            (link) =>
+              link.milestone &&
+              (link.milestone.deletedAt === null || link.milestone.deletedAt === undefined),
+          )
+          .map((link) => ({
+            id: link.milestone.id,
+            title: link.milestone.title,
+            targetDate: formatReportDateString(link.milestone.targetDate),
+            status: link.milestone.status,
+            orderIndex: link.milestone.orderIndex,
+          }))
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+      : undefined,
   };
 }
 

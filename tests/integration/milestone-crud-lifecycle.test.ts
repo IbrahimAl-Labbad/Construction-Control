@@ -223,9 +223,9 @@ describe('Milestone CRUD Lifecycle & IDOR (Live PostgreSQL Integration)', () => 
     cleanupMilestoneIds.push(milestoneInProject1.id);
 
     // Fetching milestone using wrong projectId (testProject2.id) must throw NOT_FOUND
-    await expect(
-      getProjectMilestone(testProject2.id, milestoneInProject1.id),
-    ).rejects.toThrow(AppError);
+    await expect(getProjectMilestone(testProject2.id, milestoneInProject1.id)).rejects.toThrow(
+      AppError,
+    );
   });
 
   it('enforces mandatory query correction: milestones of a soft-deleted project are NOT returned', async () => {

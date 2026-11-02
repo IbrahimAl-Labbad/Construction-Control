@@ -293,6 +293,9 @@ model User {
   uploadedAttachments Attachment[] @relation("AttachmentUploader")
   voidedAttachments   Attachment[] @relation("AttachmentVoider")
 
+  // Milestone Linkages (CR-08 / BD-17)
+  milestoneLinkagesCreated ProgressReportMilestone[] @relation("MilestoneLinker")
+
 
 
 
@@ -392,6 +395,9 @@ model Project {
 
   /// Evidence Attachments for this project (Attachment Infrastructure — Wave 0)
   attachments           Attachment[]
+
+  /// Progress report milestone linkages (CR-08 / BD-17)
+  progressReportMilestones ProgressReportMilestone[]
 
 
 
@@ -979,6 +985,9 @@ model ProgressReport {
   cancelledAt        DateTime?     @db.Timestamptz
   cancellationReason String?       @db.Text
 
+  /// Linked project milestones that this report provides evidence for (CR-08 / BD-17)
+  milestones ProgressReportMilestone[]
+
   /// Soft deletion marker — present for schema consistency.
   /// NO Slice 10 use case sets this field.
   deletedAt   DateTime?            @db.Timestamptz
@@ -992,6 +1001,9 @@ model ProgressReport {
   /// A cancelled report permanently occupies the (projectId, reportDate, createdById) slot.
   /// The same Engineer cannot create a replacement report for the same date after cancellation.
   @@unique([projectId, reportDate, createdById])
+
+  /// Composite unique constraint supporting relational project enclosure in ProgressReportMilestone
+  @@unique([id, projectId])
 
   @@index([projectId, status])
   @@index([createdById, status])
@@ -1079,6 +1091,9 @@ model ProjectMilestone {
   updatedById String?
   updatedBy   User?           @relation("MilestoneUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
 
+  /// Linked progress reports providing narrative and visual evidence (CR-08 / BD-17)
+  progressReports ProgressReportMilestone[]
+
   /// Soft deletion timestamp (allowed for PLANNED status only)
   deletedAt   DateTime?       @db.Timestamptz
 
@@ -1086,11 +1101,52 @@ model ProjectMilestone {
   createdAt   DateTime        @default(now()) @db.Timestamptz
   updatedAt   DateTime        @updatedAt @db.Timestamptz
 
+  /// Composite unique constraint supporting relational project enclosure in ProgressReportMilestone
+  @@unique([id, projectId])
   @@index([projectId, status])
   @@index([projectId, orderIndex])
   @@index([targetDate])
   @@index([deletedAt])
   @@map("project_milestones")
+}
+
+// =============================================================================
+// PROGRESS REPORT MILESTONE LINKAGE DOMAIN MODELS (CR-08 / Vertical Slice 26)
+// =============================================================================
+
+/// Join table linking Site Engineer Progress Reports to Project Milestones (CR-08 / BD-17).
+/// Provides verifiable operational and visual evidence for milestone completion.
+/// Enforces database-level project enclosure: report and milestone must share the same projectId.
+/// Referential integrity: Restrict on all foreign keys to prevent cascade deletion of historical records.
+model ProgressReportMilestone {
+  id          String           @id @default(cuid())
+
+  /// Project reference for coarse and database-level project boundary enforcement.
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  /// Composite FK to the progress report containing narrative and visual attachments.
+  reportId    String
+  report      ProgressReport   @relation(fields: [reportId, projectId], references: [id, projectId], onDelete: Restrict)
+
+  /// Composite FK to the project milestone being evidenced.
+  milestoneId String
+  milestone   ProjectMilestone @relation(fields: [milestoneId, projectId], references: [id, projectId], onDelete: Restrict)
+
+  /// User who established the linkage (Engineer when authoring, or Manager).
+  linkedById  String
+  linkedBy    User             @relation("MilestoneLinker", fields: [linkedById], references: [id], onDelete: Restrict)
+
+  /// Timestamp when the linkage was created.
+  linkedAt    DateTime         @default(now()) @db.Timestamptz
+
+  /// Natural uniqueness: a report cannot be linked to the same milestone more than once.
+  @@unique([reportId, milestoneId])
+
+  /// Milestone index for evidence-gate queries (reportId covered by composite unique index).
+  @@index([milestoneId])
+  @@index([projectId])
+  @@map("progress_report_milestones")
 }
 
 // =============================================================================

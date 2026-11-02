@@ -8,5 +8,7 @@ export * from './types';
 export * from './calculations';
 export * from './state-machine';
 export * from './mappers';
+export * from './evidence-policy';
+export * from './evidence-metrics';
 export * from './queries';
 export * from './use-cases';

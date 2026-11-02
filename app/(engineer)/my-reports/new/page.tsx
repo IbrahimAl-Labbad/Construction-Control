@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { prisma } from '@/lib/db/prisma';
 import { getActiveProjectsForEngineer } from '@/lib/progress-reports';
-import { ProgressReportForm } from '@/components/progress-reports';
+import { ProgressReportForm, type MilestoneOptionDTO } from '@/components/progress-reports';
 import { createProgressReportDraftAction } from '../actions';
 import { ClipboardList, ArrowRight, AlertTriangle } from 'lucide-react';
 
@@ -12,6 +13,38 @@ export const metadata: Metadata = {
 
 export default async function NewProgressReportPage() {
   const activeProjects = await getActiveProjectsForEngineer();
+  const projectIds = activeProjects.map((p) => p.id);
+
+  const activeMilestones =
+    projectIds.length > 0
+      ? await prisma.projectMilestone.findMany({
+          where: {
+            projectId: { in: projectIds },
+            status: { in: ['PLANNED', 'IN_PROGRESS'] },
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            projectId: true,
+            title: true,
+            orderIndex: true,
+            status: true,
+          },
+          orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [];
+
+  const milestonesByProject: Record<string, MilestoneOptionDTO[]> = {};
+  for (const m of activeMilestones) {
+    const list = milestonesByProject[m.projectId] ?? [];
+    list.push({
+      id: m.id,
+      title: m.title,
+      orderIndex: m.orderIndex,
+      status: m.status,
+    });
+    milestonesByProject[m.projectId] = list;
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -56,6 +89,7 @@ export default async function NewProgressReportPage() {
       ) : (
         <ProgressReportForm
           projects={activeProjects}
+          milestonesByProject={milestonesByProject}
           onSubmit={createProgressReportDraftAction}
           isEdit={false}
         />

@@ -138,6 +138,16 @@ export const cancellationReasonSchema = z.preprocess(
 );
 
 // ---------------------------------------------------------------------------
+// Milestone Linkage Schemas (CR-08 / BD-17)
+// ---------------------------------------------------------------------------
+
+export const reportMilestoneIdsSchema = z
+  .array(z.string().cuid('معرف المحطة غير صالح'))
+  .refine((items) => new Set(items).size === items.length, {
+    message: 'لا يجوز تكرار معرفات المحطات المرتبطة',
+  });
+
+// ---------------------------------------------------------------------------
 // Operation Schemas
 // ---------------------------------------------------------------------------
 
@@ -150,6 +160,7 @@ export const createProgressReportDraftSchema = z.object({
   blockers: blockersSchema,
   nextPeriodPlan: nextPeriodPlanSchema,
   weatherCondition: weatherConditionSchema,
+  milestoneIds: reportMilestoneIdsSchema.optional(),
 });
 
 export const updateProgressReportDraftSchema = z.object({
@@ -159,6 +170,7 @@ export const updateProgressReportDraftSchema = z.object({
   blockers: blockersSchema,
   nextPeriodPlan: nextPeriodPlanSchema,
   weatherCondition: weatherConditionSchema,
+  milestoneIds: reportMilestoneIdsSchema.optional(),
 });
 
 export const rejectProgressReportSchema = z.object({

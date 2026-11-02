@@ -93,6 +93,11 @@ export type ErrorCode =
   | 'ATTACHMENT_OWNER_NOT_SUPPORTED'
   | 'ATTACHMENT_STORAGE_UNAVAILABLE'
   | 'ATTACHMENT_INTEGRITY_ERROR'
+  // Milestone Evidence & Linkage specific errors (CR-08 / BD-17)
+  | 'MILESTONE_EVIDENCE_MISSING'
+  | 'MILESTONE_COMPLETED_IMMUTABLE'
+  | 'MILESTONE_HAS_LINKED_REPORTS'
+  | 'CROSS_PROJECT_LINKAGE_FORBIDDEN'
   // General
   | 'INTERNAL_ERROR'
   | 'SERVICE_UNAVAILABLE';
@@ -164,6 +169,11 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   ATTACHMENT_OWNER_NOT_SUPPORTED: 422,
   ATTACHMENT_STORAGE_UNAVAILABLE: 503,
   ATTACHMENT_INTEGRITY_ERROR: 500,
+  // Milestone Evidence & Linkage (CR-08 / BD-17)
+  MILESTONE_EVIDENCE_MISSING: 400,
+  MILESTONE_COMPLETED_IMMUTABLE: 422,
+  MILESTONE_HAS_LINKED_REPORTS: 422,
+  CROSS_PROJECT_LINKAGE_FORBIDDEN: 403,
   INTERNAL_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
 };
@@ -188,11 +198,7 @@ export class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly httpStatus: number;
 
-  constructor(
-    code: ErrorCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
+  constructor(code: ErrorCode, message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'AppError';
     this.code = code;

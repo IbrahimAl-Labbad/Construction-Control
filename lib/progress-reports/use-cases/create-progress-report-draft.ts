@@ -29,7 +29,8 @@ import {
   isProgressReportUniqueConstraintViolation,
   toCalendarDate,
 } from '../calculations';
-import { PROGRESS_REPORT_INCLUDE, toProgressReportDetailDTO } from '../mappers';
+import { PROGRESS_REPORT_DETAIL_INCLUDE, toProgressReportDetailDTO } from '../mappers';
+import { acquireMilestoneLinkageLocks, syncReportMilestoneLinkages } from '@/lib/milestones';
 import type { CreateProgressReportInput, ProgressReportDetailDTO } from '../types';
 
 export async function createProgressReportDraft(
@@ -84,7 +85,17 @@ export async function createProgressReportDraft(
         );
       }
 
-      // 3. Create ProgressReport in DRAFT status
+      // 3. Acquire milestone linkage locks if milestones are provided (CR-08 / §6.3.2)
+      const hasMilestones = Boolean(data.milestoneIds && data.milestoneIds.length > 0);
+      const lockedContext = hasMilestones
+        ? await acquireMilestoneLinkageLocks(tx, {
+            projectId: data.projectId,
+            reportId: undefined,
+            targetMilestoneIds: data.milestoneIds,
+          })
+        : undefined;
+
+      // 4. Create ProgressReport in DRAFT status
       const report = await tx.progressReport.create({
         data: {
           projectId: data.projectId,
@@ -98,10 +109,23 @@ export async function createProgressReportDraft(
           status: ProgressReportStatus.DRAFT,
           createdById: actor.id,
         },
-        include: PROGRESS_REPORT_INCLUDE,
       });
 
-      // 4. Write PROGRESS_REPORT_CREATED AuditLog in SAME transaction
+      // 5. Synchronize milestone linkages via shared service
+      if (hasMilestones && lockedContext) {
+        await syncReportMilestoneLinkages(tx, {
+          actor,
+          projectId: data.projectId,
+          reportId: report.id,
+          targetMilestoneIds: data.milestoneIds,
+          lockedContext: {
+            ...lockedContext,
+            lockedReport: report,
+          },
+        });
+      }
+
+      // 6. Write PROGRESS_REPORT_CREATED AuditLog in SAME transaction
       await tx.auditLog.create({
         data: {
           actorId: actor.id,
@@ -114,11 +138,18 @@ export async function createProgressReportDraft(
             title: report.title,
             status: report.status,
             createdById: report.createdById,
+            ...(hasMilestones ? { linkedMilestoneIds: data.milestoneIds } : {}),
           },
         },
       });
 
-      return report;
+      // 7. Refetch report with relations including linked milestones
+      const createdReport = await tx.progressReport.findUniqueOrThrow({
+        where: { id: report.id },
+        include: PROGRESS_REPORT_DETAIL_INCLUDE,
+      });
+
+      return createdReport;
     });
 
     return toProgressReportDetailDTO(created);

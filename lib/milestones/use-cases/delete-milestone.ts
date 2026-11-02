@@ -55,7 +55,23 @@ export async function deleteMilestone(milestoneId: unknown): Promise<{ success: 
     // 3.3 Lock parent project and verify status [PLANNED, ACTIVE]
     await lockProjectForMilestoneMutation(tx, existing.projectId);
 
-    // 3.4 Concurrency CAS updateMany: soft delete
+    // 3.4 Lock milestone row (Level 6)
+    if (typeof tx.$queryRaw === 'function') {
+      await tx.$queryRaw`SELECT id FROM project_milestones WHERE id = ${id} FOR UPDATE`;
+    }
+
+    // 3.5 Check linked reports guard (CR-08 / Requirement 7)
+    const linkedReportsCount = await tx.progressReportMilestone.count({
+      where: { milestoneId: id },
+    });
+    if (linkedReportsCount > 0) {
+      throw new AppError(
+        'MILESTONE_HAS_LINKED_REPORTS',
+        'لا يمكن حذف المحطة لأنها مرتبطة بتقارير تقدم. يجب فك ارتباط جميع التقارير أولاً.',
+      );
+    }
+
+    // 3.6 Concurrency CAS updateMany: soft delete
     const deleteResult = await tx.projectMilestone.updateMany({
       where: {
         id,

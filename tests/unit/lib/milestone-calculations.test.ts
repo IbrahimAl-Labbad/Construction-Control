@@ -44,21 +44,29 @@ describe('Milestone Calculations & Date Helpers (Unit Tests)', () => {
     });
 
     it('returns true when status is IN_PROGRESS and targetDate < businessToday', () => {
-      expect(isMilestoneOverdue('2026-09-23', MilestoneStatus.IN_PROGRESS, businessToday)).toBe(true);
+      expect(isMilestoneOverdue('2026-09-23', MilestoneStatus.IN_PROGRESS, businessToday)).toBe(
+        true,
+      );
     });
 
     it('returns false when targetDate >= businessToday', () => {
       expect(isMilestoneOverdue('2026-09-24', MilestoneStatus.PLANNED, businessToday)).toBe(false);
       expect(isMilestoneOverdue('2026-09-25', MilestoneStatus.PLANNED, businessToday)).toBe(false);
-      expect(isMilestoneOverdue('2026-10-01', MilestoneStatus.IN_PROGRESS, businessToday)).toBe(false);
+      expect(isMilestoneOverdue('2026-10-01', MilestoneStatus.IN_PROGRESS, businessToday)).toBe(
+        false,
+      );
     });
 
     it('returns false for COMPLETED even if targetDate is in the past', () => {
-      expect(isMilestoneOverdue('2026-08-01', MilestoneStatus.COMPLETED, businessToday)).toBe(false);
+      expect(isMilestoneOverdue('2026-08-01', MilestoneStatus.COMPLETED, businessToday)).toBe(
+        false,
+      );
     });
 
     it('returns false for CANCELLED even if targetDate is in the past', () => {
-      expect(isMilestoneOverdue('2026-08-01', MilestoneStatus.CANCELLED, businessToday)).toBe(false);
+      expect(isMilestoneOverdue('2026-08-01', MilestoneStatus.CANCELLED, businessToday)).toBe(
+        false,
+      );
     });
   });
 });

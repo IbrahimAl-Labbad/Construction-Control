@@ -19,7 +19,7 @@ import { AppError, ValidationError } from '@/lib/errors';
 import { requireAuth } from '@/lib/permissions';
 import { validate } from '@/lib/validation';
 import { progressReportIdSchema } from '@/lib/validation/schemas/progress-report';
-import { PROGRESS_REPORT_INCLUDE, toProgressReportDetailDTO } from '../mappers';
+import { PROGRESS_REPORT_DETAIL_INCLUDE, toProgressReportDetailDTO } from '../mappers';
 import type { ProgressReportDetailDTO } from '../types';
 
 export async function getProgressReport(id: string): Promise<ProgressReportDetailDTO> {
@@ -44,7 +44,7 @@ export async function getProgressReport(id: string): Promise<ProgressReportDetai
       deletedAt: null,
       ...(actor.role === Role.ENGINEER ? { createdById: actor.id } : {}),
     },
-    include: PROGRESS_REPORT_INCLUDE,
+    include: PROGRESS_REPORT_DETAIL_INCLUDE,
   });
 
   if (!report) {

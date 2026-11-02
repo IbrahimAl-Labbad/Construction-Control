@@ -6,6 +6,7 @@
 
 export * from './progress-report-status-badge';
 export * from './progress-report-form';
+export * from './linked-milestones-card';
 export * from './reject-report-dialog';
 export * from './cancel-report-dialog';
 export * from './project-filter-select';

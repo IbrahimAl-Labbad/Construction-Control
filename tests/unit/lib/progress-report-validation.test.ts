@@ -165,4 +165,65 @@ describe('ProgressReport Validation Schemas', () => {
       expect(cancelProgressReportSchema.safeParse({}).success).toBe(true);
     });
   });
+
+  describe('milestoneIds integration in report schemas (CR-08 / BD-17)', () => {
+    const validMilestone1 = 'clh1111111111111111111111';
+    const validMilestone2 = 'clh2222222222222222222222';
+
+    it('createProgressReportDraftSchema accepts valid milestoneIds array', () => {
+      const res = createProgressReportDraftSchema.safeParse({
+        projectId: 'clh1234567890123456789012',
+        reportDate: '2025-05-10',
+        title: 'تقرير مع محطات',
+        workDescription: 'أعمال مرتبطة بمحطات المشروع',
+        milestoneIds: [validMilestone1, validMilestone2],
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.milestoneIds).toEqual([validMilestone1, validMilestone2]);
+      }
+    });
+
+    it('createProgressReportDraftSchema accepts empty milestoneIds array', () => {
+      const res = createProgressReportDraftSchema.safeParse({
+        projectId: 'clh1234567890123456789012',
+        reportDate: '2025-05-10',
+        title: 'تقرير بدون محطات',
+        workDescription: 'أعمال عامة',
+        milestoneIds: [],
+      });
+      expect(res.success).toBe(true);
+    });
+
+    it('createProgressReportDraftSchema rejects duplicate milestoneIds', () => {
+      const res = createProgressReportDraftSchema.safeParse({
+        projectId: 'clh1234567890123456789012',
+        reportDate: '2025-05-10',
+        title: 'تقرير مع معرفات مكررة',
+        workDescription: 'أعمال',
+        milestoneIds: [validMilestone1, validMilestone1],
+      });
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.error.issues[0]?.message).toContain('لا يجوز تكرار معرفات المحطات المرتبطة');
+      }
+    });
+
+    it('updateProgressReportDraftSchema accepts milestoneIds update', () => {
+      const res = updateProgressReportDraftSchema.safeParse({
+        milestoneIds: [validMilestone1],
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.milestoneIds).toEqual([validMilestone1]);
+      }
+    });
+
+    it('updateProgressReportDraftSchema rejects non-CUID milestoneIds', () => {
+      const res = updateProgressReportDraftSchema.safeParse({
+        milestoneIds: ['invalid-id'],
+      });
+      expect(res.success).toBe(false);
+    });
+  });
 });

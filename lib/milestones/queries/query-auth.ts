@@ -56,11 +56,7 @@ export async function assertCanViewProjectMilestones(
   if (actor.role === Role.ENGINEER) {
     const isAssigned = await isEngineerAssignedToProject(projectId, actor.id);
     if (!isAssigned) {
-      throw new PermissionError(
-        'FORBIDDEN',
-        [Role.MANAGER, Role.ENGINEER],
-        actor.role,
-      );
+      throw new PermissionError('FORBIDDEN', [Role.MANAGER, Role.ENGINEER], actor.role);
     }
     return { actor, project };
   }

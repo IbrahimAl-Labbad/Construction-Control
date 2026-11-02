@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { prisma } from '@/lib/db/prisma';
 import { getProgressReport } from '@/lib/progress-reports';
 import { ProgressReportStatus } from '@prisma/client';
 import { ProgressReportForm } from '@/components/progress-reports';
@@ -35,6 +36,26 @@ export default async function EditProgressReportPage({ params }: EditProgressRep
     redirect(`/my-reports/${id}`);
   }
 
+  // Query active or currently-linked milestones for this project
+  const linkedIds = report.milestones?.map((m) => m.id) ?? [];
+  const projectMilestones = await prisma.projectMilestone.findMany({
+    where: {
+      projectId: report.projectId,
+      deletedAt: null,
+      OR: [
+        { status: { in: ['PLANNED', 'IN_PROGRESS'] } },
+        ...(linkedIds.length > 0 ? [{ id: { in: linkedIds } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      title: true,
+      orderIndex: true,
+      status: true,
+    },
+    orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
+  });
+
   async function handleUpdate(formData: FormData) {
     'use server';
     return updateProgressReportDraftAction(id, formData);
@@ -68,6 +89,7 @@ export default async function EditProgressReportPage({ params }: EditProgressRep
 
       <ProgressReportForm
         initialData={report}
+        availableMilestones={projectMilestones}
         onSubmit={handleUpdate}
         isEdit={true}
       />

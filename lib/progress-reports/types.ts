@@ -96,6 +96,21 @@ export interface ProgressReportDetailDTO {
   // Audit Timestamps
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
+
+  // CR-08 / BD-17 Linked Milestones
+  milestones?: ProgressReportLinkedMilestoneInfo[] | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Linked Milestone Info DTO (CR-08 / BD-17)
+// ---------------------------------------------------------------------------
+
+export interface ProgressReportLinkedMilestoneInfo {
+  id: string;
+  title: string;
+  targetDate: string; // YYYY-MM-DD
+  status: string;
+  orderIndex: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +145,7 @@ export interface CreateProgressReportInput {
   blockers?: string | null | undefined;
   nextPeriodPlan?: string | null | undefined;
   weatherCondition?: string | null | undefined;
+  milestoneIds?: string[] | undefined;
 }
 
 export interface UpdateProgressReportInput {
@@ -139,6 +155,7 @@ export interface UpdateProgressReportInput {
   blockers?: string | null | undefined;
   nextPeriodPlan?: string | null | undefined;
   weatherCondition?: string | null | undefined;
+  milestoneIds?: string[] | undefined;
 }
 
 export interface RejectProgressReportInput {
